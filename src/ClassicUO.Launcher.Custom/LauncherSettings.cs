@@ -7,9 +7,11 @@ namespace ClassicUO.Launcher.Custom
 {
     public sealed class LauncherSettings
     {
-        public string Assistant { get; set; } = "Nessuno"; // Nessuno | ClassicAssist | Razor
+        public string Assistant { get; set; } = "Nessuno"; // Nessuno | ClassicAssist | Razor Enhanced | Orion | UOSteam
         public string ClassicAssistPath { get; set; } = "";
         public string RazorPath { get; set; } = "";
+        public string OrionPath { get; set; } = "";
+        public string UOSteamPath { get; set; } = "";
         public string ClientPath { get; set; } = "";
         public string UoDirectory { get; set; } = "";
         public string ShardIp { get; set; } = "login.uodreams.com";

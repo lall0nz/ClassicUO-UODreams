@@ -137,7 +137,7 @@ namespace ClassicUO.Launcher.Custom
                 DrawMode = DrawMode.OwnerDrawFixed,
                 ItemHeight = 24
             };
-            _assistantCombo.Items.AddRange(new object[] { "Nessuno", "ClassicAssist", "Razor Enhanced" });
+            _assistantCombo.Items.AddRange(new object[] { "Nessuno", "ClassicAssist", "Razor Enhanced", "Orion", "UOSteam" });
             _assistantCombo.DrawItem += (_, e) =>
             {
                 if (e.Index < 0) return;
@@ -444,6 +444,18 @@ namespace ClassicUO.Launcher.Custom
                         ? ClientRuntimeDownloader.DetectRazorEnhancedPath() ?? ""
                         : _settings.RazorPath;
                     break;
+                case "Orion":
+                    _assistantPathLabel.Text = "Percorso di Orion (cartella o OrionAssistant64.dll)";
+                    _assistantPathBox.Text = string.IsNullOrWhiteSpace(_settings.OrionPath)
+                        ? ClientRuntimeDownloader.DetectOrionAssistantDll() ?? ""
+                        : _settings.OrionPath;
+                    break;
+                case "UOSteam":
+                    _assistantPathLabel.Text = "Percorso di UOSteam (cartella o UOS.dll)";
+                    _assistantPathBox.Text = string.IsNullOrWhiteSpace(_settings.UOSteamPath)
+                        ? ClientRuntimeDownloader.DetectUOSteamDll() ?? ""
+                        : _settings.UOSteamPath;
+                    break;
             }
         }
 
@@ -451,9 +463,13 @@ namespace ClassicUO.Launcher.Custom
         {
             using var dialog = new OpenFileDialog
             {
-                Title = SelectedAssistant == "ClassicAssist"
-                    ? "Seleziona ClassicAssist.dll"
-                    : "Seleziona RazorEnhanced.exe o la sua cartella",
+                Title = SelectedAssistant switch
+                {
+                    "ClassicAssist" => "Seleziona ClassicAssist.dll",
+                    "Orion" => "Seleziona OrionAssistant64.dll o la cartella di Orion",
+                    "UOSteam" => "Seleziona UOS.dll o la cartella di UOSteam",
+                    _ => "Seleziona RazorEnhanced.exe o la sua cartella"
+                },
                 Filter = "Plugin (*.dll;*.exe)|*.dll;*.exe|Tutti i file (*.*)|*.*"
             };
 
@@ -543,10 +559,13 @@ namespace ClassicUO.Launcher.Custom
 
             if (Directory.Exists(path))
             {
-                // user picked a folder: find the plugin dll inside
-                string[] candidates = SelectedAssistant == "ClassicAssist"
-                    ? new[] { "ClassicAssist.dll" }
-                    : new[] { "RazorEnhanced.exe", "RazorEnhanced.dll", "Razor.dll", "RazorCE.dll", "Razor.exe" };
+                string[] candidates = SelectedAssistant switch
+                {
+                    "ClassicAssist" => new[] { "ClassicAssist.dll" },
+                    "Orion" => new[] { "OA\\OrionAssistant64.dll", "OrionAssistant64.dll", "OA\\OrionAssistant.dll", "OrionAssistant.dll" },
+                    "UOSteam" => new[] { "UOS.dll" },
+                    _ => new[] { "RazorEnhanced.exe", "RazorEnhanced.dll", "Razor.dll", "RazorCE.dll", "Razor.exe" }
+                };
 
                 foreach (string name in candidates)
                 {
@@ -577,6 +596,12 @@ namespace ClassicUO.Launcher.Custom
                     break;
                 case "Razor Enhanced":
                     _settings.RazorPath = _assistantPathBox.Text.Trim();
+                    break;
+                case "Orion":
+                    _settings.OrionPath = _assistantPathBox.Text.Trim();
+                    break;
+                case "UOSteam":
+                    _settings.UOSteamPath = _assistantPathBox.Text.Trim();
                     break;
             }
 
@@ -644,11 +669,14 @@ namespace ClassicUO.Launcher.Custom
 
                 if (SelectedAssistant != "Razor Enhanced" && !Is64BitCompatible(assistantDll))
                 {
-                    ShowError(
-                        Path.GetFileName(assistantDll) +
-                        " è a 32 bit (x86) e non può essere caricato dal client a 64 bit.\n" +
-                        "Usa Razor Enhanced (bootstrap + cuo.dll nativo) oppure ClassicAssist."
-                    );
+                    string hint = SelectedAssistant == "UOSteam"
+                        ? "UOSteam (UOS.dll) è a 32 bit e non può essere caricato dal client ClassicUO a 64 bit.\n" +
+                          "Usa ClassicAssist (sintassi simile a UOSteam), Razor Enhanced o Orion."
+                        : Path.GetFileName(assistantDll) +
+                          " è a 32 bit (x86) e non può essere caricato dal client a 64 bit.\n" +
+                          "Usa Razor Enhanced (bootstrap + cuo.dll nativo), ClassicAssist o Orion.";
+
+                    ShowError(hint);
                     return;
                 }
             }

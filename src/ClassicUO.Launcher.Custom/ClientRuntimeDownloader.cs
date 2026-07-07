@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Threading;
@@ -111,6 +112,47 @@ namespace ClassicUO.Launcher.Custom
             }
 
             return null;
+        }
+
+        public static string? DetectOrionAssistantDll(string? installRoot = null)
+        {
+            foreach (string root in CandidatePaths(installRoot, @"c:\Orion Launcher"))
+            {
+                string dll = Path.Combine(root, "OA", "OrionAssistant64.dll");
+                if (File.Exists(dll))
+                {
+                    return dll;
+                }
+            }
+
+            return null;
+        }
+
+        public static string? DetectUOSteamDll(string? installRoot = null)
+        {
+            foreach (string root in CandidatePaths(installRoot, @"c:\Program Files (x86)\UOS"))
+            {
+                string dll = Path.Combine(root, "UOS.dll");
+                if (File.Exists(dll))
+                {
+                    return dll;
+                }
+            }
+
+            return null;
+        }
+
+        private static IEnumerable<string> CandidatePaths(string? preferred, params string[] defaults)
+        {
+            if (!string.IsNullOrWhiteSpace(preferred))
+            {
+                yield return preferred.Trim().Trim('"');
+            }
+
+            foreach (string path in defaults)
+            {
+                yield return path;
+            }
         }
 
         private static bool IsZipFile(string path)
