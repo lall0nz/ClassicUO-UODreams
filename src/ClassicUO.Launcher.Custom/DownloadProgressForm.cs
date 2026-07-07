@@ -9,7 +9,7 @@ namespace ClassicUO.Launcher.Custom
 {
     public sealed class DownloadProgressForm : Form
     {
-        private readonly string _extractDirectory;
+        private readonly Func<IProgress<DownloadProgressReport>, CancellationToken, Task<string?>> _downloadWork;
         private readonly CancellationTokenSource _cts = new();
         private readonly Label _titleLabel;
         private readonly Label _detailLabel;
@@ -20,13 +20,36 @@ namespace ClassicUO.Launcher.Custom
         private bool _success;
         private bool _failed;
 
-        public string? ExtractedUoPath { get; private set; }
+        public string? ResultPath { get; private set; }
 
-        public DownloadProgressForm(string extractDirectory)
+        public static DownloadProgressForm ForUoClient(string extractDirectory) =>
+            new(
+                async (progress, ct) =>
+                    await UoClientDownloader.DownloadAndExtractAsync(extractDirectory, progress, ct)
+                        .ConfigureAwait(true),
+                "UODreams Launcher — Download client UO",
+                "Scaricamento client Ultima Online UODreams…"
+            );
+
+        public static DownloadProgressForm ForClientRuntime() =>
+            new(
+                async (progress, ct) =>
+                {
+                    await ClientRuntimeDownloader.DownloadAndInstallAsync(progress, ct).ConfigureAwait(true);
+                    return AppContext.BaseDirectory;
+                },
+                "UODreams Launcher — Prima installazione",
+                "Download componenti ClassicUO UODreams…"
+            );
+
+        private DownloadProgressForm(
+            Func<IProgress<DownloadProgressReport>, CancellationToken, Task<string?>> downloadWork,
+            string windowTitle,
+            string title)
         {
-            _extractDirectory = extractDirectory;
+            _downloadWork = downloadWork;
 
-            Text = "UODreams Launcher — Download client";
+            Text = windowTitle;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
@@ -39,7 +62,7 @@ namespace ClassicUO.Launcher.Custom
 
             _titleLabel = new Label
             {
-                Text = "Scaricamento client UODreams…",
+                Text = title,
                 ForeColor = Theme.Text,
                 BackColor = Color.Transparent,
                 AutoSize = false,
@@ -165,17 +188,13 @@ namespace ClassicUO.Launcher.Custom
 
             try
             {
-                ExtractedUoPath = await UoClientDownloader.DownloadAndExtractAsync(
-                    _extractDirectory,
-                    progress,
-                    _cts.Token
-                ).ConfigureAwait(true);
+                ResultPath = await _downloadWork(progress, _cts.Token).ConfigureAwait(true);
 
                 _success = true;
                 _completed = true;
                 _progressBar.Value = 1000;
                 _titleLabel.Text = "Download completato";
-                _detailLabel.Text = ExtractedUoPath ?? _extractDirectory;
+                _detailLabel.Text = ResultPath ?? "Pronto.";
                 _speedLabel.Text = "Pronto per giocare.";
                 _cancelButton.Text = "Chiudi";
             }

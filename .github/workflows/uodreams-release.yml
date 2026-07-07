@@ -1,0 +1,69 @@
+name: UODreams Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Download official ClassicUO (Razor bootstrap)
+        shell: pwsh
+        run: |
+          $zip = "$env:RUNNER_TEMP\ClassicUOLauncher.zip"
+          Invoke-WebRequest -Uri "https://www.classicuo.eu/launcher/win-x64/ClassicUOLauncher-win-x64-release.zip" -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath "$env:RUNNER_TEMP\cuo-official" -Force
+          $official = Get-ChildItem "$env:RUNNER_TEMP\cuo-official" -Recurse -Directory -Filter "ClassicUO" | Select-Object -First 1
+          if (-not $official) { throw "ClassicUO folder not found in official zip" }
+          "OFFICIAL_CUO=$($official.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Extract version from tag
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart('v')
+          "RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build release assets
+        shell: pwsh
+        run: |
+          ./scripts/package-release.ps1 -Version $env:RELEASE_VERSION -OfficialCuo $env:OFFICIAL_CUO
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: UODreams Launcher v${{ env.RELEASE_VERSION }}
+          body: |
+            ## UODreams Launcher v${{ env.RELEASE_VERSION }}
+
+            ### Installazione
+            1. Scarica **UODreams-Launcher-v${{ env.RELEASE_VERSION }}.zip**
+            2. Estrai e avvia **UODreams Launcher.exe**
+            3. Al primo avvio scarica automaticamente i componenti ClassicUO
+            4. Scarica anche il client Ultima Online UODreams dal launcher (pulsante Scarica)
+
+            ### Server
+            - `login.uodreams.com:2593`
+          files: |
+            bin/release-v${{ env.RELEASE_VERSION }}/UODreams-Launcher-v${{ env.RELEASE_VERSION }}.zip
+            bin/release-v${{ env.RELEASE_VERSION }}/UODreams-Client-v${{ env.RELEASE_VERSION }}.zip
+          draft: false
+          prerelease: false

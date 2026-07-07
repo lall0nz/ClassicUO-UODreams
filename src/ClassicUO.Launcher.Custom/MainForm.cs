@@ -74,7 +74,7 @@ namespace ClassicUO.Launcher.Custom
 
         private void BuildUi()
         {
-            Text = "UODreams Launcher";
+            Text = $"UODreams Launcher v{LauncherManifest.LauncherVersion}";
             ForeColor = Theme.Text;
             Font = new Font("Segoe UI", 9.5f);
             FormBorderStyle = FormBorderStyle.FixedSingle;
@@ -364,11 +364,9 @@ namespace ClassicUO.Launcher.Custom
             _uoHintLabel.ForeColor = valid ? Theme.SectionGreen : Theme.TextMuted;
         }
 
-        private static string GetClientDir() =>
-            Path.Combine(AppContext.BaseDirectory, "Client");
+        private static string GetClientDir() => ClientRuntimeDownloader.ClientDir;
 
-        private static string GetBootstrapDir() =>
-            Path.Combine(GetClientDir(), "Bootstrap");
+        private static string GetBootstrapDir() => ClientRuntimeDownloader.BootstrapDir;
 
         private static string DetectDefaultClient()
         {
@@ -443,7 +441,7 @@ namespace ClassicUO.Launcher.Custom
                 case "Razor Enhanced":
                     _assistantPathLabel.Text = "Percorso di RazorEnhanced (cartella o RazorEnhanced.exe)";
                     _assistantPathBox.Text = string.IsNullOrWhiteSpace(_settings.RazorPath)
-                        ? @"C:\Users\simon\Downloads\ClassicUOLauncher-win-x64-release\ClassicUO\Data\Plugins\RazorEnhanced-0.8.2.158"
+                        ? ClientRuntimeDownloader.DetectRazorEnhancedPath() ?? ""
                         : _settings.RazorPath;
                     break;
             }
@@ -512,14 +510,14 @@ namespace ClassicUO.Launcher.Custom
             _statusLabel.Text = "Download client UODreams in corso…";
             _downloadUoButton.Enabled = false;
 
-            using var progressForm = new DownloadProgressForm(extractDir);
+            using var progressForm = DownloadProgressForm.ForUoClient(extractDir);
             var result = progressForm.ShowDialog(this);
 
             _downloadUoButton.Enabled = true;
 
-            if (result == DialogResult.OK && !string.IsNullOrWhiteSpace(progressForm.ExtractedUoPath))
+            if (result == DialogResult.OK && !string.IsNullOrWhiteSpace(progressForm.ResultPath))
             {
-                _uoPathBox.Text = progressForm.ExtractedUoPath;
+                _uoPathBox.Text = progressForm.ResultPath;
                 SaveSettings();
                 UpdateUoDownloadUi();
                 _statusLabel.ForeColor = Theme.SectionGreen;
@@ -587,6 +585,19 @@ namespace ClassicUO.Launcher.Custom
 
         private void Launch()
         {
+            if (!ClientRuntimeDownloader.IsInstalled())
+            {
+                using var bootstrapForm = DownloadProgressForm.ForClientRuntime();
+                if (bootstrapForm.ShowDialog(this) != DialogResult.OK)
+                {
+                    ShowError("Componenti di gioco non installati.");
+                    return;
+                }
+
+                _clientPathBox.Text = DetectDefaultClient();
+                UpdateAssistantUi();
+            }
+
             string clientPath = DetectDefaultClient();
             if (string.IsNullOrWhiteSpace(clientPath) && !string.IsNullOrWhiteSpace(_clientPathBox.Text))
                 clientPath = _clientPathBox.Text.Trim().Trim('"');

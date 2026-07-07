@@ -96,6 +96,39 @@ namespace ClassicUO.Launcher.Custom
             }
         }
 
+        public static async Task DownloadFileFromUrlAsync(
+            string downloadUrl,
+            string destinationPath,
+            IProgress<DownloadProgressReport>? progress,
+            CancellationToken cancellationToken = default)
+        {
+            using var handler = new HttpClientHandler
+            {
+                AllowAutoRedirect = true,
+                UseCookies = true,
+                CookieContainer = new CookieContainer()
+            };
+
+            using var client = CreateHttpClient(handler);
+
+            using var response = await client
+                .GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+                .ConfigureAwait(false);
+
+            response.EnsureSuccessStatusCode();
+
+            string? contentType = response.Content.Headers.ContentType?.MediaType;
+            if (contentType != null && contentType.Contains("text/html", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException(
+                    "Il server ha restituito una pagina web invece del file. Verifica l'URL di download."
+                );
+            }
+
+            await SaveResponseToFileAsync(response, destinationPath, progress, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         public static async Task DownloadGoogleDriveFileAsync(
             string fileId,
             string destinationPath,
