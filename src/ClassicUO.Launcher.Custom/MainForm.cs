@@ -184,14 +184,15 @@ namespace ClassicUO.Launcher.Custom
                 Text = "",
                 ForeColor = Theme.TextMuted,
                 BackColor = Color.Transparent,
-                AutoSize = false,
-                Bounds = new Rectangle(cx, cy, cw, 18)
+                AutoSize = true,
+                MaximumSize = new Size(cw, 0),
+                Location = new Point(cx, cy)
             };
             assistantCard.Controls.Add(_assistantHintLabel);
             y += assistantCard.Height + 14;
 
             // ----- Card 2: Ultima Online -----
-            var pathsCard = new CardPanel { Bounds = new Rectangle(margin, y, width, 132) };
+            var pathsCard = new CardPanel { Bounds = new Rectangle(margin, y, width, 150) };
             Controls.Add(pathsCard);
             cy = 14;
 
@@ -218,8 +219,9 @@ namespace ClassicUO.Launcher.Custom
                 Text = "",
                 ForeColor = Theme.TextMuted,
                 BackColor = Color.Transparent,
-                AutoSize = false,
-                Bounds = new Rectangle(cx, cy, cw, 18)
+                AutoSize = true,
+                MaximumSize = new Size(cw, 0),
+                Location = new Point(cx, cy)
             };
             pathsCard.Controls.Add(_uoHintLabel);
 
