@@ -28,9 +28,31 @@ namespace ClassicUO.Launcher.Custom
                     );
                     return;
                 }
+
+                TryCreateDesktopShortcutOnce();
             }
 
             Application.Run(new MainForm());
+        }
+
+        private static void TryCreateDesktopShortcutOnce()
+        {
+            try
+            {
+                var settings = LauncherSettings.Load();
+                if (settings.DesktopShortcutCreated)
+                {
+                    return;
+                }
+
+                DesktopShortcut.TryCreate();
+                settings.DesktopShortcutCreated = true;
+                settings.Save();
+            }
+            catch
+            {
+                // shortcut creation is best-effort
+            }
         }
     }
 }

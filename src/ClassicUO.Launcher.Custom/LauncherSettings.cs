@@ -15,6 +15,7 @@ namespace ClassicUO.Launcher.Custom
         public string ShardIp { get; set; } = "login.uodreams.com";
         public int ShardPort { get; set; } = 2593;
         public int Encryption { get; set; } = 0;
+        public bool DesktopShortcutCreated { get; set; } = false;
 
         [JsonIgnore]
         public static string FilePath =>
