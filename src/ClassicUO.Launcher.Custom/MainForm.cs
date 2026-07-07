@@ -21,6 +21,8 @@ namespace ClassicUO.Launcher.Custom
         private TextBox _uoPathBox = null!;
         private TextBox _ipBox = null!;
         private NumericUpDown _portBox = null!;
+        private ComboBox _serverCombo = null!;
+        private bool _suppressServerComboEvents;
         private CheckBox _encryptionCheck = null!;
         private Label _statusLabel = null!;
         private ThemedButton _downloadUoButton = null!;
@@ -28,8 +30,21 @@ namespace ClassicUO.Launcher.Custom
         private ThemedButton _downloadAssistantButton = null!;
         private Label _assistantHintLabel = null!;
 
+        // References kept for language switching.
+        private ThemedButton _langButton = null!;
+        private ThemedButton _launchButton = null!;
+        private ThemedButton _uoBrowseButton = null!;
+        private Label _assistantSectionLabel = null!;
+        private Label _uoSectionLabel = null!;
+        private Label _shardSectionLabel = null!;
+        private Label _serverLabel = null!;
+        private Label _ipLabel = null!;
+        private Label _portLabel = null!;
+        private FooterLinkButton _registerBtn = null!;
+
         public MainForm()
         {
+            Loc.Lang = _settings.Language == "en" ? "en" : "it";
             LoadWindowIcon();
             BuildUi();
             LoadFromSettings();
@@ -113,7 +128,8 @@ namespace ClassicUO.Launcher.Custom
 
             int cx = 18, cy = 14, cw = width - 36;
 
-            assistantCard.Controls.Add(SectionLabel("Assistente", cx, cy, cw));
+            _assistantSectionLabel = SectionLabel(Loc.S("Seleziona l'assistant", "Select assistant"), cx, cy, cw);
+            assistantCard.Controls.Add(_assistantSectionLabel);
             cy += 28;
 
             _assistantCombo = new ComboBox
@@ -153,7 +169,7 @@ namespace ClassicUO.Launcher.Custom
 
             _assistantPathLabel = new Label
             {
-                Text = "Percorso assistente",
+                Text = Loc.S("Percorso assistente", "Assistant path"),
                 ForeColor = Theme.TextMuted,
                 BackColor = Color.Transparent,
                 AutoSize = false,
@@ -168,7 +184,7 @@ namespace ClassicUO.Launcher.Custom
 
             _downloadAssistantButton = new ThemedButton
             {
-                Text = "⬇ Scarica",
+                Text = Loc.S("⬇ Scarica", "⬇ Download"),
                 UseGradient = true,
                 CornerRadius = 8,
                 ForeColor = Color.White,
@@ -196,14 +212,15 @@ namespace ClassicUO.Launcher.Custom
             Controls.Add(pathsCard);
             cy = 14;
 
-            pathsCard.Controls.Add(SectionLabel("Client Ultima Online", cx, cy, cw));
+            _uoSectionLabel = SectionLabel(Loc.S("Client Ultima Online", "Ultima Online client"), cx, cy, cw);
+            pathsCard.Controls.Add(_uoSectionLabel);
             cy += 26;
-            (_, _uoPathBox, _) = PathRow(pathsCard, cx, cy, cw - 168, BrowseUoFolder);
+            (_, _uoPathBox, _uoBrowseButton) = PathRow(pathsCard, cx, cy, cw - 168, BrowseUoFolder);
             _uoPathBox.TextChanged += (_, _) => UpdateUoDownloadUi();
 
             _downloadUoButton = new ThemedButton
             {
-                Text = "⬇ Scarica UODreams",
+                Text = Loc.S("⬇ Scarica UODreams", "⬇ Download UODreams"),
                 UseGradient = true,
                 CornerRadius = 8,
                 ForeColor = Color.White,
@@ -230,29 +247,80 @@ namespace ClassicUO.Launcher.Custom
             y += pathsCard.Height + 14;
 
             // ----- Card 3: shard -----
-            var shardCard = new CardPanel { Bounds = new Rectangle(margin, y, width, 108) };
+            var shardCard = new CardPanel { Bounds = new Rectangle(margin, y, width, 174) };
             Controls.Add(shardCard);
             cy = 14;
 
-            shardCard.Controls.Add(SectionLabel("Shard  —  UODreams", cx, cy, cw));
-            cy += 26;
+            _shardSectionLabel = SectionLabel("Shard  —  UODreams", cx, cy, cw);
+            shardCard.Controls.Add(_shardSectionLabel);
+            cy += 28;
 
-            var ipLabel = new Label
+            _serverLabel = new Label
             {
                 Text = "Server",
                 ForeColor = Theme.TextMuted,
                 BackColor = Color.Transparent,
                 Bounds = new Rectangle(cx, cy, 200, 16)
             };
-            var portLabel = new Label
+            shardCard.Controls.Add(_serverLabel);
+            cy += 18;
+
+            _serverCombo = new ComboBox
             {
-                Text = "Porta",
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Theme.Input,
+                ForeColor = Theme.Text,
+                Font = new Font("Segoe UI", 10f),
+                Bounds = new Rectangle(cx, cy, cw - 42, 30),
+                DrawMode = DrawMode.OwnerDrawFixed,
+                ItemHeight = 24
+            };
+            _serverCombo.DrawItem += (_, e) =>
+            {
+                if (e.Index < 0) return;
+                bool selected = (e.State & DrawItemState.Selected) != 0;
+                using var bg = new SolidBrush(selected ? Theme.ButtonNeutralHover : Theme.Input);
+                e.Graphics.FillRectangle(bg, e.Bounds);
+                TextRenderer.DrawText(
+                    e.Graphics,
+                    _serverCombo.Items[e.Index]!.ToString(),
+                    _serverCombo.Font,
+                    new Rectangle(e.Bounds.X + 6, e.Bounds.Y, e.Bounds.Width - 6, e.Bounds.Height),
+                    Theme.Text,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter
+                );
+            };
+            _serverCombo.SelectedIndexChanged += (_, _) => OnServerComboChanged();
+            shardCard.Controls.Add(_serverCombo);
+
+            var addServerButton = new ThemedButton
+            {
+                Text = "+",
+                CornerRadius = 8,
+                Font = new Font("Segoe UI Semibold", 13f, FontStyle.Bold),
+                Bounds = new Rectangle(cx + cw - 34, cy, 34, 30)
+            };
+            addServerButton.Click += (_, _) => AddServer();
+            shardCard.Controls.Add(addServerButton);
+            cy += 40;
+
+            _ipLabel = new Label
+            {
+                Text = Loc.S("Indirizzo", "Address"),
+                ForeColor = Theme.TextMuted,
+                BackColor = Color.Transparent,
+                Bounds = new Rectangle(cx, cy, 200, 16)
+            };
+            _portLabel = new Label
+            {
+                Text = Loc.S("Porta", "Port"),
                 ForeColor = Theme.TextMuted,
                 BackColor = Color.Transparent,
                 Bounds = new Rectangle(cx + 320, cy, 80, 16)
             };
-            shardCard.Controls.Add(ipLabel);
-            shardCard.Controls.Add(portLabel);
+            shardCard.Controls.Add(_ipLabel);
+            shardCard.Controls.Add(_portLabel);
             cy += 18;
 
             var ipPanel = new InputPanel { Bounds = new Rectangle(cx, cy, 300, 32) };
@@ -281,7 +349,7 @@ namespace ClassicUO.Launcher.Custom
 
             _encryptionCheck = new CheckBox
             {
-                Text = "Crittografia",
+                Text = Loc.S("Crittografia", "Encryption"),
                 ForeColor = Theme.Text,
                 BackColor = Color.Transparent,
                 Bounds = new Rectangle(cx + 430, cy + 4, cw - 430, 24)
@@ -290,17 +358,17 @@ namespace ClassicUO.Launcher.Custom
             y += shardCard.Height + 18;
 
             // ----- Launch button -----
-            var launchButton = new ThemedButton
+            _launchButton = new ThemedButton
             {
-                Text = "AVVIA",
+                Text = Loc.S("AVVIA", "START"),
                 UseGradient = true,
                 CornerRadius = 12,
                 ForeColor = Color.White,
                 Font = new Font("Segoe UI Semibold", 13f, FontStyle.Bold),
                 Bounds = new Rectangle(margin, y, width, 48)
             };
-            launchButton.Click += (_, _) => Launch();
-            Controls.Add(launchButton);
+            _launchButton.Click += (_, _) => Launch();
+            Controls.Add(_launchButton);
             y += 56;
 
             _statusLabel = new Label
@@ -337,15 +405,79 @@ namespace ClassicUO.Launcher.Custom
             discordBtn.Click += (_, _) => OpenUrl("https://discord.com/invite/FWVjsRv");
             Controls.Add(discordBtn);
 
-            var registerBtn = new FooterLinkButton
+            _registerBtn = new FooterLinkButton
             {
-                Text = "Registrati gratis",
+                Text = Loc.S("Registrati gratis", "Register for free"),
                 Bounds = new Rectangle(margin + (footerBtnW + footerGap) * 2, y, footerBtnW, footerH)
             };
-            registerBtn.Click += (_, _) => OpenUrl("http://www.gamesnet.it/register.php");
-            Controls.Add(registerBtn);
+            _registerBtn.Click += (_, _) => OpenRegisterWindow();
+            Controls.Add(_registerBtn);
+
+            // ----- Language toggle (top-right) -----
+            _langButton = new ThemedButton
+            {
+                Text = LangButtonText(),
+                CornerRadius = 8,
+                Font = new Font("Segoe UI Semibold", 8.5f, FontStyle.Bold),
+                ForeColor = Theme.Text,
+                Bounds = new Rectangle(formWidth - margin - 66, 12, 66, 26)
+            };
+            _langButton.Click += (_, _) => ToggleLanguage();
+            Controls.Add(_langButton);
+            _langButton.BringToFront();
 
             ClientSize = new Size(formWidth, y + footerH + bottomMargin);
+        }
+
+        private static string LangButtonText() => Loc.IsEn ? "🌐 EN" : "🌐 IT";
+
+        private void ToggleLanguage()
+        {
+            Loc.Lang = Loc.IsEn ? "it" : "en";
+            _settings.Language = Loc.Lang;
+            _settings.Save();
+            ApplyLanguage();
+        }
+
+        private void ApplyLanguage()
+        {
+            _langButton.Text = LangButtonText();
+
+            _assistantSectionLabel.Text = Loc.S("Seleziona l'assistant", "Select assistant").ToUpperInvariant();
+            _uoSectionLabel.Text = Loc.S("Client Ultima Online", "Ultima Online client").ToUpperInvariant();
+            _shardSectionLabel.Text = "Shard  —  UODreams".ToUpperInvariant();
+
+            _assistantBrowseButton.Text = Loc.S("Sfoglia…", "Browse…");
+            _uoBrowseButton.Text = Loc.S("Sfoglia…", "Browse…");
+            _downloadAssistantButton.Text = Loc.S("⬇ Scarica", "⬇ Download");
+            _downloadUoButton.Text = Loc.S("⬇ Scarica UODreams", "⬇ Download UODreams");
+            _launchButton.Text = Loc.S("AVVIA", "START");
+            _registerBtn.Text = Loc.S("Registrati gratis", "Register for free");
+
+            _serverLabel.Text = "Server";
+            _ipLabel.Text = Loc.S("Indirizzo", "Address");
+            _portLabel.Text = Loc.S("Porta", "Port");
+            _encryptionCheck.Text = Loc.S("Crittografia", "Encryption");
+
+            // Refresh dynamic/contextual texts.
+            UpdateAssistantUi();
+            UpdateUoDownloadUi();
+
+            _statusLabel.Text = "";
+        }
+
+        private void OpenRegisterWindow()
+        {
+            try
+            {
+                using var form = new RegisterForm();
+                form.ShowDialog(this);
+            }
+            catch (Exception ex)
+            {
+                LauncherLog.Error("Failed to open registration window", ex);
+                RegisterForm.OpenInExternalBrowser("https://www.gamesnet.it/register");
+            }
         }
 
         private static void OpenUrl(string url)
@@ -361,7 +493,7 @@ namespace ClassicUO.Launcher.Custom
             catch (Exception ex)
             {
                 MessageBox.Show(
-                    "Impossibile aprire il link:\n" + ex.Message,
+                    Loc.S("Impossibile aprire il link:\n", "Unable to open the link:\n") + ex.Message,
                     "UODreams Launcher",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Warning
@@ -396,7 +528,7 @@ namespace ClassicUO.Launcher.Custom
 
             var button = new ThemedButton
             {
-                Text = "Sfoglia…",
+                Text = Loc.S("Sfoglia…", "Browse…"),
                 Bounds = new Rectangle(x + width - 94, y, 94, 32)
             };
             button.Click += (_, _) => browse();
@@ -418,6 +550,7 @@ namespace ClassicUO.Launcher.Custom
             _ipBox.Text = _settings.ShardIp;
             _portBox.Value = Math.Min(Math.Max(_settings.ShardPort, 1), 65535);
             _encryptionCheck.Checked = _settings.Encryption != 0;
+            RefreshServerCombo();
 
             _clientPathBox.Text = !string.IsNullOrEmpty(_settings.ClientPath) && File.Exists(_settings.ClientPath)
                 ? _settings.ClientPath
@@ -426,6 +559,95 @@ namespace ClassicUO.Launcher.Custom
             UpdateAssistantUi();
             UpdateAssistantDownloadUi();
             UpdateUoDownloadUi();
+        }
+
+        private void RefreshServerCombo()
+        {
+            _suppressServerComboEvents = true;
+            _serverCombo.Items.Clear();
+
+            foreach (ShardServer server in _settings.Servers)
+            {
+                _serverCombo.Items.Add(server.Name);
+            }
+
+            int idx = _serverCombo.FindStringExact(_settings.SelectedServer);
+
+            if (idx < 0)
+            {
+                string ip = (_ipBox.Text ?? "").Trim();
+                ShardServer? match = _settings.Servers.Find(s =>
+                    string.Equals(s.Ip, ip, StringComparison.OrdinalIgnoreCase) &&
+                    s.Port == (int)_portBox.Value);
+
+                if (match != null)
+                {
+                    idx = _serverCombo.Items.IndexOf(match.Name);
+                }
+            }
+
+            if (idx < 0 && _serverCombo.Items.Count > 0)
+            {
+                idx = 0;
+            }
+
+            if (idx >= 0)
+            {
+                _serverCombo.SelectedIndex = idx;
+            }
+
+            _suppressServerComboEvents = false;
+        }
+
+        private void OnServerComboChanged()
+        {
+            if (_suppressServerComboEvents)
+            {
+                return;
+            }
+
+            if (_serverCombo.SelectedItem is not string name)
+            {
+                return;
+            }
+
+            ShardServer? server = _settings.Servers.Find(s => s.Name == name);
+            if (server == null)
+            {
+                return;
+            }
+
+            _settings.SelectedServer = name;
+            _ipBox.Text = server.Ip;
+            _portBox.Value = Math.Min(Math.Max(server.Port, 1), 65535);
+        }
+
+        private void AddServer()
+        {
+            ShardServer? added = ShardServerDialog.Prompt(this);
+            if (added == null)
+            {
+                return;
+            }
+
+            ShardServer? existing = _settings.Servers.Find(s =>
+                string.Equals(s.Name, added.Name, StringComparison.OrdinalIgnoreCase));
+
+            if (existing != null)
+            {
+                existing.Ip = added.Ip;
+                existing.Port = added.Port;
+            }
+            else
+            {
+                _settings.Servers.Add(added);
+            }
+
+            _settings.SelectedServer = added.Name;
+            _settings.Save();
+
+            RefreshServerCombo();
+            OnServerComboChanged();
         }
 
         private void UpdateUoDownloadUi()
@@ -437,8 +659,10 @@ namespace ClassicUO.Launcher.Custom
 
             _downloadUoButton.Visible = !valid;
             _uoHintLabel.Text = valid
-                ? "Client Ultima Online pronto."
-                : "Client non trovato — scarica il pacchetto UODreams o seleziona la cartella con tiledata.mul.";
+                ? Loc.S("Client Ultima Online pronto.", "Ultima Online client ready.")
+                : Loc.S(
+                    "Client non trovato — scarica il pacchetto UODreams o seleziona la cartella del gioco con il client.",
+                    "Client not found — download the UODreams package or select the game folder containing the client.");
             _uoHintLabel.ForeColor = valid ? Theme.SectionGreen : Theme.TextMuted;
         }
 
@@ -513,23 +737,31 @@ namespace ClassicUO.Launcher.Custom
             switch (SelectedAssistant)
             {
                 case "ClassicAssist":
-                    _assistantPathLabel.Text = "Percorso di ClassicAssist.dll (o della sua cartella)";
+                    _assistantPathLabel.Text = Loc.S(
+                        "Percorso di ClassicAssist.dll (o della sua cartella)",
+                        "Path to ClassicAssist.dll (or its folder)");
                     _assistantPathBox.Text = _settings.ClassicAssistPath;
                     break;
                 case "Razor Enhanced":
-                    _assistantPathLabel.Text = "Percorso di RazorEnhanced (cartella o RazorEnhanced.exe)";
+                    _assistantPathLabel.Text = Loc.S(
+                        "Percorso di RazorEnhanced (cartella o RazorEnhanced.exe)",
+                        "Path to RazorEnhanced (folder or RazorEnhanced.exe)");
                     _assistantPathBox.Text = string.IsNullOrWhiteSpace(_settings.RazorPath)
                         ? ClientRuntimeDownloader.DetectRazorEnhancedPath() ?? ""
                         : _settings.RazorPath;
                     break;
                 case "Orion":
-                    _assistantPathLabel.Text = "Percorso di Orion Launcher (cartella o OrionLauncher64.exe)";
+                    _assistantPathLabel.Text = Loc.S(
+                        "Percorso di Orion Launcher (cartella o OrionLauncher64.exe)",
+                        "Path to Orion Launcher (folder or OrionLauncher64.exe)");
                     _assistantPathBox.Text = string.IsNullOrWhiteSpace(_settings.OrionPath)
                         ? ClientRuntimeDownloader.DetectOrionInstallRoot() ?? ""
                         : _settings.OrionPath;
                     break;
                 case "UOSteam":
-                    _assistantPathLabel.Text = "Percorso di UOSteam (cartella o UOS.exe)";
+                    _assistantPathLabel.Text = Loc.S(
+                        "Percorso di UOSteam (cartella o UOS.exe)",
+                        "Path to UOSteam (folder or UOS.exe)");
                     _assistantPathBox.Text = string.IsNullOrWhiteSpace(_settings.UOSteamPath)
                         ? ClientRuntimeDownloader.DetectUOSteamExe() ?? ""
                         : _settings.UOSteamPath;
@@ -556,22 +788,30 @@ namespace ClassicUO.Launcher.Custom
 
             if (installed)
             {
-                _assistantHintLabel.Text = $"{SelectedAssistant} pronto.";
+                _assistantHintLabel.Text = Loc.S($"{SelectedAssistant} pronto.", $"{SelectedAssistant} ready.");
                 _assistantHintLabel.ForeColor = Theme.SectionGreen;
             }
             else if (canDownload)
             {
                 _assistantHintLabel.Text = SelectedAssistant switch
                 {
-                    "UOSteam" => "UOSteam non trovato — scaricalo o seleziona la cartella con UOS.exe.",
-                    "Orion" => "Orion non trovato — scaricalo o seleziona la cartella con OrionLauncher64.exe.",
-                    _ => $"{SelectedAssistant} non trovato — scaricalo o seleziona il percorso del plugin."
+                    "UOSteam" => Loc.S(
+                        "UOSteam non trovato — scaricalo o seleziona la cartella con UOS.exe.",
+                        "UOSteam not found — download it or select the folder containing UOS.exe."),
+                    "Orion" => Loc.S(
+                        "Orion non trovato — scaricalo o seleziona la cartella con OrionLauncher64.exe.",
+                        "Orion not found — download it or select the folder containing OrionLauncher64.exe."),
+                    _ => Loc.S(
+                        $"{SelectedAssistant} non trovato — scaricalo o seleziona il percorso del plugin.",
+                        $"{SelectedAssistant} not found — download it or select the plugin path.")
                 };
                 _assistantHintLabel.ForeColor = Theme.TextMuted;
             }
             else
             {
-                _assistantHintLabel.Text = "Seleziona il percorso dell'assistente.";
+                _assistantHintLabel.Text = Loc.S(
+                    "Seleziona il percorso dell'assistente.",
+                    "Select the assistant path.");
                 _assistantHintLabel.ForeColor = Theme.TextMuted;
             }
         }
@@ -582,12 +822,20 @@ namespace ClassicUO.Launcher.Custom
             {
                 Title = SelectedAssistant switch
                 {
-                    "ClassicAssist" => "Seleziona ClassicAssist.dll",
-                    "Orion" => "Seleziona OrionLauncher64.exe o la cartella di Orion Launcher",
-                    "UOSteam" => "Seleziona UOS.exe o la cartella di UOSteam",
-                    _ => "Seleziona RazorEnhanced.exe o la sua cartella"
+                    "ClassicAssist" => Loc.S("Seleziona ClassicAssist.dll", "Select ClassicAssist.dll"),
+                    "Orion" => Loc.S(
+                        "Seleziona OrionLauncher64.exe o la cartella di Orion Launcher",
+                        "Select OrionLauncher64.exe or the Orion Launcher folder"),
+                    "UOSteam" => Loc.S(
+                        "Seleziona UOS.exe o la cartella di UOSteam",
+                        "Select UOS.exe or the UOSteam folder"),
+                    _ => Loc.S(
+                        "Seleziona RazorEnhanced.exe o la sua cartella",
+                        "Select RazorEnhanced.exe or its folder")
                 },
-                Filter = "Plugin (*.dll;*.exe)|*.dll;*.exe|Tutti i file (*.*)|*.*"
+                Filter = Loc.S(
+                    "Plugin (*.dll;*.exe)|*.dll;*.exe|Tutti i file (*.*)|*.*",
+                    "Plugin (*.dll;*.exe)|*.dll;*.exe|All files (*.*)|*.*")
             };
 
             if (!string.IsNullOrEmpty(_assistantPathBox.Text))
@@ -610,7 +858,9 @@ namespace ClassicUO.Launcher.Custom
         {
             using var dialog = new FolderBrowserDialog
             {
-                Description = "Seleziona la cartella di Ultima Online (deve contenere tiledata.mul)",
+                Description = Loc.S(
+                    "Seleziona la cartella di Ultima Online (deve contenere tiledata.mul)",
+                    "Select the Ultima Online folder (must contain tiledata.mul)"),
                 UseDescriptionForTitle = true
             };
 
@@ -631,9 +881,15 @@ namespace ClassicUO.Launcher.Custom
                 return;
             }
 
+            string orionInfoMessage = Loc.S(
+                "Orion Assistant: una volta terminato il download, si aprirà in automatico e bisognerà aggiornarlo e configurarlo.",
+                "Orion Assistant: once the download is finished, it will open automatically and you will need to update and configure it.");
+
             using var folderDialog = new FolderBrowserDialog
             {
-                Description = $"Scegli dove installare {SelectedAssistant}",
+                Description = Loc.S(
+                    $"Scegli dove installare {SelectedAssistant}",
+                    $"Choose where to install {SelectedAssistant}"),
                 UseDescriptionForTitle = true
             };
 
@@ -666,10 +922,13 @@ namespace ClassicUO.Launcher.Custom
             });
 
             _statusLabel.ForeColor = Theme.TextMuted;
-            _statusLabel.Text = $"Download {SelectedAssistant} in corso…";
+            _statusLabel.Text = Loc.S($"Download {SelectedAssistant} in corso…", $"Downloading {SelectedAssistant}…");
             _downloadAssistantButton.Enabled = false;
 
-            using var progressForm = DownloadProgressForm.ForAssistant(SelectedAssistant, installDir);
+            using var progressForm = DownloadProgressForm.ForAssistant(
+                SelectedAssistant,
+                installDir,
+                SelectedAssistant == "Orion" ? orionInfoMessage : null);
             var result = progressForm.ShowDialog(this);
 
             _downloadAssistantButton.Enabled = true;
@@ -680,12 +939,14 @@ namespace ClassicUO.Launcher.Custom
                 SaveSettings();
                 UpdateAssistantDownloadUi();
                 _statusLabel.ForeColor = Theme.SectionGreen;
-                _statusLabel.Text = $"{SelectedAssistant} installato correttamente.";
+                _statusLabel.Text = Loc.S($"{SelectedAssistant} installato correttamente.", $"{SelectedAssistant} installed successfully.");
             }
             else if (result == DialogResult.Abort)
             {
                 _statusLabel.ForeColor = Theme.Error;
-                _statusLabel.Text = $"Download di {SelectedAssistant} non riuscito. Riprova o seleziona manualmente il percorso.";
+                _statusLabel.Text = Loc.S(
+                    $"Download di {SelectedAssistant} non riuscito. Riprova o seleziona manualmente il percorso.",
+                    $"{SelectedAssistant} download failed. Retry or select the path manually.");
             }
             else
             {
@@ -697,7 +958,9 @@ namespace ClassicUO.Launcher.Custom
         {
             using var folderDialog = new FolderBrowserDialog
             {
-                Description = "Scegli dove salvare il client Ultima Online UODreams",
+                Description = Loc.S(
+                    "Scegli dove salvare il client Ultima Online UODreams",
+                    "Choose where to save the Ultima Online UODreams client"),
                 UseDescriptionForTitle = true
             };
 
@@ -712,7 +975,7 @@ namespace ClassicUO.Launcher.Custom
             string extractDir = Path.Combine(folderDialog.SelectedPath, "Ultima Online UODreams");
 
             _statusLabel.ForeColor = Theme.TextMuted;
-            _statusLabel.Text = "Download client UODreams in corso…";
+            _statusLabel.Text = Loc.S("Download client UODreams in corso…", "Downloading UODreams client…");
             _downloadUoButton.Enabled = false;
 
             using var progressForm = DownloadProgressForm.ForUoClient(extractDir);
@@ -726,12 +989,14 @@ namespace ClassicUO.Launcher.Custom
                 SaveSettings();
                 UpdateUoDownloadUi();
                 _statusLabel.ForeColor = Theme.SectionGreen;
-                _statusLabel.Text = "Client UODreams installato correttamente.";
+                _statusLabel.Text = Loc.S("Client UODreams installato correttamente.", "UODreams client installed successfully.");
             }
             else if (result == DialogResult.Abort)
             {
                 _statusLabel.ForeColor = Theme.Error;
-                _statusLabel.Text = "Download non riuscito. Riprova o seleziona manualmente la cartella.";
+                _statusLabel.Text = Loc.S(
+                    "Download non riuscito. Riprova o seleziona manualmente la cartella.",
+                    "Download failed. Retry or select the folder manually.");
             }
             else
             {
@@ -775,10 +1040,10 @@ namespace ClassicUO.Launcher.Custom
             string? orionExe = AssistantPaths.ResolveOrionLauncherExe(_assistantPathBox.Text);
             if (orionExe == null)
             {
-                ShowError(
-                    "Orion Launcher non trovato. Seleziona la cartella con OrionLauncher64.exe\n" +
-                    "(es. C:\\Orion Launcher)."
-                );
+                ShowError(Loc.S(
+                    "Orion Launcher non trovato. Seleziona la cartella con OrionLauncher64.exe\n(es. C:\\Orion Launcher).",
+                    "Orion Launcher not found. Select the folder containing OrionLauncher64.exe\n(e.g. C:\\Orion Launcher)."
+                ));
                 return;
             }
 
@@ -799,18 +1064,20 @@ namespace ClassicUO.Launcher.Custom
                 Process? process = Process.Start(psi);
                 if (process == null)
                 {
-                    ShowError("Impossibile avviare Orion Launcher.");
+                    ShowError(Loc.S("Impossibile avviare Orion Launcher.", "Unable to start Orion Launcher."));
                     return;
                 }
 
                 _statusLabel.ForeColor = Theme.TextMuted;
-                _statusLabel.Text = "Orion Launcher avviato. Seleziona il profilo e premi Launch.";
+                _statusLabel.Text = Loc.S(
+                    "Orion Launcher avviato. Seleziona il profilo e premi Launch.",
+                    "Orion Launcher started. Select the profile and press Launch.");
                 LauncherLog.Info($"Orion Launcher avviato PID={process.Id}");
                 Close();
             }
             catch (Exception ex)
             {
-                ShowError("Errore durante l'avvio di Orion Launcher: " + ex.Message, ex);
+                ShowError(Loc.S("Errore durante l'avvio di Orion Launcher: ", "Error while starting Orion Launcher: ") + ex.Message, ex);
             }
         }
 
@@ -819,9 +1086,23 @@ namespace ClassicUO.Launcher.Custom
             string? uosExe = AssistantPaths.ResolveUOSteamExe(_assistantPathBox.Text);
             if (uosExe == null)
             {
-                ShowError("UOSteam non trovato. Seleziona la cartella con UOS.exe\n(es. C:\\Program Files (x86)\\UOS).");
+                ShowError(Loc.S(
+                    "UOSteam non trovato. Seleziona la cartella con UOS.exe\n(es. C:\\Program Files (x86)\\UOS).",
+                    "UOSteam not found. Select the folder containing UOS.exe\n(e.g. C:\\Program Files (x86)\\UOS)."));
                 return;
             }
+
+            MessageBox.Show(
+                this,
+                Loc.S(
+                    "UOSteam è un assistant che non supporta ClassicUO. Se vuoi provare un nuovo assistant simile, " +
+                    "prova ClassicAssist, così potrai usufruire di tutte le feature del Classic Client di UO.",
+                    "UOSteam is an assistant that does not support ClassicUO. If you want to try a similar new " +
+                    "assistant, try ClassicAssist, so you can enjoy all the features of the UO Classic Client."),
+                "UODreams Launcher",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information
+            );
 
             SaveSettings();
 
@@ -843,18 +1124,20 @@ namespace ClassicUO.Launcher.Custom
                 Process? process = Process.Start(psi);
                 if (process == null)
                 {
-                    ShowError("Impossibile avviare UOS.exe.");
+                    ShowError(Loc.S("Impossibile avviare UOS.exe.", "Unable to start UOS.exe."));
                     return;
                 }
 
                 _statusLabel.ForeColor = Theme.TextMuted;
-                _statusLabel.Text = "UOSteam avviato. Configura shard/porta nell'interfaccia UOS.";
+                _statusLabel.Text = Loc.S(
+                    "UOSteam avviato. Configura shard/porta nell'interfaccia UOS.",
+                    "UOSteam started. Configure shard/port in the UOS interface.");
                 LauncherLog.Info($"UOSteam avviato PID={process.Id}");
                 Close();
             }
             catch (Exception ex)
             {
-                ShowError("Errore durante l'avvio di UOSteam: " + ex.Message, ex);
+                ShowError(Loc.S("Errore durante l'avvio di UOSteam: ", "Error while starting UOSteam: ") + ex.Message, ex);
             }
         }
 
@@ -866,6 +1149,7 @@ namespace ClassicUO.Launcher.Custom
             _settings.ShardIp = _ipBox.Text.Trim();
             _settings.ShardPort = (int)_portBox.Value;
             _settings.Encryption = _encryptionCheck.Checked ? 1 : 0;
+            _settings.SelectedServer = _serverCombo.SelectedItem as string ?? _settings.SelectedServer;
 
             switch (SelectedAssistant)
             {
@@ -905,7 +1189,7 @@ namespace ClassicUO.Launcher.Custom
                 using var bootstrapForm = DownloadProgressForm.ForClientRuntime();
                 if (bootstrapForm.ShowDialog(this) != DialogResult.OK)
                 {
-                    ShowError("Componenti di gioco non installati.");
+                    ShowError(Loc.S("Componenti di gioco non installati.", "Game components not installed."));
                     return;
                 }
 
@@ -926,22 +1210,28 @@ namespace ClassicUO.Launcher.Custom
 
                 if (!File.Exists(effectiveClient) || !IsNativeCuoDll(nativeCuo))
                 {
-                    ShowError(
+                    ShowError(Loc.S(
                         "Razor Enhanced richiede la cartella Client\\Bootstrap con ClassicUO.exe e cuo.dll nativo.\n" +
-                        "Il client moddato (cuo-modded.exe) non può caricare Razor in-process."
-                    );
+                        "Il client moddato (cuo-modded.exe) non può caricare Razor in-process.",
+                        "Razor Enhanced requires the Client\\Bootstrap folder with ClassicUO.exe and native cuo.dll.\n" +
+                        "The modded client (cuo-modded.exe) cannot load Razor in-process."
+                    ));
                     return;
                 }
             }
             else if (!File.Exists(effectiveClient))
             {
-                ShowError("Client non trovato. Seleziona ClassicUO.exe o cuo-modded.exe nella cartella Client.");
+                ShowError(Loc.S(
+                    "Client non trovato. Seleziona ClassicUO.exe o cuo-modded.exe nella cartella Client.",
+                    "Client not found. Select ClassicUO.exe or cuo-modded.exe in the Client folder."));
                 return;
             }
 
             if (!Directory.Exists(uoPath) || !File.Exists(Path.Combine(uoPath, "tiledata.mul")))
             {
-                ShowError("Cartella di Ultima Online non valida (manca tiledata.mul).");
+                ShowError(Loc.S(
+                    "Cartella di Ultima Online non valida (manca tiledata.mul).",
+                    "Invalid Ultima Online folder (tiledata.mul is missing)."));
                 return;
             }
 
@@ -953,7 +1243,7 @@ namespace ClassicUO.Launcher.Custom
 
                 if (assistantDll == null)
                 {
-                    ShowError($"Percorso di {SelectedAssistant} non valido.");
+                    ShowError(Loc.S($"Percorso di {SelectedAssistant} non valido.", $"Invalid {SelectedAssistant} path."));
                     return;
                 }
 
@@ -961,8 +1251,11 @@ namespace ClassicUO.Launcher.Custom
                 {
                     ShowError(
                         Path.GetFileName(assistantDll) +
-                        " è a 32 bit (x86) e non può essere caricato dal client a 64 bit.\n" +
-                        "Usa Razor Enhanced (bootstrap + cuo.dll nativo) o ClassicAssist."
+                        Loc.S(
+                            " è a 32 bit (x86) e non può essere caricato dal client a 64 bit.\n" +
+                            "Usa Razor Enhanced (bootstrap + cuo.dll nativo) o ClassicAssist.",
+                            " is 32-bit (x86) and cannot be loaded by the 64-bit client.\n" +
+                            "Use Razor Enhanced (bootstrap + native cuo.dll) or ClassicAssist.")
                     );
                     return;
                 }
@@ -1001,21 +1294,23 @@ namespace ClassicUO.Launcher.Custom
                 Process? process = Process.Start(psi);
                 if (process == null)
                 {
-                    ShowError("Impossibile avviare il client (Process.Start ha restituito null).");
+                    ShowError(Loc.S(
+                        "Impossibile avviare il client (Process.Start ha restituito null).",
+                        "Unable to start the client (Process.Start returned null)."));
                     return;
                 }
 
                 _statusLabel.ForeColor = Theme.TextMuted;
                 _statusLabel.Text = SelectedAssistant == "Nessuno"
-                    ? "Client avviato."
-                    : $"Client avviato con {SelectedAssistant}.";
+                    ? Loc.S("Client avviato.", "Client started.")
+                    : Loc.S($"Client avviato con {SelectedAssistant}.", $"Client started with {SelectedAssistant}.");
 
                 LauncherLog.Info($"Client avviato PID={process.Id}");
                 Close();
             }
             catch (Exception ex)
             {
-                ShowError("Errore durante l'avvio: " + ex.Message, ex);
+                ShowError(Loc.S("Errore durante l'avvio: ", "Error while starting: ") + ex.Message, ex);
             }
         }
 

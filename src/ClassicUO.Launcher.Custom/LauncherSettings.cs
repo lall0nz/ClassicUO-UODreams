@@ -1,10 +1,18 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace ClassicUO.Launcher.Custom
 {
+    public sealed class ShardServer
+    {
+        public string Name { get; set; } = "";
+        public string Ip { get; set; } = "";
+        public int Port { get; set; } = 2593;
+    }
+
     public sealed class LauncherSettings
     {
         public string Assistant { get; set; } = "Nessuno"; // Nessuno | ClassicAssist | Razor Enhanced | Orion | UOSteam
@@ -18,6 +26,38 @@ namespace ClassicUO.Launcher.Custom
         public int ShardPort { get; set; } = 2593;
         public int Encryption { get; set; } = 0;
         public bool DesktopShortcutCreated { get; set; } = false;
+        public string Language { get; set; } = "it"; // it | en
+
+        public List<ShardServer> Servers { get; set; } = new();
+        public string SelectedServer { get; set; } = "UODreams";
+
+        public static List<ShardServer> DefaultServers() => new()
+        {
+            new ShardServer { Name = "UODreams", Ip = "login.uodreams.com", Port = 2593 },
+            new ShardServer { Name = "UODreams TC", Ip = "login.uodreams.com", Port = 2594 },
+            new ShardServer { Name = "UODreams Staff TC", Ip = "login.uodreams.com", Port = 2596 }
+        };
+
+        /// <summary>
+        /// Ensures the default UODreams servers are always present (merged with any custom ones).
+        /// </summary>
+        public void EnsureDefaultServers()
+        {
+            if (Servers == null)
+            {
+                Servers = new List<ShardServer>();
+            }
+
+            foreach (ShardServer def in DefaultServers())
+            {
+                bool exists = Servers.Exists(s =>
+                    string.Equals(s.Name, def.Name, StringComparison.OrdinalIgnoreCase));
+                if (!exists)
+                {
+                    Servers.Add(def);
+                }
+            }
+        }
 
         [JsonIgnore]
         public static string FilePath =>
@@ -31,7 +71,10 @@ namespace ClassicUO.Launcher.Custom
                 {
                     var loaded = JsonSerializer.Deserialize<LauncherSettings>(File.ReadAllText(FilePath));
                     if (loaded != null)
+                    {
+                        loaded.EnsureDefaultServers();
                         return loaded;
+                    }
                 }
             }
             catch
@@ -39,7 +82,9 @@ namespace ClassicUO.Launcher.Custom
                 // corrupted settings file: fall back to defaults
             }
 
-            return new LauncherSettings();
+            var fresh = new LauncherSettings();
+            fresh.EnsureDefaultServers();
+            return fresh;
         }
 
         public void Save()

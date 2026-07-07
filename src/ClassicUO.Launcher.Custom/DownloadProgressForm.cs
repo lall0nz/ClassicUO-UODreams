@@ -42,28 +42,33 @@ namespace ClassicUO.Launcher.Custom
                 "Download componenti ClassicUO UODreams…"
             );
 
-        public static DownloadProgressForm ForAssistant(string assistant, string installDirectory) =>
+        public static DownloadProgressForm ForAssistant(string assistant, string installDirectory, string? infoMessage = null) =>
             new(
                 async (progress, ct) =>
                     await AssistantDownloader.DownloadAndInstallAsync(assistant, installDirectory, progress, ct)
                         .ConfigureAwait(true),
-                $"UODreams Launcher — Download {assistant}",
-                $"Scaricamento {assistant}…"
+                Loc.S($"UODreams Launcher — Download {assistant}", $"UODreams Launcher — Download {assistant}"),
+                Loc.S($"Scaricamento {assistant}…", $"Downloading {assistant}…"),
+                infoMessage
             );
 
         private DownloadProgressForm(
             Func<IProgress<DownloadProgressReport>, CancellationToken, Task<string?>> downloadWork,
             string windowTitle,
-            string title)
+            string title,
+            string? infoMessage = null)
         {
             _downloadWork = downloadWork;
+
+            bool hasInfo = !string.IsNullOrWhiteSpace(infoMessage);
+            int infoHeight = hasInfo ? 62 : 0;
 
             Text = windowTitle;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new Size(520, 210);
+            ClientSize = new Size(520, 210 + infoHeight);
             BackColor = Theme.WindowBottom;
             ForeColor = Theme.Text;
             Font = new Font("Segoe UI", 9.5f);
@@ -104,8 +109,8 @@ namespace ClassicUO.Launcher.Custom
 
             _cancelButton = new ThemedButton
             {
-                Text = "Annulla",
-                Bounds = new Rectangle(402, 148, 94, 34)
+                Text = Loc.S("Annulla", "Cancel"),
+                Bounds = new Rectangle(402, 148 + infoHeight, 94, 34)
             };
             _cancelButton.Click += OnCancelClick;
 
@@ -113,6 +118,28 @@ namespace ClassicUO.Launcher.Custom
             Controls.Add(_detailLabel);
             Controls.Add(_speedLabel);
             Controls.Add(_progressBar);
+
+            if (hasInfo)
+            {
+                var infoPanel = new InputPanel
+                {
+                    Bounds = new Rectangle(24, 138, 472, infoHeight - 6)
+                };
+                var infoLabel = new Label
+                {
+                    Text = infoMessage,
+                    ForeColor = Theme.SectionGreen,
+                    BackColor = Color.Transparent,
+                    AutoSize = false,
+                    Dock = DockStyle.Fill,
+                    Padding = new Padding(10, 6, 10, 6),
+                    TextAlign = ContentAlignment.MiddleLeft,
+                    Font = new Font("Segoe UI Semibold", 9f, FontStyle.Bold)
+                };
+                infoPanel.Controls.Add(infoLabel);
+                Controls.Add(infoPanel);
+            }
+
             Controls.Add(_cancelButton);
 
             Shown += OnFormShown;
