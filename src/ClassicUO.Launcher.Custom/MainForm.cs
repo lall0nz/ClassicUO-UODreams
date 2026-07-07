@@ -82,11 +82,12 @@ namespace ClassicUO.Launcher.Custom
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(620, 700);
             DoubleBuffered = true;
 
+            const int formWidth = 620;
+            const int bottomMargin = 12;
             int margin = 24;
-            int width = ClientSize.Width - margin * 2;
+            int width = formWidth - margin * 2;
             int y = 16;
 
             // ----- UODreams banner -----
@@ -103,21 +104,8 @@ namespace ClassicUO.Launcher.Custom
                     Bounds = new Rectangle(margin, y, width, bannerH)
                 };
                 Controls.Add(logoBox);
-                y += bannerH + 4;
+                y += bannerH + 10;
             }
-
-            var subtitle = new Label
-            {
-                Text = "CLIENT PERSONALIZZATO  •  GRID CONTAINER  •  BARRE VITA CLASSICHE  •  AUTO-EVITA OSTACOLI",
-                Font = new Font("Segoe UI Semibold", 7.8f, FontStyle.Bold),
-                ForeColor = Theme.TextMuted,
-                BackColor = Color.Transparent,
-                AutoSize = false,
-                Bounds = new Rectangle(margin, y, width, 18),
-                TextAlign = ContentAlignment.MiddleCenter
-            };
-            Controls.Add(subtitle);
-            y += 30;
 
             // ----- Card 1: assistant -----
             var assistantCard = new CardPanel { Bounds = new Rectangle(margin, y, width, 190) };
@@ -318,10 +306,64 @@ namespace ClassicUO.Launcher.Custom
                 ForeColor = Theme.TextMuted,
                 BackColor = Color.Transparent,
                 AutoSize = false,
-                Bounds = new Rectangle(margin, y, width, 34),
+                Bounds = new Rectangle(margin, y, width, 26),
                 TextAlign = ContentAlignment.TopCenter
             };
             Controls.Add(_statusLabel);
+            y += 30;
+
+            // ----- Footer links -----
+            const int footerGap = 6;
+            const int footerH = 28;
+            int footerBtnW = (width - footerGap * 2) / 3;
+
+            var websiteBtn = new FooterLinkButton
+            {
+                Text = "UODreams",
+                Bounds = new Rectangle(margin, y, footerBtnW, footerH)
+            };
+            websiteBtn.Click += (_, _) => OpenUrl("https://www.uodreams.it");
+            Controls.Add(websiteBtn);
+
+            var discordBtn = new FooterLinkButton
+            {
+                Text = "💬 Discord",
+                AccentColor = Theme.DiscordAccent,
+                Bounds = new Rectangle(margin + footerBtnW + footerGap, y, footerBtnW, footerH)
+            };
+            discordBtn.Click += (_, _) => OpenUrl("https://discord.com/invite/FWVjsRv");
+            Controls.Add(discordBtn);
+
+            var registerBtn = new FooterLinkButton
+            {
+                Text = "Registrati gratis",
+                Bounds = new Rectangle(margin + (footerBtnW + footerGap) * 2, y, footerBtnW, footerH)
+            };
+            registerBtn.Click += (_, _) => OpenUrl("http://www.gamesnet.it/register.php");
+            Controls.Add(registerBtn);
+
+            ClientSize = new Size(formWidth, y + footerH + bottomMargin);
+        }
+
+        private static void OpenUrl(string url)
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = url,
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Impossibile aprire il link:\n" + ex.Message,
+                    "UODreams Launcher",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning
+                );
+            }
         }
 
         private static Label SectionLabel(string text, int x, int y, int width)

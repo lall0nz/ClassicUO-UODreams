@@ -22,6 +22,8 @@ namespace ClassicUO.Launcher.Custom
         public static readonly Color ButtonNeutral = Color.FromArgb(38, 38, 64);
         public static readonly Color ButtonNeutralHover = Color.FromArgb(50, 50, 82);
         public static readonly Color Error = Color.FromArgb(244, 105, 105);
+        public static readonly Color DiscordAccent = Color.FromArgb(88, 101, 242);
+        public static readonly Color LinkHoverBorder = Color.FromArgb(78, 107, 245);
 
         public static GraphicsPath RoundedRect(Rectangle bounds, int radius)
         {
@@ -150,6 +152,62 @@ namespace ClassicUO.Launcher.Custom
 
             TextRenderer.DrawText(
                 e.Graphics, Text, Font, rect, ForeColor,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis
+            );
+        }
+    }
+
+    // Compact footer link button with subtle border and hover glow.
+    internal sealed class FooterLinkButton : Button
+    {
+        private bool _hover;
+        private bool _down;
+
+        public Color? AccentColor { get; set; }
+        public int CornerRadius { get; set; } = 8;
+
+        public FooterLinkButton()
+        {
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer, true);
+            FlatStyle = FlatStyle.Flat;
+            FlatAppearance.BorderSize = 0;
+            BackColor = Color.Transparent;
+            ForeColor = Theme.TextMuted;
+            Font = new Font("Segoe UI Semibold", 8f, FontStyle.Bold);
+            Cursor = Cursors.Hand;
+        }
+
+        protected override void OnMouseEnter(EventArgs e) { _hover = true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { _hover = false; _down = false; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnMouseDown(MouseEventArgs e) { _down = true; Invalidate(); base.OnMouseDown(e); }
+        protected override void OnMouseUp(MouseEventArgs e) { _down = false; Invalidate(); base.OnMouseUp(e); }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+
+            var rect = new Rectangle(0, 0, Width - 1, Height - 1);
+            using var path = Theme.RoundedRect(rect, CornerRadius);
+
+            Color fillColor = _down ? Theme.ButtonNeutral : Theme.ButtonNeutral;
+            if (_hover)
+                fillColor = Theme.ButtonNeutralHover;
+
+            Color borderColor = Theme.InputBorder;
+            if (_hover)
+                borderColor = AccentColor ?? Theme.LinkHoverBorder;
+
+            using (var brush = new SolidBrush(fillColor))
+                e.Graphics.FillPath(brush, path);
+            using (var pen = new Pen(borderColor))
+                e.Graphics.DrawPath(pen, path);
+
+            Color textColor = AccentColor ?? (_hover ? Theme.Text : Theme.TextMuted);
+            if (_down && AccentColor == null)
+                textColor = Theme.TextMuted;
+
+            TextRenderer.DrawText(
+                e.Graphics, Text, Font, rect, textColor,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis
             );
         }
