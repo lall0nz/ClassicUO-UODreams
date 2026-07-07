@@ -78,6 +78,13 @@ namespace ClassicUO
         {
             CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
 
+            // Legacy code-page encodings (e.g. 850) are not available by default on
+            // modern .NET; managed assistants like ClassicAssist/IronPython need them.
+            System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+
+            // FNA 26.x defaults to SDL3; our native libs ship SDL2 (external/x64).
+            Environment.SetEnvironmentVariable("FNA_PLATFORM_BACKEND", "SDL2");
+
             Log.Start(LogTypes.All);
 
             DllMap.Init();

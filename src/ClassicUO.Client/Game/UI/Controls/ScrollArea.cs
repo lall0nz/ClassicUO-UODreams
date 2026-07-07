@@ -184,6 +184,17 @@ namespace ClassicUO.Game.UI.Controls
         private void CalculateScrollBarMaxValue()
         {
             _scrollBar.Height = ScrollMaxHeight >= 0 ? ScrollMaxHeight : Height;
+
+            // Keep the scrollbar pinned to the right edge when the area is resized.
+            if (_isNormalScroll)
+            {
+                _scrollBar.X = Width - 14;
+            }
+            else
+            {
+                _scrollBar.X = Width - 19;
+            }
+
             bool maxValue = _scrollBar.Value == _scrollBar.MaxValue && _scrollBar.MaxValue != 0;
 
             int startX = 0, startY = 0, endX = 0, endY = 0;

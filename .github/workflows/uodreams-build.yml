@@ -1,0 +1,41 @@
+name: UODreams Build
+
+on:
+  push:
+    branches: [ master, main ]
+    paths:
+      - 'src/ClassicUO.Launcher.Custom/**'
+      - 'src/ClassicUO.Client/**'
+      - 'src/ClassicUO.Bootstrap/**'
+      - 'scripts/**'
+      - 'ClassicUO.sln'
+      - '.github/workflows/uodreams-build.yml'
+  pull_request:
+    branches: [ master, main ]
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build client
+        run: dotnet publish src/ClassicUO.Client/ClassicUO.Client.csproj -c Release -r win-x64 --self-contained true -p:PublishAot=false -o bin/client-out
+
+      - name: Build launcher
+        run: dotnet publish src/ClassicUO.Launcher.Custom/ClassicUO.Launcher.Custom.csproj -c Release -r win-x64 --self-contained true -o bin/launcher-out
+
+      - name: Build bootstrap
+        run: dotnet publish src/ClassicUO.Bootstrap/src/ClassicUO.Bootstrap.csproj -c Release -o bin/bootstrap-out

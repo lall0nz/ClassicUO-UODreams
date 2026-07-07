@@ -66,12 +66,17 @@ namespace ClassicUO.Game.UI.Gumps
 
         //experimental
         private Checkbox _autoOpenDoors, _autoOpenCorpse, _skipEmptyCorpse, _disableTabBtn, _disableCtrlQWBtn, _disableDefaultHotkeys, _disableArrowBtn, _disableAutoMove, _overrideContainerLocation, _smoothDoors, _showTargetRangeIndicator, _customBars, _customBarsBBG, _saveHealthbars;
+        private Checkbox _avoidObstacles, _avoidObstaclesIgnoreHumanoids;
         private HSliderBar _cellSize;
         private Checkbox _containerScaleItems, _containerDoubleClickToLoot, _relativeDragAnDropItems, _useLargeContianersGumps, _highlightContainersWhenMouseIsOver;
 
 
         // containers
         private HSliderBar _containersScale;
+        // grid container
+        private Checkbox _gridContainerEnabled, _gridHideBorder, _gridContainerPreview;
+        private HSliderBar _gridColumns, _gridRows, _gridContainerScale, _gridContainerOpacity;
+        private Combobox _gridSearchMode;
         private Combobox _cotType;
         private DataBox _databox;
         private HSliderBar _delay_before_display_tooltip, _tooltip_zoom, _tooltip_background_opacity;
@@ -107,6 +112,7 @@ namespace ClassicUO.Game.UI.Gumps
                          _alwaysRun,
                          _alwaysRunUnlessHidden,
                          _showHpMobile,
+                         _useOldHealthBars,
                          _highlightByPoisoned,
                          _highlightByParalyzed,
                          _highlightByInvul,
@@ -571,6 +577,30 @@ namespace ClassicUO.Game.UI.Gumps
 
             section.Add
             (
+                _avoidObstacles = AddCheckBox
+                (
+                    null,
+                    "Auto avoid obstacles",
+                    _currentProfile.AvoidObstacles,
+                    startX,
+                    startY
+                )
+            );
+
+            section.AddRight
+            (
+                _avoidObstaclesIgnoreHumanoids = AddCheckBox
+                (
+                    null,
+                    "Ignore characters when avoiding",
+                    _currentProfile.AvoidObstaclesIgnoreHumanoids,
+                    startX,
+                    startY
+                )
+            );
+
+            section.Add
+            (
                 _autoOpenCorpse = AddCheckBox
                 (
                     null,
@@ -746,6 +776,18 @@ namespace ClassicUO.Game.UI.Gumps
                     100
                 ),
                 2
+            );
+
+            section2.Add
+            (
+                _useOldHealthBars = AddCheckBox
+                (
+                    null,
+                    "Old style bars (HP/Mana/Stam)",
+                    _currentProfile.UseOldHealthBars,
+                    startX,
+                    startY
+                )
             );
 
             section2.Add
@@ -3309,6 +3351,65 @@ namespace ClassicUO.Game.UI.Gumps
                 startY += _useLargeContianersGumps.Height + 2;
             }
 
+            startX = 5;
+            text = AddLabel(rightArea, "Grid Containers", startX, startY);
+            startY += text.Height + 4;
+
+            _gridContainerEnabled = AddCheckBox
+            (
+                rightArea,
+                "Enable grid containers",
+                _currentProfile.GridContainerEnabled,
+                startX,
+                startY
+            );
+
+            startY += _gridContainerEnabled.Height + 2;
+
+            _gridHideBorder = AddCheckBox
+            (
+                rightArea,
+                "Hide grid border",
+                _currentProfile.Grid_HideBorder,
+                startX,
+                startY
+            );
+
+            startY += _gridHideBorder.Height + 2;
+
+            _gridContainerPreview = AddCheckBox
+            (
+                rightArea,
+                "Enable container preview",
+                _currentProfile.GridEnableContPreview,
+                startX,
+                startY
+            );
+
+            startY += _gridContainerPreview.Height + 2;
+
+            text = AddLabel(rightArea, "Default columns", startX, startY);
+            _gridColumns = AddHSlider(rightArea, 1, 20, _currentProfile.Grid_DefaultColumns, startX + text.Width + 5, startY, 150);
+            startY += text.Height + 4;
+
+            text = AddLabel(rightArea, "Default rows", startX, startY);
+            _gridRows = AddHSlider(rightArea, 1, 20, _currentProfile.Grid_DefaultRows, startX + text.Width + 5, startY, 150);
+            startY += text.Height + 4;
+
+            text = AddLabel(rightArea, "Grid scale %", startX, startY);
+            _gridContainerScale = AddHSlider(rightArea, 50, 200, _currentProfile.GridContainersScale, startX + text.Width + 5, startY, 150);
+            startY += text.Height + 4;
+
+            text = AddLabel(rightArea, "Background opacity %", startX, startY);
+            _gridContainerOpacity = AddHSlider(rightArea, 0, 100, _currentProfile.ContainerOpacity, startX + text.Width + 5, startY, 150);
+            startY += text.Height + 4;
+
+            text = AddLabel(rightArea, "Search mode", startX, startY);
+            _gridSearchMode = AddCombobox(rightArea, new[] { "Filter", "Highlight" }, _currentProfile.GridContainerSearchMode, startX + text.Width + 5, startY, 120);
+            startY += text.Height + 6;
+
+            startX = 5;
+
             _containerDoubleClickToLoot = AddCheckBox
             (
                 rightArea,
@@ -3468,6 +3569,7 @@ namespace ClassicUO.Game.UI.Gumps
                     _alwaysRun.IsChecked = false;
                     _alwaysRunUnlessHidden.IsChecked = false;
                     _showHpMobile.IsChecked = false;
+                    _useOldHealthBars.IsChecked = false;
                     _hpComboBox.SelectedIndex = 0;
                     _hpComboBoxShowWhen.SelectedIndex = 0;
                     _highlightByPoisoned.IsChecked = true;
@@ -3503,6 +3605,8 @@ namespace ClassicUO.Game.UI.Gumps
                     _autoOpenCorpse.IsChecked = false;
                     _autoOpenDoors.IsChecked = false;
                     _smoothDoors.IsChecked = false;
+                    _avoidObstacles.IsChecked = false;
+                    _avoidObstaclesIgnoreHumanoids.IsChecked = false;
                     _skipEmptyCorpse.IsChecked = false;
                     _saveHealthbars.IsChecked = false;
                     _use_smooth_boat_movement.IsChecked = false;
@@ -3651,6 +3755,16 @@ namespace ClassicUO.Game.UI.Gumps
                     _containersScale.Value = 100;
                     _containerScaleItems.IsChecked = false;
                     _useLargeContianersGumps.IsChecked = false;
+
+                    _gridContainerEnabled.IsChecked = false;
+                    _gridHideBorder.IsChecked = false;
+                    _gridContainerPreview.IsChecked = true;
+                    _gridColumns.Value = 4;
+                    _gridRows.Value = 4;
+                    _gridContainerScale.Value = 100;
+                    _gridContainerOpacity.Value = 80;
+                    _gridSearchMode.SelectedIndex = 0;
+
                     _containerDoubleClickToLoot.IsChecked = false;
                     _relativeDragAnDropItems.IsChecked = false;
                     _highlightContainersWhenMouseIsOver.IsChecked = false;
@@ -3690,6 +3804,7 @@ namespace ClassicUO.Game.UI.Gumps
             _currentProfile.AlwaysRun = _alwaysRun.IsChecked;
             _currentProfile.AlwaysRunUnlessHidden = _alwaysRunUnlessHidden.IsChecked;
             _currentProfile.ShowMobilesHP = _showHpMobile.IsChecked;
+            _currentProfile.UseOldHealthBars = _useOldHealthBars.IsChecked;
             _currentProfile.HighlightMobilesByPoisoned = _highlightByPoisoned.IsChecked;
             _currentProfile.HighlightMobilesByParalize = _highlightByParalyzed.IsChecked;
             _currentProfile.HighlightMobilesByInvul = _highlightByInvul.IsChecked;
@@ -4087,6 +4202,8 @@ namespace ClassicUO.Game.UI.Gumps
             _currentProfile.DisableAutoMove = _disableAutoMove.IsChecked;
             _currentProfile.AutoOpenDoors = _autoOpenDoors.IsChecked;
             _currentProfile.SmoothDoors = _smoothDoors.IsChecked;
+            _currentProfile.AvoidObstacles = _avoidObstacles.IsChecked;
+            _currentProfile.AvoidObstaclesIgnoreHumanoids = _avoidObstaclesIgnoreHumanoids.IsChecked;
             _currentProfile.AutoOpenCorpses = _autoOpenCorpse.IsChecked;
             _currentProfile.AutoOpenCorpseRange = int.Parse(_autoOpenCorpseRange.Text);
             _currentProfile.CorpseOpenOptions = _autoOpenCorpseOptions.SelectedIndex;
@@ -4197,6 +4314,25 @@ namespace ClassicUO.Game.UI.Gumps
             }
 
             _currentProfile.UseLargeContainerGumps = _useLargeContianersGumps.IsChecked;
+
+            _currentProfile.GridContainerEnabled = _gridContainerEnabled.IsChecked;
+            if (_gridContainerEnabled.IsChecked && World.Player != null)
+            {
+                Item backpack = World.Player.FindItemByLayer(Layer.Backpack);
+
+                if (backpack != null)
+                {
+                    GridContainer.SetContainerGridStyle(backpack.Serial, false);
+                }
+            }
+            _currentProfile.Grid_HideBorder = _gridHideBorder.IsChecked;
+            _currentProfile.GridEnableContPreview = _gridContainerPreview.IsChecked;
+            _currentProfile.Grid_DefaultColumns = _gridColumns.Value;
+            _currentProfile.Grid_DefaultRows = _gridRows.Value;
+            _currentProfile.GridContainersScale = _gridContainerScale.Value;
+            _currentProfile.ContainerOpacity = _gridContainerOpacity.Value;
+            _currentProfile.GridContainerSearchMode = _gridSearchMode.SelectedIndex;
+
             _currentProfile.DoubleClickToLootInsideContainers = _containerDoubleClickToLoot.IsChecked;
             _currentProfile.RelativeDragAndDropItems = _relativeDragAnDropItems.IsChecked;
             _currentProfile.HighlightContainerWhenSelected = _highlightContainersWhenMouseIsOver.IsChecked;

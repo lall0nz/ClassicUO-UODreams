@@ -32,6 +32,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -274,40 +275,18 @@ namespace ClassicUO.Network
             {
                 try
                 {
-                    Client.Game.PluginHost?.LoadPlugin(PluginPath);
+                    if (Client.Game.PluginHost != null)
+                    {
+                        Client.Game.PluginHost.LoadPlugin(PluginPath);
+                    }
+                    else if (!TryLoadManagedPlugin(func))
+                    {
+                        Log.Error(
+                            "Unable to load plugin. Managed assistants (ClassicAssist/Razor) require a valid plugin DLL path."
+                        );
 
-                    //Client.Game.AssistantHost.OnSocketConnected += (o, e) => { 
-                    //    Client.Game.AssistantHost.PluginInitialize(PluginPath); 
-                    //};
-                    //Client.Game.AssistantHost.Connect("127.0.0.1", 7777);
-
-                    //Assembly asm = Assembly.LoadFile(PluginPath);
-                    //Type type = asm.GetType("Assistant.Engine");
-
-                    //if (type == null)
-                    //{
-                    //    Log.Error(
-                    //        "Unable to find Plugin Type, API requires the public class Engine in namespace Assistant."
-                    //    );
-
-                    //    return;
-                    //}
-
-                    //MethodInfo meth = type.GetMethod(
-                    //    "Install",
-                    //    BindingFlags.Public | BindingFlags.Static
-                    //);
-
-                    //if (meth == null)
-                    //{
-                    //    Log.Error(
-                    //        "Engine class missing public static Install method Needs 'public static unsafe void Install(PluginHeader *plugin)' "
-                    //    );
-
-                    //    return;
-                    //}
-
-                    //meth.Invoke(null, new object[] { (IntPtr)func });
+                        return;
+                    }
                 }
                 catch (Exception err)
                 {
@@ -826,7 +805,72 @@ namespace ClassicUO.Network
             return true;
         }
 
-        //Code from https://stackoverflow.com/questions/6374673/unblock-file-from-within-net-4-c-sharp
+        private bool TryLoadManagedPlugin(void* header)
+        {
+            string pluginDir = Path.GetDirectoryName(PluginPath);
+
+            if (!string.IsNullOrEmpty(pluginDir))
+            {
+                Environment.SetEnvironmentVariable(
+                    "PATH",
+                    Environment.GetEnvironmentVariable("PATH") + ";" + pluginDir
+                );
+            }
+
+            ResolveEventHandler resolveHandler = (_, args) =>
+            {
+                if (string.IsNullOrEmpty(pluginDir))
+                {
+                    return null;
+                }
+
+                string name = new AssemblyName(args.Name).Name + ".dll";
+                string candidate = Path.Combine(pluginDir, name);
+
+                return File.Exists(candidate) ? Assembly.LoadFrom(candidate) : null;
+            };
+
+            AppDomain.CurrentDomain.AssemblyResolve += resolveHandler;
+
+            try
+            {
+                Assembly asm = Assembly.LoadFrom(PluginPath);
+                Type type = asm.GetType("Assistant.Engine");
+
+                if (type == null)
+                {
+                    Log.Error(
+                        "Unable to find Plugin Type, API requires the public class Engine in namespace Assistant."
+                    );
+
+                    return false;
+                }
+
+                MethodInfo meth = type.GetMethod(
+                    "Install",
+                    BindingFlags.Public | BindingFlags.Static
+                );
+
+                if (meth == null)
+                {
+                    Log.Error(
+                        "Engine class missing public static Install method Needs 'public static unsafe void Install(PluginHeader *plugin)' "
+                    );
+
+                    return false;
+                }
+
+                Log.Trace("Loading managed plugin via Assistant.Engine.Install");
+                meth.Invoke(null, new object[] { (IntPtr)header });
+
+                return true;
+            }
+            finally
+            {
+                AppDomain.CurrentDomain.AssemblyResolve -= resolveHandler;
+            }
+        }
+
         private static void UnblockPath(string path)
         {
             string[] files = Directory.GetFiles(path);

@@ -52,6 +52,7 @@ namespace ClassicUO.Game.UI.Gumps
         private ContainerData _data;
         private int _eyeCorspeOffset;
         private GumpPic _eyeGumpPic;
+        private NiceButton _openGridButton;
         private GumpPicContainer _gumpPicContainer;
         private readonly bool _hideIfEmpty;
         private HitBox _hitBox;
@@ -227,6 +228,44 @@ namespace ClassicUO.Game.UI.Gumps
 
             Width = _gumpPicContainer.Width = (int)(_gumpPicContainer.Width * scale);
             Height = _gumpPicContainer.Height = (int)(_gumpPicContainer.Height * scale);
+
+            _openGridButton?.Dispose();
+            _openGridButton = null;
+
+            uint backpackSerial = World.Player?.FindItemByLayer(Layer.Backpack)?.Serial ?? 0;
+            bool isPlayerBackpack = backpackSerial != 0 && LocalSerial == backpackSerial;
+
+            if (
+                ProfileManager.CurrentProfile?.GridContainerEnabled == true
+                && isPlayerBackpack
+                && Graphic != CORPSES_GUMP
+            )
+            {
+                ushort containerGraphic = Graphic;
+
+                Add(
+                    _openGridButton = new NiceButton(
+                        Math.Max(4, Width - 58),
+                        4,
+                        54,
+                        20,
+                        ButtonAction.Default,
+                        "Griglia"
+                    )
+                    {
+                        IsSelectable = false
+                    }
+                );
+
+                _openGridButton.MouseUp += (sender, e) =>
+                {
+                    if (e.Button == MouseButtonType.Left)
+                    {
+                        GridContainer.OpenGridView(World, LocalSerial, containerGraphic);
+                    }
+                };
+                _openGridButton.SetTooltip("Apri il backpack a griglia.");
+            }
         }
 
         private void HitBoxOnMouseUp(object sender, MouseEventArgs e)

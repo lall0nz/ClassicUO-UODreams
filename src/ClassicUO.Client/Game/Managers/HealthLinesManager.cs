@@ -42,10 +42,11 @@ namespace ClassicUO.Game.Managers
 {
     internal sealed class HealthLinesManager
     {
-        private const int BAR_WIDTH = 34; //28;
+        private const int BAR_WIDTH = 38;
         private const int BAR_HEIGHT = 8;
         private const int BAR_WIDTH_HALF = BAR_WIDTH >> 1;
         private const int BAR_HEIGHT_HALF = BAR_HEIGHT >> 1;
+        private const int OLD_BAR_HEIGHT = 4;
 
         const ushort BACKGROUND_GRAPHIC = 0x1068;
         const ushort HP_GRAPHIC = 0x1069;
@@ -53,6 +54,37 @@ namespace ClassicUO.Game.Managers
         private readonly World _world;
 
         public HealthLinesManager(World world) { _world = world; }
+
+        // Players, pets, and monsters only — skip vendors, statues, and other invulnerable NPCs.
+        private bool ShouldShowOverheadHealthBar(Mobile mobile)
+        {
+            if (mobile == null || mobile.IsDestroyed)
+            {
+                return false;
+            }
+
+            if (mobile == _world.Player)
+            {
+                return true;
+            }
+
+            if (!mobile.IsHuman)
+            {
+                return true;
+            }
+
+            if (mobile.NotorietyFlag == NotorietyFlag.Invulnerable)
+            {
+                return false;
+            }
+
+            if (!mobile.IsRenamable)
+            {
+                return false;
+            }
+
+            return true;
+        }
 
         public bool IsEnabled =>
             ProfileManager.CurrentProfile != null && ProfileManager.CurrentProfile.ShowMobilesHP;
@@ -107,7 +139,7 @@ namespace ClassicUO.Game.Managers
 
             foreach (Mobile mobile in _world.Mobiles.Values)
             {
-                if (mobile.IsDestroyed)
+                if (!ShouldShowOverheadHealthBar(mobile))
                 {
                     continue;
                 }
@@ -213,7 +245,14 @@ namespace ClassicUO.Game.Managers
 
                 if (mode >= 1)
                 {
-                    DrawHealthLine(batcher, mobile, p.X, p.Y, mobile.Serial != _world.Player.Serial);
+                    if (ProfileManager.CurrentProfile.UseOldHealthBars)
+                    {
+                        DrawOldHealthLine(batcher, mobile, p.X, p.Y, mobile.Serial != _world.Player.Serial);
+                    }
+                    else
+                    {
+                        DrawHealthLine(batcher, mobile, p.X, p.Y, mobile.Serial != _world.Player.Serial);
+                    }
                 }
             }
         }
@@ -226,6 +265,11 @@ namespace ClassicUO.Game.Managers
         )
         {
             Entity entity = _world.Get(serial);
+
+            if (entity is Mobile mobile && !ShouldShowOverheadHealthBar(mobile))
+            {
+                return;
+            }
 
             if (entity == null)
             {
@@ -250,7 +294,122 @@ namespace ClassicUO.Game.Managers
                 return;
             }
 
-            DrawHealthLine(batcher, entity, p.X, p.Y, false);
+            if (ProfileManager.CurrentProfile != null && ProfileManager.CurrentProfile.UseOldHealthBars)
+            {
+                DrawOldHealthLine(batcher, entity, p.X, p.Y, false);
+            }
+            else
+            {
+                DrawHealthLine(batcher, entity, p.X, p.Y, false);
+            }
+        }
+
+        // Classic-style overhead bars: solid HP bar for everyone, plus Mana and
+        // Stamina bars for the player and party members (old UO look).
+        private void DrawOldHealthLine(
+            UltimaBatcher2D batcher,
+            Entity entity,
+            int x,
+            int y,
+            bool passive
+        )
+        {
+            if (entity == null)
+            {
+                return;
+            }
+
+            Mobile mobile = entity as Mobile;
+
+            float alpha = passive ? 0.5f : 1.0f;
+            Vector3 hueVec = ShaderHueTranslator.GetHueVector(0, false, alpha);
+
+            Color hpColor;
+
+            if (mobile != null && mobile.IsParalyzed)
+            {
+                hpColor = Color.AliceBlue;
+            }
+            else if (mobile != null && mobile.IsYellowHits)
+            {
+                hpColor = Color.Orange;
+            }
+            else if (mobile != null && mobile.IsPoisoned)
+            {
+                hpColor = Color.LimeGreen;
+            }
+            else
+            {
+                hpColor = Color.CornflowerBlue;
+            }
+
+            int hpWidth = CalcBarWidth(entity.Hits, entity.HitsMax, BAR_WIDTH);
+            DrawOldBar(batcher, x, y, BAR_WIDTH, OLD_BAR_HEIGHT, hpWidth, hpColor, hueVec);
+
+            bool showAll = mobile != null && (mobile == _world.Player || _world.Party.Contains(mobile.Serial));
+
+            if (showAll)
+            {
+                int manaWidth = CalcBarWidth(mobile.Mana, mobile.ManaMax, BAR_WIDTH);
+                int stamWidth = CalcBarWidth(mobile.Stamina, mobile.StaminaMax, BAR_WIDTH);
+
+                DrawOldBar(batcher, x, y + OLD_BAR_HEIGHT + 1, BAR_WIDTH, OLD_BAR_HEIGHT, manaWidth, Color.CornflowerBlue, hueVec);
+                DrawOldBar(batcher, x, y + (OLD_BAR_HEIGHT + 1) * 2, BAR_WIDTH, OLD_BAR_HEIGHT, stamWidth, Color.CornflowerBlue, hueVec);
+            }
+        }
+
+        private static int CalcBarWidth(int current, int max, int barWidth)
+        {
+            if (max <= 0)
+            {
+                return 0;
+            }
+
+            int percent = current * 100 / max;
+
+            if (percent > 100)
+            {
+                percent = 100;
+            }
+            else if (percent < 0)
+            {
+                percent = 0;
+            }
+
+            return barWidth * percent / 100;
+        }
+
+        private static void DrawOldBar(
+            UltimaBatcher2D batcher,
+            int x,
+            int y,
+            int width,
+            int height,
+            int filled,
+            Color fill,
+            Vector3 hueVec
+        )
+        {
+            batcher.Draw(
+                SolidColorTextureCache.GetTexture(Color.Black),
+                new Rectangle(x - 1, y - 1, width + 2, height + 2),
+                hueVec
+            );
+
+            batcher.Draw(
+                SolidColorTextureCache.GetTexture(Color.Red),
+                new Rectangle(x, y, width, height),
+                hueVec
+            );
+
+            if (filled > 0)
+            {
+                batcher.Draw(
+                    SolidColorTextureCache.GetTexture(fill),
+                    new Rectangle(x, y, filled, height),
+                    hueVec
+                );
+            }
         }
 
         private void DrawHealthLine(

@@ -264,3 +264,17 @@ paket.lock
 __pycache__/
 *.pyc
 /.svn
+
+# UODreams / local dev
+_vanilla_ref/
+_launcher_ref/
+intermediate/
+build-output.txt
+settings.json
+launcher.settings.json
+bin/client-out/
+bin/launcher-out/
+bin/bootstrap-out/
+bin/gdrive-test.bin
+*.zip
+

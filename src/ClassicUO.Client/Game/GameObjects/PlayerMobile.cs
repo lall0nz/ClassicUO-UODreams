@@ -1570,6 +1570,37 @@ namespace ClassicUO.Game.GameObjects
                 oldDirection = (Direction) walkStep.Direction;
             }
 
+            // Auto Avoid Obstacles: when walking into a blocked cardinal tile, try to open a door
+            // ahead, otherwise sidestep around the obstacle.
+            if (ProfileManager.CurrentProfile.AvoidObstacles && IsCardinalDirection(direction))
+            {
+                if (IsObstacle(direction, x, y, z))
+                {
+                    if (TryOpenDoorAhead(direction, x, y, z))
+                    {
+                        return false;
+                    }
+
+                    Direction newDir = TryToAvoid(direction, x, y, z);
+
+                    if (!IsObstacle(newDir, x, y, z))
+                    {
+                        direction = newDir;
+                        ClearSteps();
+
+                        x = X;
+                        y = Y;
+                        z = Z;
+                        oldDirection = Direction;
+                        emptyStack = true;
+                    }
+                    else
+                    {
+                        return false;
+                    }
+                }
+            }
+
             sbyte oldZ = z;
             ushort walkTime = Constants.TURN_DELAY;
 
@@ -1704,6 +1735,92 @@ namespace ClassicUO.Game.GameObjects
             GetGroupForAnimation(this, 0, true);
 
             return true;
+        }
+
+        // ---- Auto Avoid Obstacles helpers ----
+        private static bool IsCardinalDirection(Direction direction)
+        {
+            switch (direction & Direction.Mask)
+            {
+                case Direction.North:
+                case Direction.South:
+                case Direction.East:
+                case Direction.West:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private bool CanUseDoorAssist()
+        {
+            return !IsDead && (ProfileManager.CurrentProfile.AutoOpenDoors || ProfileManager.CurrentProfile.SmoothDoors);
+        }
+
+        private bool HasDoorAhead(Direction direction, int x, int y, sbyte z)
+        {
+            int nextX = x;
+            int nextY = y;
+            Pathfinder.GetNewXY((byte) direction, ref nextX, ref nextY);
+
+            for (GameObject obj = World.Map.GetTile(nextX, nextY); obj != null; obj = obj.TNext)
+            {
+                if (obj is Item item && item.ItemData.IsDoor && item.Z - 15 <= z && item.Z + 15 >= z)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool TryOpenDoorAhead(Direction direction, int x, int y, sbyte z)
+        {
+            if (!CanUseDoorAssist() || !HasDoorAhead(direction, x, y, z))
+            {
+                return false;
+            }
+
+            GameActions.OpenDoor();
+
+            return true;
+        }
+
+        private bool IsObstacle(Direction direction, int x, int y, sbyte z)
+        {
+            bool ignoreHumanoids = ProfileManager.CurrentProfile.AvoidObstaclesIgnoreHumanoids;
+
+            if (ignoreHumanoids)
+            {
+                Pathfinder.IgnoreHumanoidsForWalkCheck = true;
+            }
+
+            try
+            {
+                return !Pathfinder.CanWalk(ref direction, ref x, ref y, ref z);
+            }
+            finally
+            {
+                if (ignoreHumanoids)
+                {
+                    Pathfinder.IgnoreHumanoidsForWalkCheck = false;
+                }
+            }
+        }
+
+        private Direction TryToAvoid(Direction direction, int x, int y, sbyte z)
+        {
+            switch (direction & Direction.Mask)
+            {
+                case Direction.North:
+                case Direction.South:
+                    return IsObstacle(Direction.East, x, y, z) ? Direction.West : Direction.East;
+                case Direction.East:
+                case Direction.West:
+                    return IsObstacle(Direction.North, x, y, z) ? Direction.South : Direction.North;
+                default:
+                    return direction;
+            }
         }
     }
 }

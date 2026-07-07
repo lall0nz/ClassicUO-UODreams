@@ -44,6 +44,7 @@ namespace ClassicUO.Game.UI.Gumps
         private Point _lastSize, _savedSize;
         private readonly int _minH;
         private readonly int _minW;
+        private bool _alwaysShowResizeHandle;
 
 
         protected ResizableGump
@@ -96,7 +97,31 @@ namespace ClassicUO.Game.UI.Gumps
         public bool ShowBorder
         {
             get => _borderControl.IsVisible;
-            set => _borderControl.IsVisible = _button.IsVisible = value;
+            set
+            {
+                _borderControl.IsVisible = value;
+                _button.IsVisible = value || _alwaysShowResizeHandle;
+            }
+        }
+
+        public bool AlwaysShowResizeHandle
+        {
+            get => _alwaysShowResizeHandle;
+            set
+            {
+                _alwaysShowResizeHandle = value;
+
+                if (value)
+                {
+                    _button.IsVisible = true;
+                }
+            }
+        }
+
+        public void BringResizeButtonToFront()
+        {
+            Remove(_button);
+            Add(_button);
         }
 
 

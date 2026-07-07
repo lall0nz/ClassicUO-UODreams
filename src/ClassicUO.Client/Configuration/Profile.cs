@@ -140,6 +140,8 @@ namespace ClassicUO.Configuration
         public bool ShowMobilesHP { get; set; }
         public int MobileHPType { get; set; }     // 0 = %, 1 = line, 2 = both
         public int MobileHPShowWhen { get; set; } // 0 = Always, 1 - <100%
+        // Old-style overhead bars (classic solid HP/Mana/Stamina bars)
+        public bool UseOldHealthBars { get; set; }
         public bool DrawRoofs { get; set; } = true;
         public bool TreeToStumps { get; set; }
         public bool EnableCaveBorder { get; set; }
@@ -210,6 +212,9 @@ namespace ClassicUO.Configuration
         public bool FastSpellsAssign { get; set; }
         public bool AutoOpenDoors { get; set; }
         public bool SmoothDoors { get; set; }
+        // Auto Avoid Obstacles
+        public bool AvoidObstacles { get; set; }
+        public bool AvoidObstaclesIgnoreHumanoids { get; set; }
         public bool AutoOpenCorpses { get; set; }
         public int AutoOpenCorpseRange { get; set; } = 2;
         public int CorpseOpenOptions { get; set; } = 3;
@@ -295,6 +300,24 @@ namespace ClassicUO.Configuration
 
         public bool UseLargeContainerGumps { get; set; } = false;
 
+        // ---- Grid Container ----
+        public bool GridContainerEnabled { get; set; } = false;
+        public int GridContainersScale { get; set; } = 100;
+        public bool GridContainerScaleItems { get; set; } = false;
+        [JsonConverter(typeof(Point2Converter))] public Point BackpackGridPosition { get; set; } = new Point(100, 100);
+        [JsonConverter(typeof(Point2Converter))] public Point BackpackGridSize { get; set; } = new Point(300, 300);
+        public int Grid_DefaultColumns { get; set; } = 4;
+        public int Grid_DefaultRows { get; set; } = 4;
+        public bool Grid_UseContainerHue { get; set; } = false;
+        public ushort AltGridContainerBackgroundHue { get; set; } = 0;
+        public int ContainerOpacity { get; set; } = 80;
+        public bool Grid_HideBorder { get; set; } = false;
+        public int GridContainerSearchMode { get; set; } = 0; // 0 = filter/hide, 1 = highlight
+        public bool CorpseSingleClickLoot { get; set; } = false;
+        public ushort GridBorderHue { get; set; } = 0;
+        public int GridBorderAlpha { get; set; } = 100;
+        public bool GridEnableContPreview { get; set; } = true;
+
         public bool RelativeDragAndDropItems { get; set; }
 
         public bool HighlightContainerWhenSelected { get; set; }
@@ -342,11 +365,11 @@ namespace ClassicUO.Configuration
         {
             Log.Trace($"Saving path:\t\t{path}");
 
-            // Save profile settings
-            ConfigurationResolver.Save(this, Path.Combine(path, "profile.json"), ProfileJsonContext.DefaultToUse.Profile);
-
-            // Save opened gumps
+            // Save opened gumps first so grid backpack layout is written into the profile
             SaveGumps(world, path);
+
+            // Save profile settings after gumps updated in-memory values (e.g. backpack grid position)
+            ConfigurationResolver.Save(this, Path.Combine(path, "profile.json"), ProfileJsonContext.DefaultToUse.Profile);
 
             Log.Trace("Saving done!");
         }
@@ -527,6 +550,11 @@ namespace ClassicUO.Configuration
 
                                 case GumpType.Container:
                                     gump = new ContainerGump(world);
+
+                                    break;
+
+                                case GumpType.GridContainer:
+                                    gump = new GridContainer(world, serial, 0);
 
                                     break;
 

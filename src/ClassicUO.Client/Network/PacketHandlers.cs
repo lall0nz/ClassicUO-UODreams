@@ -1096,6 +1096,7 @@ namespace ClassicUO.Network
                     }
 
                     UIManager.GetGump<ContainerGump>(cont)?.RequestUpdateContents();
+                    UIManager.GetGump<GridContainer>(cont)?.RequestUpdateContents();
 
                     if (
                         top != null
@@ -1551,14 +1552,23 @@ namespace ClassicUO.Network
                         playsound = true;
                     }
 
-                    UIManager.Add(
-                        new ContainerGump(world, item, graphic, playsound)
-                        {
-                            X = x,
-                            Y = y,
-                            InvalidateContents = true
-                        }
-                    );
+                    if (ProfileManager.CurrentProfile != null && ProfileManager.CurrentProfile.GridContainerEnabled)
+                    {
+                        UIManager.GetGump<GridContainer>(serial)?.Dispose();
+
+                        UIManager.Add(new GridContainer(world, serial, graphic));
+                    }
+                    else
+                    {
+                        UIManager.Add(
+                            new ContainerGump(world, item, graphic, playsound)
+                            {
+                                X = x,
+                                Y = y,
+                                InvalidateContents = true
+                            }
+                        );
+                    }
 
                     UIManager.RemovePosition(serial);
                 }
@@ -1851,6 +1861,7 @@ namespace ClassicUO.Network
             if (SerialHelper.IsValid(item.Container))
             {
                 UIManager.GetGump<ContainerGump>(item.Container)?.RequestUpdateContents();
+                UIManager.GetGump<GridContainer>(item.Container)?.RequestUpdateContents();
 
                 UIManager.GetGump<PaperDollGump>(item.Container)?.RequestUpdateContents();
             }
@@ -4395,6 +4406,7 @@ namespace ClassicUO.Network
 
                         case 0x0C: //container
                             UIManager.GetGump<ContainerGump>(serial)?.Dispose();
+                            UIManager.GetGump<GridContainer>(serial)?.Dispose();
 
                             break;
                     }
@@ -6127,6 +6139,18 @@ namespace ClassicUO.Network
                         if (gump != null)
                         {
                             ((ContainerGump)gump).CheckItemControlPosition(item);
+                        }
+
+                        GridContainer gridContainer = UIManager.GetGump<GridContainer>(containerSerial);
+
+                        if (gridContainer != null)
+                        {
+                            if (SerialHelper.IsItem(containerSerial))
+                            {
+                                ((Item)container).Opened = true;
+                            }
+
+                            gridContainer.RequestUpdateContents();
                         }
 
                         if (ProfileManager.CurrentProfile.GridLootType > 0)

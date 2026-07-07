@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>UODreams Launcher</AssemblyName>
+    <RootNamespace>ClassicUO.Launcher.Custom</RootNamespace>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <Nullable>enable</Nullable>
+    <PublishAot>false</PublishAot>
+    <ApplicationIcon>Resources\uodreams.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\uodreams_logo.png" />
+    <EmbeddedResource Include="Resources\uodreams.ico" />
+  </ItemGroup>
+
+</Project>
