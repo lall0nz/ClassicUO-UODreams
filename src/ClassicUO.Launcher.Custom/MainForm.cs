@@ -198,6 +198,7 @@ namespace ClassicUO.Launcher.Custom
             pathsCard.Controls.Add(SectionLabel("Client Ultima Online", cx, cy, cw));
             cy += 26;
             (_, _uoPathBox, _) = PathRow(pathsCard, cx, cy, cw - 168, BrowseUoFolder);
+            _uoPathBox.TextChanged += (_, _) => UpdateUoDownloadUi();
 
             _downloadUoButton = new ThemedButton
             {
@@ -427,8 +428,10 @@ namespace ClassicUO.Launcher.Custom
 
         private void UpdateUoDownloadUi()
         {
-            string uoPath = _uoPathBox.Text.Trim().Trim('"');
-            bool valid = Directory.Exists(uoPath) && File.Exists(Path.Combine(uoPath, "tiledata.mul"));
+            string uoPath = (_uoPathBox.Text ?? "").Trim().Trim('"');
+            bool valid = !string.IsNullOrEmpty(uoPath) &&
+                Directory.Exists(uoPath) &&
+                File.Exists(Path.Combine(uoPath, "tiledata.mul"));
 
             _downloadUoButton.Visible = !valid;
             _uoHintLabel.Text = valid
