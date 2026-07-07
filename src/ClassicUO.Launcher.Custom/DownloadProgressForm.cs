@@ -42,6 +42,15 @@ namespace ClassicUO.Launcher.Custom
                 "Download componenti ClassicUO UODreams…"
             );
 
+        public static DownloadProgressForm ForAssistant(string assistant, string installDirectory) =>
+            new(
+                async (progress, ct) =>
+                    await AssistantDownloader.DownloadAndInstallAsync(assistant, installDirectory, progress, ct)
+                        .ConfigureAwait(true),
+                $"UODreams Launcher — Download {assistant}",
+                $"Scaricamento {assistant}…"
+            );
+
         private DownloadProgressForm(
             Func<IProgress<DownloadProgressReport>, CancellationToken, Task<string?>> downloadWork,
             string windowTitle,

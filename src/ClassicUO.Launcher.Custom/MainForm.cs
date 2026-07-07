@@ -25,6 +25,8 @@ namespace ClassicUO.Launcher.Custom
         private Label _statusLabel = null!;
         private ThemedButton _downloadUoButton = null!;
         private Label _uoHintLabel = null!;
+        private ThemedButton _downloadAssistantButton = null!;
+        private Label _assistantHintLabel = null!;
 
         public MainForm()
         {
@@ -80,7 +82,7 @@ namespace ClassicUO.Launcher.Custom
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(620, 668);
+            ClientSize = new Size(620, 700);
             DoubleBuffered = true;
 
             int margin = 24;
@@ -118,7 +120,7 @@ namespace ClassicUO.Launcher.Custom
             y += 30;
 
             // ----- Card 1: assistant -----
-            var assistantCard = new CardPanel { Bounds = new Rectangle(margin, y, width, 158) };
+            var assistantCard = new CardPanel { Bounds = new Rectangle(margin, y, width, 190) };
             Controls.Add(assistantCard);
 
             int cx = 18, cy = 14, cw = width - 36;
@@ -153,7 +155,11 @@ namespace ClassicUO.Launcher.Custom
                     TextFormatFlags.Left | TextFormatFlags.VerticalCenter
                 );
             };
-            _assistantCombo.SelectedIndexChanged += (_, _) => UpdateAssistantUi();
+            _assistantCombo.SelectedIndexChanged += (_, _) =>
+            {
+                UpdateAssistantUi();
+                UpdateAssistantDownloadUi();
+            };
             assistantCard.Controls.Add(_assistantCombo);
             cy += 38;
 
@@ -169,7 +175,31 @@ namespace ClassicUO.Launcher.Custom
             cy += 20;
 
             (_assistantPathPanel, _assistantPathBox, _assistantBrowseButton) =
-                PathRow(assistantCard, cx, cy, cw, BrowseAssistant);
+                PathRow(assistantCard, cx, cy, cw - 168, BrowseAssistant);
+            _assistantPathBox.TextChanged += (_, _) => UpdateAssistantDownloadUi();
+
+            _downloadAssistantButton = new ThemedButton
+            {
+                Text = "⬇ Scarica",
+                UseGradient = true,
+                CornerRadius = 8,
+                ForeColor = Color.White,
+                Font = new Font("Segoe UI Semibold", 8.5f, FontStyle.Bold),
+                Bounds = new Rectangle(cx + cw - 158, cy, 158, 32)
+            };
+            _downloadAssistantButton.Click += (_, _) => DownloadAssistant();
+            assistantCard.Controls.Add(_downloadAssistantButton);
+            cy += 38;
+
+            _assistantHintLabel = new Label
+            {
+                Text = "",
+                ForeColor = Theme.TextMuted,
+                BackColor = Color.Transparent,
+                AutoSize = false,
+                Bounds = new Rectangle(cx, cy, cw, 18)
+            };
+            assistantCard.Controls.Add(_assistantHintLabel);
             y += assistantCard.Height + 14;
 
             // ----- Card 2: Ultima Online -----
@@ -349,6 +379,7 @@ namespace ClassicUO.Launcher.Custom
                 : DetectDefaultClient();
 
             UpdateAssistantUi();
+            UpdateAssistantDownloadUi();
             UpdateUoDownloadUi();
         }
 
@@ -457,6 +488,39 @@ namespace ClassicUO.Launcher.Custom
                         : _settings.UOSteamPath;
                     break;
             }
+
+            UpdateAssistantDownloadUi();
+        }
+
+        private void UpdateAssistantDownloadUi()
+        {
+            bool hasAssistant = SelectedAssistant != "Nessuno";
+            bool canDownload = hasAssistant && AssistantDownloader.SupportsDownload(SelectedAssistant);
+            bool installed = hasAssistant && AssistantDownloader.IsInstalled(SelectedAssistant, _assistantPathBox.Text);
+
+            _downloadAssistantButton.Visible = canDownload && !installed;
+            _assistantHintLabel.Visible = hasAssistant;
+
+            if (!hasAssistant)
+            {
+                return;
+            }
+
+            if (installed)
+            {
+                _assistantHintLabel.Text = $"{SelectedAssistant} pronto.";
+                _assistantHintLabel.ForeColor = Theme.SectionGreen;
+            }
+            else if (canDownload)
+            {
+                _assistantHintLabel.Text = $"{SelectedAssistant} non trovato — scaricalo o seleziona il percorso del plugin.";
+                _assistantHintLabel.ForeColor = Theme.TextMuted;
+            }
+            else
+            {
+                _assistantHintLabel.Text = "Seleziona il percorso dell'assistente.";
+                _assistantHintLabel.ForeColor = Theme.TextMuted;
+            }
         }
 
         private void BrowseAssistant()
@@ -483,7 +547,10 @@ namespace ClassicUO.Launcher.Custom
             }
 
             if (dialog.ShowDialog(this) == DialogResult.OK)
+            {
                 _assistantPathBox.Text = dialog.FileName;
+                UpdateAssistantDownloadUi();
+            }
         }
 
         private void BrowseUoFolder()
@@ -501,6 +568,75 @@ namespace ClassicUO.Launcher.Custom
             {
                 _uoPathBox.Text = dialog.SelectedPath;
                 UpdateUoDownloadUi();
+            }
+        }
+
+        private void DownloadAssistant()
+        {
+            if (!AssistantDownloader.SupportsDownload(SelectedAssistant))
+            {
+                return;
+            }
+
+            using var folderDialog = new FolderBrowserDialog
+            {
+                Description = $"Scegli dove installare {SelectedAssistant}",
+                UseDescriptionForTitle = true
+            };
+
+            string defaultDir = AssistantDownloader.GetDefaultInstallDirectory(SelectedAssistant);
+            if (Directory.Exists(_assistantPathBox.Text))
+            {
+                folderDialog.SelectedPath = _assistantPathBox.Text;
+            }
+            else if (Directory.Exists(defaultDir))
+            {
+                folderDialog.SelectedPath = defaultDir;
+            }
+            else if (Directory.Exists(Path.GetDirectoryName(defaultDir) ?? ""))
+            {
+                folderDialog.SelectedPath = Path.GetDirectoryName(defaultDir)!;
+            }
+
+            if (folderDialog.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+
+            string installDir = Path.Combine(folderDialog.SelectedPath, SelectedAssistant switch
+            {
+                "ClassicAssist" => "ClassicAssist",
+                "Razor Enhanced" => "RazorEnhanced",
+                "Orion" => "Orion",
+                "UOSteam" => "UOSteam",
+                _ => SelectedAssistant
+            });
+
+            _statusLabel.ForeColor = Theme.TextMuted;
+            _statusLabel.Text = $"Download {SelectedAssistant} in corso…";
+            _downloadAssistantButton.Enabled = false;
+
+            using var progressForm = DownloadProgressForm.ForAssistant(SelectedAssistant, installDir);
+            var result = progressForm.ShowDialog(this);
+
+            _downloadAssistantButton.Enabled = true;
+
+            if (result == DialogResult.OK && !string.IsNullOrWhiteSpace(progressForm.ResultPath))
+            {
+                _assistantPathBox.Text = progressForm.ResultPath;
+                SaveSettings();
+                UpdateAssistantDownloadUi();
+                _statusLabel.ForeColor = Theme.SectionGreen;
+                _statusLabel.Text = $"{SelectedAssistant} installato correttamente.";
+            }
+            else if (result == DialogResult.Abort)
+            {
+                _statusLabel.ForeColor = Theme.Error;
+                _statusLabel.Text = $"Download di {SelectedAssistant} non riuscito. Riprova o seleziona manualmente il percorso.";
+            }
+            else
+            {
+                _statusLabel.Text = "";
             }
         }
 
