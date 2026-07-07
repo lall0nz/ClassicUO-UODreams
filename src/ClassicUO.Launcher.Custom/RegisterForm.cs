@@ -20,9 +20,16 @@ namespace ClassicUO.Launcher.Custom
     {
         private const string RegisterUrl = "https://www.gamesnet.it/register";
 
+        // Where to send the embedded browser once registration succeeds.
+        private const string SuccessRedirectUrl = "https://www.uodreams.it";
+
         private readonly WebView2 _webView;
         private readonly Label _statusLabel;
+        private readonly Label _openInBrowserBar;
         private bool _webViewReady;
+
+        // Guards against multiple redirects / re-entrant success detection.
+        private bool _registrationSucceeded;
 
         public RegisterForm()
         {
@@ -51,6 +58,28 @@ namespace ClassicUO.Launcher.Custom
                 TextAlign = ContentAlignment.MiddleLeft
             };
 
+            // Thin clickable bar that lets the user open the UODreams site in their real
+            // default browser instead of the embedded WebView2. It stays hidden during
+            // registration and is only revealed once the view lands on www.uodreams.it.
+            _openInBrowserBar = new Label
+            {
+                Dock = DockStyle.Top,
+                Height = 28,
+                Visible = false,
+                Text = Loc.S(
+                    "Preferisci il browser? Clicca qui per aprire www.uodreams.it esternamente.",
+                    "Prefer your browser? Click here to open www.uodreams.it externally."),
+                ForeColor = Theme.Text,
+                BackColor = Theme.ButtonNeutral,
+                Cursor = Cursors.Hand,
+                Padding = new Padding(14, 5, 14, 5),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Font = new Font("Segoe UI", 9f, FontStyle.Underline)
+            };
+            _openInBrowserBar.Click += (_, _) => OpenInExternalBrowser(SuccessRedirectUrl);
+            _openInBrowserBar.MouseEnter += (_, _) => _openInBrowserBar.BackColor = Theme.ButtonNeutralHover;
+            _openInBrowserBar.MouseLeave += (_, _) => _openInBrowserBar.BackColor = Theme.ButtonNeutral;
+
             _statusLabel = new Label
             {
                 Dock = DockStyle.Bottom,
@@ -68,9 +97,13 @@ namespace ClassicUO.Launcher.Custom
                 DefaultBackgroundColor = Theme.WindowBottom
             };
 
+            // Docking is resolved from the last-added control inward, so add the
+            // fill/bottom first, then the instruction banner, then the open-in-browser
+            // bar last so it sits at the very top edge.
             Controls.Add(_webView);
             Controls.Add(_statusLabel);
             Controls.Add(banner);
+            Controls.Add(_openInBrowserBar);
 
             Shown += OnShown;
         }
@@ -134,12 +167,61 @@ namespace ClassicUO.Launcher.Custom
                     _statusLabel.Text = "Caricamento…";
                 };
 
-                core.NavigationCompleted += (_, args) =>
+                core.NavigationCompleted += async (_, args) =>
                 {
+                    // The "open in browser" bar is only relevant once we have landed on
+                    // uodreams.it (i.e. after a successful registration + redirect).
+                    string currentUrl = core.Source ?? string.Empty;
+                    bool onUodreams = currentUrl.IndexOf("uodreams.it", StringComparison.OrdinalIgnoreCase) >= 0;
+                    _openInBrowserBar.Visible = onUodreams;
+
+                    if (_registrationSucceeded)
+                    {
+                        if (onUodreams)
+                        {
+                            _statusLabel.Text = Loc.S(
+                                "Benvenuto su UODreams! Ricordati di attivare l'account dall'email.",
+                                "Welcome to UODreams! Remember to activate your account from the email.");
+                        }
+                        return;
+                    }
+
                     _statusLabel.Text = args.IsSuccess
                         ? "Pagina pronta. Compila i campi e completa la verifica."
                         : "Impossibile caricare la pagina. Controlla la connessione.";
+
+                    // Fallback content check (in case the MutationObserver missed a
+                    // synchronously-rendered confirmation page).
+                    if (args.IsSuccess)
+                    {
+                        await CheckForRegistrationSuccessAsync().ConfigureAwait(true);
+                    }
                 };
+
+                // The confirmation ("Grazie, una mail è stata inviata…") is rendered by
+                // vBulletin via AJAX without a full navigation, so a MutationObserver is
+                // injected into every document to watch for the success text and notify
+                // the host through postMessage.
+                core.WebMessageReceived += (_, args) =>
+                {
+                    string message;
+                    try
+                    {
+                        message = args.TryGetWebMessageAsString();
+                    }
+                    catch
+                    {
+                        message = string.Empty;
+                    }
+
+                    if (message == "uod-register-success")
+                    {
+                        HandleRegistrationSuccess();
+                    }
+                };
+
+                await core.AddScriptToExecuteOnDocumentCreatedAsync(SuccessWatcherScript)
+                    .ConfigureAwait(true);
 
                 _webViewReady = true;
                 core.Navigate(RegisterUrl);
@@ -149,6 +231,150 @@ namespace ClassicUO.Launcher.Custom
                 _webViewReady = false;
                 LauncherLog.Error("WebView2 init failed", ex);
                 ShowRuntimeMissingFallback();
+            }
+        }
+
+        // Injected into every document. Watches the page (initial render + later AJAX
+        // DOM mutations) for the vBulletin post-registration confirmation text and, when
+        // found, notifies the host via postMessage("uod-register-success").
+        private const string SuccessWatcherScript = @"
+(function () {
+    if (window.__uodRegWatch) { return; }
+    window.__uodRegWatch = true;
+
+    var keywords = [
+        'una mail \u00e8 stata inviata',
+        'una email \u00e8 stata inviata',
+        'mail \u00e8 stata inviata',
+        '\u00e8 stata inviata',
+        'grazie per esserti registrato',
+        'grazie per la registrazione',
+        'grazie per aver effettuato la registrazione',
+        'controlla la tua casella',
+        'controlla la tua email',
+        'controlla la tua posta',
+        'email di attivazione',
+        'mail di attivazione',
+        'email di conferma',
+        'verifica il tuo indirizzo',
+        'account attivazione',
+        'attivare il tuo account'
+    ];
+
+    function pageMatches() {
+        try {
+            var text = (document.body ? document.body.innerText : '') || '';
+            text = text.toLowerCase();
+            for (var i = 0; i < keywords.length; i++) {
+                if (text.indexOf(keywords[i]) !== -1) {
+                    return true;
+                }
+            }
+        } catch (e) { }
+        return false;
+    }
+
+    function notifySuccess() {
+        try {
+            window.chrome.webview.postMessage('uod-register-success');
+        } catch (e) { }
+    }
+
+    function start() {
+        if (pageMatches()) {
+            notifySuccess();
+            return;
+        }
+        try {
+            var target = document.body || document.documentElement;
+            if (!target) { return; }
+            var observer = new MutationObserver(function () {
+                if (pageMatches()) {
+                    observer.disconnect();
+                    notifySuccess();
+                }
+            });
+            observer.observe(target, { childList: true, subtree: true, characterData: true });
+        } catch (e) { }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', start);
+    } else {
+        start();
+    }
+})();
+";
+
+        private async Task CheckForRegistrationSuccessAsync()
+        {
+            if (_registrationSucceeded || !_webViewReady)
+            {
+                return;
+            }
+
+            try
+            {
+                string script =
+                    "(function(){var t=(document.body?document.body.innerText:'')||'';t=t.toLowerCase();"
+                    + "var k=['\\u00e8 stata inviata','grazie per esserti registrato','grazie per la registrazione',"
+                    + "'controlla la tua casella','controlla la tua email','email di attivazione','mail di attivazione',"
+                    + "'email di conferma','verifica il tuo indirizzo'];"
+                    + "for(var i=0;i<k.length;i++){if(t.indexOf(k[i])!==-1){return true;}}return false;})();";
+
+                string result = await _webView.CoreWebView2.ExecuteScriptAsync(script)
+                    .ConfigureAwait(true);
+
+                if (result == "true")
+                {
+                    HandleRegistrationSuccess();
+                }
+            }
+            catch (Exception ex)
+            {
+                LauncherLog.Error("Registration success check failed", ex);
+            }
+        }
+
+        private void HandleRegistrationSuccess()
+        {
+            if (_registrationSucceeded)
+            {
+                return;
+            }
+
+            _registrationSucceeded = true;
+            _statusLabel.Text = Loc.S(
+                "Registrazione completata! Controlla l'email per attivare l'account.",
+                "Registration complete! Check your email to activate the account.");
+
+            // Defer the modal dialog out of the WebView2 event callback to avoid
+            // re-entrancy, then redirect only after the user acknowledges.
+            BeginInvoke(new Action(ShowSuccessPopupAndRedirect));
+        }
+
+        private void ShowSuccessPopupAndRedirect()
+        {
+            MessageBox.Show(
+                this,
+                Loc.S(
+                    "Controlla l'email per attivare l'account.",
+                    "Check your email to activate the account."),
+                Loc.S("Registrazione completata", "Registration complete"),
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information
+            );
+
+            try
+            {
+                if (_webViewReady && _webView.CoreWebView2 != null)
+                {
+                    _webView.CoreWebView2.Navigate(SuccessRedirectUrl);
+                }
+            }
+            catch (Exception ex)
+            {
+                LauncherLog.Error("Redirect to uodreams.it failed", ex);
             }
         }
 

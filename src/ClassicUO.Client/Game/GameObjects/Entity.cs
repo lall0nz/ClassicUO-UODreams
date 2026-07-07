@@ -32,6 +32,7 @@
 
 using System;
 using System.Runtime.CompilerServices;
+using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.Managers;
 using ClassicUO.Game.UI.Gumps;
@@ -145,7 +146,18 @@ namespace ClassicUO.Game.GameObjects
                         color = 0x0058;
                     }
 
-                    rtext = RenderedText.Create($"[{perc}%]", color, 3, false);
+                    byte font = 3;
+                    bool isunicode = false;
+
+                    Profile profile = ProfileManager.CurrentProfile;
+
+                    if (profile != null && profile.OverrideAllFonts)
+                    {
+                        font = profile.ChatFont;
+                        isunicode = profile.OverrideAllFontsIsUnicode;
+                    }
+
+                    rtext = RenderedText.Create($"[{perc}%]", color, font, isunicode);
                 }
             }
         }

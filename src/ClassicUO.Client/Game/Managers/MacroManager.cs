@@ -1798,6 +1798,12 @@ namespace ClassicUO.Game.Managers
                 case MacroType.LookAtMouse:
                     // handle in gamesceneinput
                     break;
+
+                // Dust765: toggle rendering of house multi tiles above the player.
+                case MacroType.ToggleInvisibleHouses:
+                    ProfileManager.CurrentProfile.InvisibleHousesEnabled = !ProfileManager.CurrentProfile.InvisibleHousesEnabled;
+
+                    break;
             }
 
 
@@ -2342,7 +2348,8 @@ namespace ClassicUO.Game.Managers
         CloseInactiveHealthBars,
         CloseCorpses,
         UseObject,
-        LookAtMouse
+        LookAtMouse,
+        ToggleInvisibleHouses // Dust765
     }
 
     internal enum MacroSubType

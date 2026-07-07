@@ -31,6 +31,7 @@
 #endregion
 
 using ClassicUO.Assets;
+using ClassicUO.Configuration;
 using ClassicUO.Renderer;
 using ClassicUO.Utility.Collections;
 using Microsoft.Xna.Framework;
@@ -103,11 +104,22 @@ namespace ClassicUO.Game.GameObjects
         {
             TextObject text_obj = TextObject.Create(_world);
 
+            byte font = 3;
+            bool isunicode = false;
+
+            Profile profile = ProfileManager.CurrentProfile;
+
+            if (profile != null && profile.OverrideAllFonts)
+            {
+                font = profile.ChatFont;
+                isunicode = profile.OverrideAllFontsIsUnicode;
+            }
+
             text_obj.RenderedText = RenderedText.Create(
                 damage.ToString(),
                 (ushort)(ReferenceEquals(Parent, _world.Player) ? 0x0034 : 0x0021),
-                3,
-                false
+                font,
+                isunicode
             );
 
             text_obj.Time = Time.Ticks + 1500;

@@ -160,6 +160,10 @@ namespace ClassicUO.Game.Managers
             }
 
             IsTargeting = false;
+
+            // Dust765 visual helper: the target cursor is gone (target chosen or
+            // cancelled), so the spell/target range ring should stop.
+            GameActions.iscasting = false;
         }
 
         public void Reset()

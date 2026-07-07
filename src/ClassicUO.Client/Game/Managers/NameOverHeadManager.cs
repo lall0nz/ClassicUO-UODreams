@@ -32,6 +32,7 @@
 
 using System;
 using ClassicUO.Configuration;
+using ClassicUO.Game.Data;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.UI.Gumps;
 
@@ -69,6 +70,19 @@ namespace ClassicUO.Game.Managers
         public bool IsAllowed(Entity serial)
         {
             if (serial == null)
+            {
+                return false;
+            }
+
+            // Custom: hide the always-on overhead name for decorative / invulnerable
+            // (yellow) NPCs such as vendors, mannequins, parrots and statues. These are
+            // all Invulnerable notoriety. Single-click naming is unaffected.
+            if (
+                ProfileManager.CurrentProfile != null
+                && ProfileManager.CurrentProfile.HidePersistentNPCNames
+                && serial is Mobile mobile
+                && mobile.NotorietyFlag == NotorietyFlag.Invulnerable
+            )
             {
                 return false;
             }

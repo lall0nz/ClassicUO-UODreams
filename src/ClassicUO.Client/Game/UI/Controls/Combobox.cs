@@ -79,7 +79,12 @@ namespace ClassicUO.Game.UI.Controls
                 }
             );
 
-            string initialText = selected > -1 ? items[selected] : emptyString;
+            // Guard against out-of-range indexes (e.g. a macro saved with an unknown /
+            // legacy action code), which would otherwise throw IndexOutOfRangeException
+            // and crash the client when the macro editor is opened.
+            string initialText = selected > -1 && items != null && selected < items.Length
+                ? items[selected]
+                : emptyString;
 
             bool isAsianLang = string.Compare(Settings.GlobalSettings.Language, "CHT", StringComparison.InvariantCultureIgnoreCase) == 0 || 
                 string.Compare(Settings.GlobalSettings.Language, "KOR", StringComparison.InvariantCultureIgnoreCase) == 0 ||
@@ -110,7 +115,7 @@ namespace ClassicUO.Game.UI.Controls
             {
                 _selectedIndex = value;
 
-                if (_items != null)
+                if (_items != null && value >= 0 && value < _items.Length)
                 {
                     _label.Text = _items[value];
 

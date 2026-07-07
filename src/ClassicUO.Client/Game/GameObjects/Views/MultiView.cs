@@ -93,6 +93,22 @@ namespace ClassicUO.Game.GameObjects
 
             Profile currentProfile = ProfileManager.CurrentProfile;
 
+            // Dust765: Invisible Houses - skip drawing house multi tiles that sit
+            // above the player, revealing the interior/lower floors.
+            if (currentProfile != null && currentProfile.InvisibleHousesEnabled && World.Player != null)
+            {
+                GameObject groundTile = World.Map?.GetTile(X, Y);
+
+                if (
+                    groundTile != null
+                    && (Z - World.Player.Z) > currentProfile.InvisibleHousesZ
+                    && (Z - groundTile.Z) > currentProfile.DontRemoveHouseBelowZ
+                )
+                {
+                    return false;
+                }
+            }
+
             if (currentProfile.HighlightGameObjects && SelectedObject.Object == this)
             {
                 hue = Constants.HIGHLIGHT_CURRENT_OBJECT_HUE;

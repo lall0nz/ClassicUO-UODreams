@@ -398,13 +398,23 @@ namespace ClassicUO.Game.UI.Controls
                 _control = control;
                 _items = items;
 
+                // A macro can be persisted with an unknown/legacy action code (e.g. an
+                // old "House" macro saved as code 100). That value is not a valid index
+                // into the macro-type name list, so clamp it to avoid crashing.
+                int selectedCode = (int) obj.Code;
+
+                if (selectedCode < 0 || selectedCode >= items.Length)
+                {
+                    selectedCode = 0;
+                }
+
                 Combobox mainBox = new Combobox
                 (
                     0,
                     0,
                     200,
                     _items,
-                    (int) obj.Code
+                    selectedCode
                 )
                 {
                     Tag = obj

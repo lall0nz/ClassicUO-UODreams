@@ -132,6 +132,13 @@ namespace ClassicUO.Game.UI.Gumps
         private Checkbox _holdShiftForContext, _holdShiftToSplitStack, _reduceFPSWhenInactive, _sallosEasyGrab, _partyInviteGump, _objectsFading, _textFading, _holdAltToMoveGumps;
         private Combobox _hpComboBox, _healtbarType, _fieldsType, _hpComboBoxShowWhen;
 
+        // Visual Helpers (Dust765) - Highlight tiles on range
+        private Checkbox _ltHighlightRangeOnActivated, _ltHighlightRangeOnCast;
+        private HSliderBar _ltHighlightRangeOnActivatedRange, _ltHighlightRangeOnCastRange;
+        private ClickableColorBox _ltHighlightRangeOnActivatedHue, _ltHighlightRangeOnCastHue;
+        private Checkbox _hidePersistentNPCNames;
+        private Checkbox _showAllLayersPaperdoll;
+
         // infobar
         private List<InfoBarBuilderControl> _infoBarBuilderControls;
         private Combobox _infoBarHighlightType;
@@ -1413,6 +1420,114 @@ namespace ClassicUO.Game.UI.Gumps
                     startX,
                     startY,
                     150
+                )
+            );
+
+            // ----- VISUAL HELPERS (Dust765) -----
+            SettingsSection section6 = AddSettingsSection(box, "Visual Helpers");
+            section6.Y = section5.Bounds.Bottom + 40;
+
+            section6.Add
+            (
+                _ltHighlightRangeOnActivated = AddCheckBox
+                (
+                    null,
+                    "Highlight tiles on range",
+                    _currentProfile.LTHighlightRangeOnActivated,
+                    startX,
+                    startY
+                )
+            );
+            section6.Add(AddLabel(null, "Range", startX, startY));
+            section6.AddRight
+            (
+                _ltHighlightRangeOnActivatedRange = AddHSlider
+                (
+                    null,
+                    1,
+                    18,
+                    _currentProfile.LTHighlightRangeOnActivatedRange,
+                    startX,
+                    startY,
+                    150
+                )
+            );
+
+            section6.Add(AddLabel(null, "Tile color", startX, startY));
+            section6.AddRight
+            (
+                _ltHighlightRangeOnActivatedHue = AddColorBox
+                (
+                    null,
+                    startX,
+                    startY,
+                    _currentProfile.LTHighlightRangeOnActivatedHue,
+                    string.Empty
+                ),
+                2
+            );
+
+            section6.Add
+            (
+                _ltHighlightRangeOnCast = AddCheckBox
+                (
+                    null,
+                    "Highlight tiles on range for spells",
+                    _currentProfile.LTHighlightRangeOnCast,
+                    startX,
+                    startY
+                )
+            );
+            section6.Add(AddLabel(null, "Range", startX, startY));
+            section6.AddRight
+            (
+                _ltHighlightRangeOnCastRange = AddHSlider
+                (
+                    null,
+                    1,
+                    18,
+                    _currentProfile.LTHighlightRangeOnCastRange,
+                    startX,
+                    startY,
+                    150
+                )
+            );
+
+            section6.Add(AddLabel(null, "Tile color", startX, startY));
+            section6.AddRight
+            (
+                _ltHighlightRangeOnCastHue = AddColorBox
+                (
+                    null,
+                    startX,
+                    startY,
+                    _currentProfile.LTHighlightRangeOnCastHue,
+                    string.Empty
+                ),
+                2
+            );
+
+            section6.Add
+            (
+                _hidePersistentNPCNames = AddCheckBox
+                (
+                    null,
+                    "Hide persistent NPC names (vendors, mannequins, parrots, statues)",
+                    _currentProfile.HidePersistentNPCNames,
+                    startX,
+                    startY
+                )
+            );
+
+            section6.Add
+            (
+                _showAllLayersPaperdoll = AddCheckBox
+                (
+                    null,
+                    "Show all equipment slots on paperdoll",
+                    _currentProfile.ShowAllLayersPaperdoll,
+                    startX,
+                    startY
                 )
             );
 
@@ -3859,6 +3974,17 @@ namespace ClassicUO.Game.UI.Gumps
 
             _currentProfile.FieldsType = _fieldsType.SelectedIndex;
             _currentProfile.HideVegetation = _hideVegetation.IsChecked;
+
+            // Visual Helpers (Dust765) - Highlight tiles on range
+            _currentProfile.LTHighlightRangeOnActivated = _ltHighlightRangeOnActivated.IsChecked;
+            _currentProfile.LTHighlightRangeOnActivatedRange = _ltHighlightRangeOnActivatedRange.Value;
+            _currentProfile.LTHighlightRangeOnActivatedHue = _ltHighlightRangeOnActivatedHue.Hue;
+            _currentProfile.LTHighlightRangeOnCast = _ltHighlightRangeOnCast.IsChecked;
+            _currentProfile.LTHighlightRangeOnCastRange = _ltHighlightRangeOnCastRange.Value;
+            _currentProfile.LTHighlightRangeOnCastHue = _ltHighlightRangeOnCastHue.Hue;
+            _currentProfile.HidePersistentNPCNames = _hidePersistentNPCNames.IsChecked;
+            _currentProfile.ShowAllLayersPaperdoll = _showAllLayersPaperdoll.IsChecked;
+
             _currentProfile.NoColorObjectsOutOfRange = _noColorOutOfRangeObjects.IsChecked;
             _currentProfile.UseCircleOfTransparency = _useCircleOfTransparency.IsChecked;
             _currentProfile.CircleOfTransparencyRadius = _circleOfTranspRadius.Value;

@@ -31,6 +31,7 @@
 #endregion
 
 using System;
+using System.Collections.Generic;
 using System.Xml;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
@@ -62,7 +63,8 @@ namespace ClassicUO.Game.UI.Gumps
 
         private GumpPic _picBase;
         private GumpPic _profilePic;
-        private readonly EquipmentSlot[] _slots = new EquipmentSlot[6];
+        private readonly List<EquipmentSlot> _slots = new List<EquipmentSlot>();
+        private const int PaperdollLeftSlotCount = 9;
         private Label _titleLabel;
         private GumpPic _virtueMenuPic;
         private Button _warModeBtn;
@@ -101,6 +103,12 @@ namespace ClassicUO.Game.UI.Gumps
                     }
 
                     _picBase.IsVisible = true;
+
+                    if (!value)
+                    {
+                        UpdateSlotVisibility();
+                    }
+
                     WantUpdateSize = true;
                 }
             }
@@ -289,18 +297,41 @@ namespace ClassicUO.Game.UI.Gumps
             Add(_virtueMenuPic = new GumpPic(80, 4, 0x0071, 0));
             _virtueMenuPic.MouseDoubleClick += VirtueMenu_MouseDoubleClickEvent;
 
-            // Equipment slots for hat/earrings/neck/ring/bracelet
-            Add(_slots[0] = new EquipmentSlot(0, 2, 75, Layer.Helmet, this));
+            // Equipment slots for EVERY wearable layer (Dust765 style). The left column
+            // is always shown for the first 6 entries; the rest of the left column and
+            // the whole right column appear when ShowAllLayersPaperdoll is enabled.
+            _slots.Clear();
 
-            Add(_slots[1] = new EquipmentSlot(0, 2, 75 + 21, Layer.Earrings, this));
+            var slotPos = new Point(2, 75);
 
-            Add(_slots[2] = new EquipmentSlot(0, 2, 75 + 21 * 2, Layer.Necklace, this));
+            // Left column
+            _slots.Add(new EquipmentSlot(0, slotPos.X, slotPos.Y, Layer.Helmet, this));
+            _slots.Add(new EquipmentSlot(0, slotPos.X, slotPos.Y + 21, Layer.Earrings, this));
+            _slots.Add(new EquipmentSlot(0, slotPos.X, slotPos.Y + 21 * 2, Layer.Necklace, this));
+            _slots.Add(new EquipmentSlot(0, slotPos.X, slotPos.Y + 21 * 3, Layer.Ring, this));
+            _slots.Add(new EquipmentSlot(0, slotPos.X, slotPos.Y + 21 * 4, Layer.Bracelet, this));
+            _slots.Add(new EquipmentSlot(0, slotPos.X, slotPos.Y + 21 * 5, Layer.Tunic, this));
+            _slots.Add(new EquipmentSlot(0, slotPos.X, slotPos.Y + 21 * 6, Layer.OneHanded, this));
+            _slots.Add(new EquipmentSlot(0, slotPos.X, slotPos.Y + 21 * 7, Layer.TwoHanded, this));
+            _slots.Add(new EquipmentSlot(0, slotPos.X, slotPos.Y + 21 * 8, Layer.Talisman, this));
 
-            Add(_slots[3] = new EquipmentSlot(0, 2, 75 + 21 * 3, Layer.Ring, this));
+            // Right column
+            slotPos.X = 160 + 2;
+            _slots.Add(new EquipmentSlot(0, slotPos.X, slotPos.Y, Layer.Robe, this));
+            _slots.Add(new EquipmentSlot(0, slotPos.X, slotPos.Y + 21, Layer.Gloves, this));
+            _slots.Add(new EquipmentSlot(0, slotPos.X, slotPos.Y + 21 * 2, Layer.Torso, this));
+            _slots.Add(new EquipmentSlot(0, slotPos.X, slotPos.Y + 21 * 3, Layer.Arms, this));
+            _slots.Add(new EquipmentSlot(0, slotPos.X, slotPos.Y + 21 * 4, Layer.Pants, this));
+            _slots.Add(new EquipmentSlot(0, slotPos.X, slotPos.Y + 21 * 5, Layer.Cloak, this));
+            _slots.Add(new EquipmentSlot(0, slotPos.X, slotPos.Y + 21 * 6, Layer.Waist, this));
+            _slots.Add(new EquipmentSlot(0, slotPos.X, slotPos.Y + 21 * 7, Layer.Shoes, this));
 
-            Add(_slots[4] = new EquipmentSlot(0, 2, 75 + 21 * 4, Layer.Bracelet, this));
+            foreach (EquipmentSlot slot in _slots)
+            {
+                Add(slot);
+            }
 
-            Add(_slots[5] = new EquipmentSlot(0, 2, 75 + 21 * 5, Layer.Tunic, this));
+            UpdateSlotVisibility();
 
             // Paperdoll control!
             _paperDollInteractable = new PaperDollInteractable(8, 19, LocalSerial, this);
@@ -347,6 +378,25 @@ namespace ClassicUO.Game.UI.Gumps
         public void UpdateTitle(string text)
         {
             _titleLabel.Text = text;
+        }
+
+        private void UpdateSlotVisibility()
+        {
+            bool isOwnPaperdoll = World.Player != null && LocalSerial == World.Player.Serial;
+            bool showAll =
+                isOwnPaperdoll && (ProfileManager.CurrentProfile?.ShowAllLayersPaperdoll ?? false);
+
+            for (int i = 0; i < _slots.Count; i++)
+            {
+                if (i < PaperdollLeftSlotCount)
+                {
+                    _slots[i].IsVisible = showAll || i < 6;
+                }
+                else
+                {
+                    _slots[i].IsVisible = showAll;
+                }
+            }
         }
 
         private void VirtueMenu_MouseDoubleClickEvent(object sender, MouseDoubleClickEventArgs args)
@@ -584,13 +634,15 @@ namespace ClassicUO.Game.UI.Gumps
 
             if (mobile != null)
             {
-                for (int i = 0; i < _slots.Length; i++)
+                for (int i = 0; i < _slots.Count; i++)
                 {
                     int idx = (int)_slots[i].Layer;
 
                     _slots[i].LocalSerial = mobile.FindItemByLayer((Layer)idx)?.Serial ?? 0;
                 }
             }
+
+            UpdateSlotVisibility();
         }
 
         public override void OnButtonClick(int buttonID)

@@ -560,6 +560,37 @@ namespace ClassicUO.Game.Scenes
             return !(itemData.IsFoliage && !itemData.IsMultiMovable && season >= Season.Winter);
         }
 
+        // Dust765 Invisible Houses: hide the COMPLETE house structure (walls, roofs,
+        // floors, decorative pieces) - not just custom-house Multi tiles. Any static,
+        // multi or world item whose Z sits above the player (and well above the ground
+        // at that tile) is skipped, matching Dust's behaviour of removing the whole
+        // building rather than only the roof/multi components.
+        private bool IsHiddenByInvisibleHouses(GameObject obj)
+        {
+            Profile profile = ProfileManager.CurrentProfile;
+
+            if (
+                profile == null
+                || !profile.InvisibleHousesEnabled
+                || _world.Player == null
+                || obj is Mobile
+                || obj is Land
+            )
+            {
+                return false;
+            }
+
+            if ((obj.Z - _world.Player.Z) <= profile.InvisibleHousesZ)
+            {
+                return false;
+            }
+
+            GameObject groundTile = _world.Map?.GetTile(obj.X, obj.Y);
+            int groundZ = groundTile?.Z ?? 0;
+
+            return (obj.Z - groundZ) > profile.DontRemoveHouseBelowZ;
+        }
+
         private bool HasSurfaceOverhead(Entity obj)
         {
             if (
@@ -701,6 +732,13 @@ namespace ClassicUO.Game.Scenes
                 if (screenX < _minPixel.X || screenX > _maxPixel.X)
                 {
                     break;
+                }
+
+                // Dust765 Invisible Houses: skip any house tile (static/multi/item) that
+                // would otherwise remain visible, so the entire structure disappears.
+                if (IsHiddenByInvisibleHouses(obj))
+                {
+                    continue;
                 }
 
                 int screenY = obj.RealScreenPosition.Y;

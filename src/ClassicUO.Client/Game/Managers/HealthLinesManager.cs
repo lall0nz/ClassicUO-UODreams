@@ -42,7 +42,7 @@ namespace ClassicUO.Game.Managers
 {
     internal sealed class HealthLinesManager
     {
-        private const int BAR_WIDTH = 38;
+        private const int BAR_WIDTH = 50;
         private const int BAR_HEIGHT = 8;
         private const int BAR_WIDTH_HALF = BAR_WIDTH >> 1;
         private const int BAR_HEIGHT_HALF = BAR_HEIGHT >> 1;
@@ -55,7 +55,10 @@ namespace ClassicUO.Game.Managers
 
         public HealthLinesManager(World world) { _world = world; }
 
-        // Players, pets, and monsters only — skip vendors, statues, and other invulnerable NPCs.
+        // Show overhead bars for all real mobiles (players, enemies, allies, pets,
+        // creatures). Only skip purely decorative / invulnerable NPCs such as town
+        // vendors, guards and statues. Real players/enemies are never Invulnerable,
+        // so they always keep their bars.
         private bool ShouldShowOverheadHealthBar(Mobile mobile)
         {
             if (mobile == null || mobile.IsDestroyed)
@@ -68,17 +71,7 @@ namespace ClassicUO.Game.Managers
                 return true;
             }
 
-            if (!mobile.IsHuman)
-            {
-                return true;
-            }
-
             if (mobile.NotorietyFlag == NotorietyFlag.Invulnerable)
-            {
-                return false;
-            }
-
-            if (!mobile.IsRenamable)
             {
                 return false;
             }
@@ -324,6 +317,11 @@ namespace ClassicUO.Game.Managers
             float alpha = passive ? 0.5f : 1.0f;
             Vector3 hueVec = ShaderHueTranslator.GetHueVector(0, false, alpha);
 
+            // Only the local player keeps the celeste (light blue) bar. Every other
+            // mobile/player (enemies, innocents, allies, party) renders a WHITE base
+            // bar so it stands out against grass instead of the purple/violet tint.
+            bool isLocalPlayer = mobile != null && mobile == _world.Player;
+
             Color hpColor;
 
             if (mobile != null && mobile.IsParalyzed)
@@ -338,9 +336,13 @@ namespace ClassicUO.Game.Managers
             {
                 hpColor = Color.LimeGreen;
             }
-            else
+            else if (isLocalPlayer)
             {
                 hpColor = Color.CornflowerBlue;
+            }
+            else
+            {
+                hpColor = Color.White;
             }
 
             int hpWidth = CalcBarWidth(entity.Hits, entity.HitsMax, BAR_WIDTH);

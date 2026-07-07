@@ -84,19 +84,19 @@ namespace ClassicUO.Configuration
 
         // sounds
         public bool EnableSound { get; set; } = true;
-        public int SoundVolume { get; set; } = 100;
-        public bool EnableMusic { get; set; } = true;
+        public int SoundVolume { get; set; } = 8;
+        public bool EnableMusic { get; set; } = false;
         public int MusicVolume { get; set; } = 100;
-        public bool EnableFootstepsSound { get; set; } = true;
-        public bool EnableCombatMusic { get; set; } = true;
+        public bool EnableFootstepsSound { get; set; } = false;
+        public bool EnableCombatMusic { get; set; } = false;
         public bool ReproduceSoundsInBackground { get; set; }
 
         // fonts and speech
         public byte ChatFont { get; set; } = 1;
         public int SpeechDelay { get; set; } = 100;
         public bool ScaleSpeechDelay { get; set; } = true;
-        public bool SaveJournalToFile { get; set; } = true;
-        public bool ForceUnicodeJournal { get; set; }
+        public bool SaveJournalToFile { get; set; } = false;
+        public bool ForceUnicodeJournal { get; set; } = true;
         public bool IgnoreAllianceMessages { get; set; }
         public bool IgnoreGuildMessages { get; set; }
 
@@ -119,15 +119,15 @@ namespace ClassicUO.Configuration
         public ushort BeneficHue { get; set; } = 0x0059;
         public ushort HarmfulHue { get; set; } = 0x0020;
         public ushort NeutralHue { get; set; } = 0x03B1;
-        public bool EnabledSpellHue { get; set; }
-        public bool EnabledSpellFormat { get; set; }
+        public bool EnabledSpellHue { get; set; } = true;
+        public bool EnabledSpellFormat { get; set; } = true;
         public string SpellDisplayFormat { get; set; } = "{power} [{spell}]";
         public ushort PoisonHue { get; set; } = 0x0044;
         public ushort ParalyzedHue { get; set; } = 0x014C;
         public ushort InvulnerableHue { get; set; } = 0x0030;
 
         // visual
-        public bool EnabledCriminalActionQuery { get; set; } = true;
+        public bool EnabledCriminalActionQuery { get; set; } = false;
         public bool EnabledBeneficialCriminalActionQuery { get; set; } = false;
         public bool EnableStatReport { get; set; } = true;
         public bool EnableSkillReport { get; set; } = true;
@@ -137,23 +137,23 @@ namespace ClassicUO.Configuration
         public bool HighlightMobilesByParalize { get; set; } = true;
         public bool HighlightMobilesByPoisoned { get; set; } = true;
         public bool HighlightMobilesByInvul { get; set; } = true;
-        public bool ShowMobilesHP { get; set; }
-        public int MobileHPType { get; set; }     // 0 = %, 1 = line, 2 = both
+        public bool ShowMobilesHP { get; set; } = true;
+        public int MobileHPType { get; set; } = 2;     // 0 = %, 1 = line, 2 = both
         public int MobileHPShowWhen { get; set; } // 0 = Always, 1 - <100%
         // Old-style overhead bars (classic solid HP/Mana/Stamina bars)
-        public bool UseOldHealthBars { get; set; }
-        public bool DrawRoofs { get; set; } = true;
-        public bool TreeToStumps { get; set; }
-        public bool EnableCaveBorder { get; set; }
-        public bool HideVegetation { get; set; }
-        public int FieldsType { get; set; } // 0 = normal, 1 = static, 2 = tile
+        public bool UseOldHealthBars { get; set; } = true;
+        public bool DrawRoofs { get; set; } = false;
+        public bool TreeToStumps { get; set; } = true;
+        public bool EnableCaveBorder { get; set; } = true;
+        public bool HideVegetation { get; set; } = true;
+        public int FieldsType { get; set; } = 2; // 0 = normal, 1 = static, 2 = tile
         public bool NoColorObjectsOutOfRange { get; set; }
-        public bool UseCircleOfTransparency { get; set; }
-        public int CircleOfTransparencyRadius { get; set; } = Constants.MAX_CIRCLE_OF_TRANSPARENCY_RADIUS / 2;
+        public bool UseCircleOfTransparency { get; set; } = true;
+        public int CircleOfTransparencyRadius { get; set; } = 90;
         public int CircleOfTransparencyType { get; set; } // 0 = normal, 1 = like original client
         public int VendorGumpHeight { get; set; } = 60;   //original vendor gump size
         public float DefaultScale { get; set; } = 1.0f;
-        public bool EnableMousewheelScaleZoom { get; set; }
+        public bool EnableMousewheelScaleZoom { get; set; } = true;
         public bool SaveScaleAfterClose { get; set; }
         public bool RestoreScaleAfterUnpressCtrl { get; set; }
         public bool BandageSelfOld { get; set; } = true;
@@ -171,12 +171,12 @@ namespace ClassicUO.Configuration
         // movements
         public bool EnablePathfind { get; set; }
         public bool UseShiftToPathfind { get; set; }
-        public bool AlwaysRun { get; set; }
-        public bool AlwaysRunUnlessHidden { get; set; }
+        public bool AlwaysRun { get; set; } = true;
+        public bool AlwaysRunUnlessHidden { get; set; } = true;
         public bool SmoothMovements { get; set; } = true;
         public bool HoldDownKeyTab { get; set; } = true;
         public bool HoldShiftForContext { get; set; } = false;
-        public bool HoldShiftToSplitStack { get; set; } = false;
+        public bool HoldShiftToSplitStack { get; set; } = true;
 
         // general
         [JsonConverter(typeof(Point2Converter))] public Point WindowClientBounds { get; set; } = new Point(600, 480);
@@ -190,7 +190,7 @@ namespace ClassicUO.Configuration
         public bool TopbarGumpIsMinimized { get; set; }
         public bool TopbarGumpIsDisabled { get; set; }
         public bool UseAlternativeLights { get; set; }
-        public bool UseCustomLightLevel { get; set; }
+        public bool UseCustomLightLevel { get; set; } = true;
         public byte LightLevel { get; set; }
         public int LightLevelType { get; set; } // 0 = absolute, 1 = minimum
         public bool UseColoredLights { get; set; } = true;
@@ -208,23 +208,41 @@ namespace ClassicUO.Configuration
 
         // Experimental
         public bool CastSpellsByOneClick { get; set; }
-        public bool BuffBarTime { get; set; }
+        public bool BuffBarTime { get; set; } = true;
         public bool FastSpellsAssign { get; set; }
-        public bool AutoOpenDoors { get; set; }
-        public bool SmoothDoors { get; set; }
+        public bool AutoOpenDoors { get; set; } = true;
+        public bool SmoothDoors { get; set; } = true;
         // Auto Avoid Obstacles
-        public bool AvoidObstacles { get; set; }
-        public bool AvoidObstaclesIgnoreHumanoids { get; set; }
-        public bool AutoOpenCorpses { get; set; }
+        public bool AvoidObstacles { get; set; } = true;
+        public bool AvoidObstaclesIgnoreHumanoids { get; set; } = true;
+
+        // Invisible Houses (Dust765): hide house multi tiles above the player so
+        // you can see inside/under roofs and walls. Toggled by the
+        // ToggleInvisibleHouses macro.
+        public bool InvisibleHousesEnabled { get; set; } = false;
+        public int InvisibleHousesZ { get; set; } = 1;
+        public int DontRemoveHouseBelowZ { get; set; } = 6;
+
+        // Visual Helpers (Dust765): "Highlight tiles on range". Colors the ring of
+        // ground tiles at a fixed distance around the player. Two independent modes:
+        // always-on (Activated) and only-while-casting (OnCast). Range and hue are
+        // configurable from the Options gump (color picker + slider).
+        public bool LTHighlightRangeOnActivated { get; set; } = false;
+        public int LTHighlightRangeOnActivatedRange { get; set; } = 10;
+        public ushort LTHighlightRangeOnActivatedHue { get; set; } = 0x0074;
+        public bool LTHighlightRangeOnCast { get; set; } = true;
+        public int LTHighlightRangeOnCastRange { get; set; } = 10;
+        public ushort LTHighlightRangeOnCastHue { get; set; } = 0x0017;
+        public bool AutoOpenCorpses { get; set; } = true;
         public int AutoOpenCorpseRange { get; set; } = 2;
         public int CorpseOpenOptions { get; set; } = 3;
-        public bool SkipEmptyCorpse { get; set; }
+        public bool SkipEmptyCorpse { get; set; } = true;
         public bool DisableDefaultHotkeys { get; set; }
         public bool DisableArrowBtn { get; set; }
         public bool DisableTabBtn { get; set; }
         public bool DisableCtrlQWBtn { get; set; }
         public bool DisableAutoMove { get; set; }
-        public bool EnableDragSelect { get; set; }
+        public bool EnableDragSelect { get; set; } = true;
         public int DragSelectModifierKey { get; set; } // 0 = none, 1 = control, 2 = shift
         public bool OverrideContainerLocation { get; set; }
 
@@ -232,28 +250,38 @@ namespace ClassicUO.Configuration
 
         [JsonConverter(typeof(Point2Converter))] public Point OverrideContainerLocationPosition { get; set; } = new Point(200, 200);
         public bool HueContainerGumps { get; set; } = true;
-        public bool DragSelectHumanoidsOnly { get; set; }
+        public bool DragSelectHumanoidsOnly { get; set; } = true;
         public int DragSelectStartX { get; set; } = 100;
         public int DragSelectStartY { get; set; } = 100;
         public bool DragSelectAsAnchor { get; set; } = false;
-        public NameOverheadTypeAllowed NameOverheadTypeAllowed { get; set; } = NameOverheadTypeAllowed.All;
-        public bool NameOverheadToggled { get; set; } = false;
+        public NameOverheadTypeAllowed NameOverheadTypeAllowed { get; set; } = NameOverheadTypeAllowed.Mobiles;
+        public bool NameOverheadToggled { get; set; } = true;
+
+        // When enabled, suppress the always-on overhead name for decorative /
+        // invulnerable (yellow) NPCs - vendors, mannequins, parrots, statues, etc.
+        // Single-click names still work; only the persistent label is hidden.
+        public bool HidePersistentNPCNames { get; set; } = true;
+
+        // Paperdoll (Dust765): show equipment slot boxes for EVERY wearable layer next
+        // to the paperdoll (helmet, jewelry, weapons, robe, torso, arms, legs, etc.).
+        // When off, only the base 6 left-column slots are shown.
+        public bool ShowAllLayersPaperdoll { get; set; } = true;
         public bool ShowTargetRangeIndicator { get; set; }
         public bool PartyInviteGump { get; set; }
-        public bool CustomBarsToggled { get; set; }
-        public bool CBBlackBGToggled { get; set; }
+        public bool CustomBarsToggled { get; set; } = true;
+        public bool CBBlackBGToggled { get; set; } = true;
 
-        public bool ShowInfoBar { get; set; }
+        public bool ShowInfoBar { get; set; } = true;
         public int InfoBarHighlightType { get; set; } // 0 = text colour changes, 1 = underline
 
-        public bool CounterBarEnabled { get; set; }
-        public bool CounterBarHighlightOnUse { get; set; }
-        public bool CounterBarHighlightOnAmount { get; set; }
+        public bool CounterBarEnabled { get; set; } = true;
+        public bool CounterBarHighlightOnUse { get; set; } = true;
+        public bool CounterBarHighlightOnAmount { get; set; } = true;
         public bool CounterBarDisplayAbbreviatedAmount { get; set; }
         public int CounterBarAbbreviatedAmount { get; set; } = 1000;
         public int CounterBarHighlightAmount { get; set; } = 5;
         public int CounterBarCellSize { get; set; } = 40;
-        public int CounterBarRows { get; set; } = 1;
+        public int CounterBarRows { get; set; } = 10;
         public int CounterBarColumns { get; set; } = 1;
 
         public bool ShowSkillsChangedMessage { get; set; } = true;
@@ -261,9 +289,9 @@ namespace ClassicUO.Configuration
         public bool ShowStatsChangedMessage { get; set; } = true;
 
 
-        public bool ShadowsEnabled { get; set; } = true;
-        public bool ShadowsStatics { get; set; } = true;
-        public int TerrainShadowsLevel { get; set; } = 15;
+        public bool ShadowsEnabled { get; set; } = false;
+        public bool ShadowsStatics { get; set; } = false;
+        public int TerrainShadowsLevel { get; set; } = 5;
         public int AuraUnderFeetType { get; set; } // 0 = NO, 1 = in warmode, 2 = ctrl+shift, 3 = always
         public bool AuraOnMouse { get; set; } = true;
         public bool AnimatedWaterEffect { get; set; } = false;
@@ -277,15 +305,15 @@ namespace ClassicUO.Configuration
         public bool StandardSkillsGump { get; set; } = true;
 
         public bool ShowNewMobileNameIncoming { get; set; } = true;
-        public bool ShowNewCorpseNameIncoming { get; set; } = true;
+        public bool ShowNewCorpseNameIncoming { get; set; } = false;
 
         public uint GrabBagSerial { get; set; }
 
-        public int GridLootType { get; set; } // 0 = none, 1 = only grid, 2 = both
+        public int GridLootType { get; set; } = 2; // 0 = none, 1 = only grid, 2 = both
 
-        public bool ReduceFPSWhenInactive { get; set; } = true;
+        public bool ReduceFPSWhenInactive { get; set; } = false;
 
-        public bool OverrideAllFonts { get; set; }
+        public bool OverrideAllFonts { get; set; } = true;
         public bool OverrideAllFontsIsUnicode { get; set; } = true;
 
         public bool SallosEasyGrab { get; set; }
@@ -298,24 +326,24 @@ namespace ClassicUO.Configuration
 
         public bool DoubleClickToLootInsideContainers { get; set; }
 
-        public bool UseLargeContainerGumps { get; set; } = false;
+        public bool UseLargeContainerGumps { get; set; } = true;
 
         // ---- Grid Container ----
-        public bool GridContainerEnabled { get; set; } = false;
+        public bool GridContainerEnabled { get; set; } = true;
         public int GridContainersScale { get; set; } = 100;
-        public bool GridContainerScaleItems { get; set; } = false;
+        public bool GridContainerScaleItems { get; set; } = true;
         [JsonConverter(typeof(Point2Converter))] public Point BackpackGridPosition { get; set; } = new Point(100, 100);
         [JsonConverter(typeof(Point2Converter))] public Point BackpackGridSize { get; set; } = new Point(300, 300);
         public int Grid_DefaultColumns { get; set; } = 4;
         public int Grid_DefaultRows { get; set; } = 4;
         public bool Grid_UseContainerHue { get; set; } = false;
         public ushort AltGridContainerBackgroundHue { get; set; } = 0;
-        public int ContainerOpacity { get; set; } = 80;
-        public bool Grid_HideBorder { get; set; } = false;
-        public int GridContainerSearchMode { get; set; } = 0; // 0 = filter/hide, 1 = highlight
+        public int ContainerOpacity { get; set; } = 50;
+        public bool Grid_HideBorder { get; set; } = true;
+        public int GridContainerSearchMode { get; set; } = 1; // 0 = filter/hide, 1 = highlight
         public bool CorpseSingleClickLoot { get; set; } = false;
         public ushort GridBorderHue { get; set; } = 0;
-        public int GridBorderAlpha { get; set; } = 100;
+        public int GridBorderAlpha { get; set; } = 75;
         public bool GridEnableContPreview { get; set; } = true;
 
         public bool RelativeDragAndDropItems { get; set; }
@@ -323,7 +351,7 @@ namespace ClassicUO.Configuration
         public bool HighlightContainerWhenSelected { get; set; }
 
         public bool ShowHouseContent { get; set; }
-        public bool SaveHealthbars { get; set; }
+        public bool SaveHealthbars { get; set; } = true;
         public bool TextFading { get; set; } = true;
 
         public bool UseSmoothBoatMovement { get; set; } = false;

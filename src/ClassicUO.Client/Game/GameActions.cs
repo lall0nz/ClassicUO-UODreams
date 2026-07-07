@@ -51,6 +51,28 @@ namespace ClassicUO.Game
         public static int LastSpellIndex { get; set; } = 1;
         public static int LastSkillIndex { get; set; } = 1;
 
+        // Dust765: casting flag used by the "Highlight tiles on range for spells"
+        // visual helper. Set when a spell is cast and cleared when a target cursor
+        // appears; a safety timeout prevents it from getting stuck on.
+        public static bool iscasting = false;
+        private static uint _castingExpireTime;
+
+        public static bool IsCasting()
+        {
+            if (iscasting && Time.Ticks >= _castingExpireTime)
+            {
+                iscasting = false;
+            }
+
+            return iscasting;
+        }
+
+        private static void BeginCasting()
+        {
+            iscasting = true;
+            _castingExpireTime = Time.Ticks + 4000;
+        }
+
 
         public static void ToggleWarMode(PlayerMobile player)
         {
@@ -654,6 +676,7 @@ namespace ClassicUO.Game
             if (index >= 0)
             {
                 LastSpellIndex = index;
+                BeginCasting();
                 Socket.Send_CastSpellFromBook(index, bookSerial);
             }
         }
@@ -663,6 +686,7 @@ namespace ClassicUO.Game
             if (index >= 0)
             {
                 LastSpellIndex = index;
+                BeginCasting();
                 Socket.Send_CastSpell(index);
             }
         }

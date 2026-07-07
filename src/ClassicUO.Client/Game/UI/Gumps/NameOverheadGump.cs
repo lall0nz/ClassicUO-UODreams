@@ -205,8 +205,11 @@ namespace ClassicUO.Game.UI.Gumps
                 return;
             }
 
+            // Overhead names show ONLY the text (no dark background box). The label is
+            // still readable thanks to the black-bordered font. Keep the control (its
+            // size is used for layout/hit-testing) but render it fully transparent.
             Add(
-                _background = new AlphaBlendControl(.7f)
+                _background = new AlphaBlendControl(0f)
                 {
                     WantUpdateSize = false,
                     Hue = entity is Mobile m ? Notoriety.GetHue(m.NotorietyFlag) : (ushort)0x0481
@@ -652,8 +655,6 @@ namespace ClassicUO.Game.UI.Gumps
                     + (bounds.Height >> 1);
             }
 
-            Vector3 hueVector = ShaderHueTranslator.GetHueVector(0);
-
             Point p = Client.Game.Scene.Camera.WorldToScreen(new Point(x, y));
             x = p.X - (Width >> 1);
             y = p.Y - (Height >> 1);
@@ -674,8 +675,6 @@ namespace ClassicUO.Game.UI.Gumps
 
             X = x;
             Y = y;
-
-            batcher.DrawRectangle(_borderColor, x - 1, y - 1, Width + 1, Height + 1, hueVector);
 
             base.Draw(batcher, x, y);
 
