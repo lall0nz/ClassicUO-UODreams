@@ -114,33 +114,55 @@ namespace ClassicUO.Launcher.Custom
             return null;
         }
 
-        public static string? DetectOrionAssistantDll(string? installRoot = null)
+        public static string? DetectOrionLauncherExe(string? installRoot = null)
         {
-            foreach (string root in CandidatePaths(installRoot, @"c:\Orion Launcher"))
+            string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            string programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+
+            foreach (string root in CandidatePaths(
+                installRoot,
+                @"c:\Orion Launcher",
+                Path.Combine(programFiles, "Orion Launcher"),
+                Path.Combine(programFilesX86, "Orion Launcher")))
             {
-                string dll = Path.Combine(root, "OA", "OrionAssistant64.dll");
-                if (File.Exists(dll))
+                foreach (string name in new[] { "OrionLauncher64.exe", "Orion Launcher64.exe" })
                 {
-                    return dll;
+                    string exe = Path.Combine(root, name);
+                    if (File.Exists(exe))
+                    {
+                        return exe;
+                    }
                 }
             }
 
             return null;
         }
 
-        public static string? DetectUOSteamDll(string? installRoot = null)
+        public static string? DetectOrionInstallRoot(string? installRoot = null)
+        {
+            string? exe = DetectOrionLauncherExe(installRoot);
+            return exe == null ? null : Path.GetDirectoryName(exe);
+        }
+
+        public static string? DetectOrionExe(string? installRoot = null) => DetectOrionLauncherExe(installRoot);
+
+        public static string? DetectOrionAssistantDll(string? installRoot = null) => DetectOrionLauncherExe(installRoot);
+
+        public static string? DetectUOSteamExe(string? installRoot = null)
         {
             foreach (string root in CandidatePaths(installRoot, @"c:\Program Files (x86)\UOS"))
             {
-                string dll = Path.Combine(root, "UOS.dll");
-                if (File.Exists(dll))
+                string exe = Path.Combine(root, "UOS.exe");
+                if (File.Exists(exe))
                 {
-                    return dll;
+                    return exe;
                 }
             }
 
             return null;
         }
+
+        public static string? DetectUOSteamDll(string? installRoot = null) => DetectUOSteamExe(installRoot);
 
         private static IEnumerable<string> CandidatePaths(string? preferred, params string[] defaults)
         {

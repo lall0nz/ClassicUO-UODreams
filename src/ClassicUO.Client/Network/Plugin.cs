@@ -239,7 +239,21 @@ namespace ClassicUO.Network
                 && Environment.OSVersion.Platform != PlatformID.MacOSX
             )
             {
-                UnblockPath(Path.GetDirectoryName(PluginPath));
+                string? pluginDir = Path.GetDirectoryName(PluginPath);
+                if (!string.IsNullOrEmpty(pluginDir))
+                {
+                    string? installRoot = Path.GetDirectoryName(pluginDir);
+                    string pathPrefix = installRoot != null && installRoot != pluginDir
+                        ? pluginDir + ";" + installRoot + ";"
+                        : pluginDir + ";";
+
+                    Environment.SetEnvironmentVariable(
+                        "PATH",
+                        pathPrefix + Environment.GetEnvironmentVariable("PATH")
+                    );
+                }
+
+                UnblockPath(pluginDir);
             }
 
             try
@@ -250,7 +264,8 @@ namespace ClassicUO.Network
 
                 if (assptr == IntPtr.Zero)
                 {
-                    var err = Marshal.GetLastWin32Error().ToString();
+                    int err = Marshal.GetLastWin32Error();
+                    Log.Error($"LoadLibrary failed for '{PluginPath}' (win32 error {err}).");
                     throw new Exception("Invalid Assembly, Attempting managed load.");
                 }
 

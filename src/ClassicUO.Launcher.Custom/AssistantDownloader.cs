@@ -42,7 +42,7 @@ namespace ClassicUO.Launcher.Custom
             DownloadUrl = "http://orionuo.online/Updates5152/OrionLauncher/x64/Orion%20Launcher64_2.0.0.0.exe",
             ArchiveFileName = "OrionLauncher64.exe",
             IsInstaller = true,
-            PluginCandidates = new[] { "OA\\OrionAssistant64.dll", "OrionAssistant64.dll" }
+            PluginCandidates = new[] { "OrionLauncher64.exe" }
         };
 
         private static readonly AssistantSource UOSteam = new()
@@ -51,7 +51,7 @@ namespace ClassicUO.Launcher.Custom
             DownloadUrl = "https://razorenhanced.net/download/UOS_Latest.exe",
             ArchiveFileName = "UOS_Latest.exe",
             IsInstaller = true,
-            PluginCandidates = new[] { "UOS.dll" }
+            PluginCandidates = new[] { "UOS.exe" }
         };
 
         public static bool SupportsDownload(string assistant) => TryGetSource(assistant, out _);
@@ -70,6 +70,25 @@ namespace ClassicUO.Launcher.Custom
         public static bool IsInstalled(string assistant, string? path = null)
         {
             return ResolvePluginPath(assistant, path) != null;
+        }
+
+        /// <summary>
+        /// UI-only check: validates the path textbox value without auto-detect fallbacks.
+        /// </summary>
+        public static bool IsPluginValidAtPath(string assistant, string? path)
+        {
+            if (!TryGetSource(assistant, out AssistantSource? source) || source is null)
+            {
+                return false;
+            }
+
+            string trimmed = (path ?? "").Trim().Trim('"');
+            if (string.IsNullOrEmpty(trimmed))
+            {
+                return false;
+            }
+
+            return ResolveInPath(trimmed, source.PluginCandidates) != null;
         }
 
         public static string? ResolvePluginPath(string assistant, string? path = null)
@@ -98,8 +117,8 @@ namespace ClassicUO.Launcher.Custom
             return assistant switch
             {
                 "Razor Enhanced" => FindPlugin(ClientRuntimeDownloader.DetectRazorEnhancedPath() ?? "", source.PluginCandidates),
-                "Orion" => ClientRuntimeDownloader.DetectOrionAssistantDll(),
-                "UOSteam" => ClientRuntimeDownloader.DetectUOSteamDll(),
+                "Orion" => ClientRuntimeDownloader.DetectOrionLauncherExe(),
+                "UOSteam" => ClientRuntimeDownloader.DetectUOSteamExe(),
                 _ => null
             };
         }

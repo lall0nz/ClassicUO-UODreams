@@ -476,15 +476,15 @@ namespace ClassicUO.Launcher.Custom
                         : _settings.RazorPath;
                     break;
                 case "Orion":
-                    _assistantPathLabel.Text = "Percorso di Orion (cartella o OrionAssistant64.dll)";
+                    _assistantPathLabel.Text = "Percorso di Orion Launcher (cartella o OrionLauncher64.exe)";
                     _assistantPathBox.Text = string.IsNullOrWhiteSpace(_settings.OrionPath)
-                        ? ClientRuntimeDownloader.DetectOrionAssistantDll() ?? ""
+                        ? ClientRuntimeDownloader.DetectOrionInstallRoot() ?? ""
                         : _settings.OrionPath;
                     break;
                 case "UOSteam":
-                    _assistantPathLabel.Text = "Percorso di UOSteam (cartella o UOS.dll)";
+                    _assistantPathLabel.Text = "Percorso di UOSteam (cartella o UOS.exe)";
                     _assistantPathBox.Text = string.IsNullOrWhiteSpace(_settings.UOSteamPath)
-                        ? ClientRuntimeDownloader.DetectUOSteamDll() ?? ""
+                        ? ClientRuntimeDownloader.DetectUOSteamExe() ?? ""
                         : _settings.UOSteamPath;
                     break;
             }
@@ -496,7 +496,8 @@ namespace ClassicUO.Launcher.Custom
         {
             bool hasAssistant = SelectedAssistant != "Nessuno";
             bool canDownload = hasAssistant && AssistantDownloader.SupportsDownload(SelectedAssistant);
-            bool installed = hasAssistant && AssistantDownloader.IsInstalled(SelectedAssistant, _assistantPathBox.Text);
+            bool installed = hasAssistant &&
+                AssistantDownloader.IsPluginValidAtPath(SelectedAssistant, _assistantPathBox.Text);
 
             _downloadAssistantButton.Visible = canDownload && !installed;
             _assistantHintLabel.Visible = hasAssistant;
@@ -513,7 +514,12 @@ namespace ClassicUO.Launcher.Custom
             }
             else if (canDownload)
             {
-                _assistantHintLabel.Text = $"{SelectedAssistant} non trovato — scaricalo o seleziona il percorso del plugin.";
+                _assistantHintLabel.Text = SelectedAssistant switch
+                {
+                    "UOSteam" => "UOSteam non trovato — scaricalo o seleziona la cartella con UOS.exe.",
+                    "Orion" => "Orion non trovato — scaricalo o seleziona la cartella con OrionLauncher64.exe.",
+                    _ => $"{SelectedAssistant} non trovato — scaricalo o seleziona il percorso del plugin."
+                };
                 _assistantHintLabel.ForeColor = Theme.TextMuted;
             }
             else
@@ -530,8 +536,8 @@ namespace ClassicUO.Launcher.Custom
                 Title = SelectedAssistant switch
                 {
                     "ClassicAssist" => "Seleziona ClassicAssist.dll",
-                    "Orion" => "Seleziona OrionAssistant64.dll o la cartella di Orion",
-                    "UOSteam" => "Seleziona UOS.dll o la cartella di UOSteam",
+                    "Orion" => "Seleziona OrionLauncher64.exe o la cartella di Orion Launcher",
+                    "UOSteam" => "Seleziona UOS.exe o la cartella di UOSteam",
                     _ => "Seleziona RazorEnhanced.exe o la sua cartella"
                 },
                 Filter = "Plugin (*.dll;*.exe)|*.dll;*.exe|Tutti i file (*.*)|*.*"
@@ -693,13 +699,14 @@ namespace ClassicUO.Launcher.Custom
             if (string.IsNullOrEmpty(path))
                 return null;
 
+            if (SelectedAssistant == "Orion")
+                return null;
+
             if (Directory.Exists(path))
             {
                 string[] candidates = SelectedAssistant switch
                 {
                     "ClassicAssist" => new[] { "ClassicAssist.dll" },
-                    "Orion" => new[] { "OA\\OrionAssistant64.dll", "OrionAssistant64.dll", "OA\\OrionAssistant.dll", "OrionAssistant.dll" },
-                    "UOSteam" => new[] { "UOS.dll" },
                     _ => new[] { "RazorEnhanced.exe", "RazorEnhanced.dll", "Razor.dll", "RazorCE.dll", "Razor.exe" }
                 };
 
@@ -714,6 +721,94 @@ namespace ClassicUO.Launcher.Custom
             }
 
             return File.Exists(path) ? path : null;
+        }
+
+        private void LaunchOrion()
+        {
+            string? orionExe = AssistantPaths.ResolveOrionLauncherExe(_assistantPathBox.Text);
+            if (orionExe == null)
+            {
+                ShowError(
+                    "Orion Launcher non trovato. Seleziona la cartella con OrionLauncher64.exe\n" +
+                    "(es. C:\\Orion Launcher)."
+                );
+                return;
+            }
+
+            SaveSettings();
+
+            string orionDir = Path.GetDirectoryName(orionExe)!;
+            var psi = new ProcessStartInfo
+            {
+                FileName = orionExe,
+                WorkingDirectory = orionDir,
+                UseShellExecute = true
+            };
+
+            LauncherLog.Info($"Launch Orion Launcher external exe={orionExe} (no CLI args)");
+
+            try
+            {
+                Process? process = Process.Start(psi);
+                if (process == null)
+                {
+                    ShowError("Impossibile avviare Orion Launcher.");
+                    return;
+                }
+
+                _statusLabel.ForeColor = Theme.TextMuted;
+                _statusLabel.Text = "Orion Launcher avviato. Seleziona il profilo e premi Launch.";
+                LauncherLog.Info($"Orion Launcher avviato PID={process.Id}");
+                Close();
+            }
+            catch (Exception ex)
+            {
+                ShowError("Errore durante l'avvio di Orion Launcher: " + ex.Message, ex);
+            }
+        }
+
+        private void LaunchUOSteam()
+        {
+            string? uosExe = AssistantPaths.ResolveUOSteamExe(_assistantPathBox.Text);
+            if (uosExe == null)
+            {
+                ShowError("UOSteam non trovato. Seleziona la cartella con UOS.exe\n(es. C:\\Program Files (x86)\\UOS).");
+                return;
+            }
+
+            SaveSettings();
+
+            string uosDir = Path.GetDirectoryName(uosExe)!;
+            var psi = new ProcessStartInfo
+            {
+                FileName = uosExe,
+                WorkingDirectory = uosDir,
+                UseShellExecute = true
+            };
+
+            LauncherLog.Info(
+                $"Launch UOSteam external exe={uosExe} shard={_ipBox.Text.Trim()}:{_portBox.Value} " +
+                "(shard/port configured inside UOS UI — no CLI args)"
+            );
+
+            try
+            {
+                Process? process = Process.Start(psi);
+                if (process == null)
+                {
+                    ShowError("Impossibile avviare UOS.exe.");
+                    return;
+                }
+
+                _statusLabel.ForeColor = Theme.TextMuted;
+                _statusLabel.Text = "UOSteam avviato. Configura shard/porta nell'interfaccia UOS.";
+                LauncherLog.Info($"UOSteam avviato PID={process.Id}");
+                Close();
+            }
+            catch (Exception ex)
+            {
+                ShowError("Errore durante l'avvio di UOSteam: " + ex.Message, ex);
+            }
         }
 
         private void SaveSettings()
@@ -746,6 +841,18 @@ namespace ClassicUO.Launcher.Custom
 
         private void Launch()
         {
+            if (SelectedAssistant == "UOSteam")
+            {
+                LaunchUOSteam();
+                return;
+            }
+
+            if (SelectedAssistant == "Orion")
+            {
+                LaunchOrion();
+                return;
+            }
+
             if (!ClientRuntimeDownloader.IsInstalled())
             {
                 using var bootstrapForm = DownloadProgressForm.ForClientRuntime();
@@ -805,14 +912,11 @@ namespace ClassicUO.Launcher.Custom
 
                 if (SelectedAssistant != "Razor Enhanced" && !Is64BitCompatible(assistantDll))
                 {
-                    string hint = SelectedAssistant == "UOSteam"
-                        ? "UOSteam (UOS.dll) è a 32 bit e non può essere caricato dal client ClassicUO a 64 bit.\n" +
-                          "Usa ClassicAssist (sintassi simile a UOSteam), Razor Enhanced o Orion."
-                        : Path.GetFileName(assistantDll) +
-                          " è a 32 bit (x86) e non può essere caricato dal client a 64 bit.\n" +
-                          "Usa Razor Enhanced (bootstrap + cuo.dll nativo), ClassicAssist o Orion.";
-
-                    ShowError(hint);
+                    ShowError(
+                        Path.GetFileName(assistantDll) +
+                        " è a 32 bit (x86) e non può essere caricato dal client a 64 bit.\n" +
+                        "Usa Razor Enhanced (bootstrap + cuo.dll nativo) o ClassicAssist."
+                    );
                     return;
                 }
             }
@@ -824,7 +928,7 @@ namespace ClassicUO.Launcher.Custom
                 FileName = effectiveClient,
                 WorkingDirectory = Path.GetDirectoryName(effectiveClient)!,
                 UseShellExecute = false,
-                CreateNoWindow = true
+                CreateNoWindow = false
             };
 
             psi.ArgumentList.Add("-ip");
@@ -840,19 +944,31 @@ namespace ClassicUO.Launcher.Custom
             psi.ArgumentList.Add("-plugins");
             psi.ArgumentList.Add(assistantDll ?? "");
 
+            string args = string.Join(" ", psi.ArgumentList);
+            LauncherLog.Info(
+                $"Launch assistant={SelectedAssistant} exe={effectiveClient} plugin={assistantDll ?? "(none)"} args={args}"
+            );
+
             try
             {
-                Process.Start(psi);
+                Process? process = Process.Start(psi);
+                if (process == null)
+                {
+                    ShowError("Impossibile avviare il client (Process.Start ha restituito null).");
+                    return;
+                }
+
                 _statusLabel.ForeColor = Theme.TextMuted;
                 _statusLabel.Text = SelectedAssistant == "Nessuno"
                     ? "Client avviato."
                     : $"Client avviato con {SelectedAssistant}.";
 
+                LauncherLog.Info($"Client avviato PID={process.Id}");
                 Close();
             }
             catch (Exception ex)
             {
-                ShowError("Errore durante l'avvio: " + ex.Message);
+                ShowError("Errore durante l'avvio: " + ex.Message, ex);
             }
         }
 
@@ -884,10 +1000,27 @@ namespace ClassicUO.Launcher.Custom
             }
         }
 
-        private void ShowError(string message)
+        private void ShowError(string message, Exception? ex = null)
         {
+            LauncherLog.Error(message, ex);
             _statusLabel.ForeColor = Theme.Error;
             _statusLabel.Text = message;
+
+            string dialogText = message;
+            if (!string.IsNullOrEmpty(LauncherLog.LastError) && LauncherLog.LastError != message)
+            {
+                dialogText += "\n\n" + LauncherLog.LastError;
+            }
+
+            dialogText += $"\n\nLog: {LauncherLog.LogPath}";
+
+            MessageBox.Show(
+                this,
+                dialogText,
+                "UODreams Launcher",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error
+            );
         }
     }
 }

@@ -59,10 +59,16 @@ namespace ClassicUO.Launcher.Custom
         {
             string installDir = Path.GetDirectoryName(exePath) ?? "";
             string sidecarIcon = Path.Combine(installDir, IconFileName);
+            string resourcesIcon = Path.Combine(installDir, "Resources", IconFileName);
 
             if (File.Exists(sidecarIcon))
             {
                 return sidecarIcon;
+            }
+
+            if (File.Exists(resourcesIcon))
+            {
+                return resourcesIcon;
             }
 
             try

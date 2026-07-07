@@ -18,6 +18,9 @@
   <ItemGroup>
     <EmbeddedResource Include="Resources\uodreams_logo.png" />
     <EmbeddedResource Include="Resources\uodreams.ico" />
+    <Content Include="Resources\uodreams.ico" Link="uodreams.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>
