@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
 using System.Reflection;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace ClassicUO.Launcher.Custom
@@ -12,7 +13,7 @@ namespace ClassicUO.Launcher.Custom
     {
         private readonly LauncherSettings _settings = LauncherSettings.Load();
 
-        private ComboBox _assistantCombo = null!;
+        private ThemedComboBox _assistantCombo = null!;
         private TextBox _assistantPathBox = null!;
         private InputPanel _assistantPathPanel = null!;
         private ThemedButton _assistantBrowseButton = null!;
@@ -21,8 +22,9 @@ namespace ClassicUO.Launcher.Custom
         private TextBox _uoPathBox = null!;
         private TextBox _ipBox = null!;
         private NumericUpDown _portBox = null!;
-        private ComboBox _serverCombo = null!;
+        private ThemedComboBox _serverCombo = null!;
         private bool _suppressServerComboEvents;
+        private bool _suppressAssistantComboEvents;
         private CheckBox _encryptionCheck = null!;
         private Label _statusLabel = null!;
         private ThemedButton _downloadUoButton = null!;
@@ -32,6 +34,8 @@ namespace ClassicUO.Launcher.Custom
 
         // References kept for language switching.
         private ThemedButton _langButton = null!;
+        private ThemedButton _updateButton = null!;
+        private ThemedButton _clearPathsButton = null!;
         private ThemedButton _launchButton = null!;
         private ThemedButton _uoBrowseButton = null!;
         private Label _assistantSectionLabel = null!;
@@ -132,41 +136,28 @@ namespace ClassicUO.Launcher.Custom
             assistantCard.Controls.Add(_assistantSectionLabel);
             cy += 28;
 
-            _assistantCombo = new ComboBox
+            _assistantCombo = new ThemedComboBox
             {
-                DropDownStyle = ComboBoxStyle.DropDownList,
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Theme.Input,
-                ForeColor = Theme.Text,
-                Font = new Font("Segoe UI", 10f),
-                Bounds = new Rectangle(cx, cy, cw, 30),
-                DrawMode = DrawMode.OwnerDrawFixed,
-                ItemHeight = 24
+                PlaceholderFirstItem = true,
+                Bounds = new Rectangle(cx, cy, cw, 30)
             };
-            _assistantCombo.Items.AddRange(new object[] { "Nessuno", "ClassicAssist", "Razor Enhanced", "Orion", "UOSteam" });
-            _assistantCombo.DrawItem += (_, e) =>
-            {
-                if (e.Index < 0) return;
-                bool selected = (e.State & DrawItemState.Selected) != 0;
-                using var bg = new SolidBrush(selected ? Theme.ButtonNeutralHover : Theme.Input);
-                e.Graphics.FillRectangle(bg, e.Bounds);
-                // "Nessuno" stays the internal key; only its displayed label is localized.
-                string itemText = _assistantCombo.Items[e.Index]!.ToString()!;
-                if (itemText == "Nessuno")
-                {
-                    itemText = Loc.S("Nessuno", "None");
-                }
-                TextRenderer.DrawText(
-                    e.Graphics,
-                    itemText,
-                    _assistantCombo.Font,
-                    new Rectangle(e.Bounds.X + 6, e.Bounds.Y, e.Bounds.Width - 6, e.Bounds.Height),
-                    Theme.Text,
-                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter
-                );
-            };
+            _assistantCombo.Items.Add(Loc.S("Seleziona un assistant", "Select an assistant"));
+            _assistantCombo.Items.Add("ClassicAssist");
+            _assistantCombo.Items.Add("Razor Enhanced");
+            _assistantCombo.Items.Add("Orion");
+            _assistantCombo.Items.Add("UOSteam");
             _assistantCombo.SelectedIndexChanged += (_, _) =>
             {
+                if (_suppressAssistantComboEvents)
+                {
+                    return;
+                }
+
+                if (SelectedAssistant == "UOSteam")
+                {
+                    ShowUOSteamNotice();
+                }
+
                 UpdateAssistantUi();
                 UpdateAssistantDownloadUi();
             };
@@ -257,7 +248,7 @@ namespace ClassicUO.Launcher.Custom
             Controls.Add(shardCard);
             cy = 14;
 
-            _shardSectionLabel = SectionLabel("Shard  —  UODreams", cx, cy, cw);
+            _shardSectionLabel = SectionLabel("SHARD - SERVER", cx, cy, cw);
             shardCard.Controls.Add(_shardSectionLabel);
             cy += 28;
 
@@ -271,31 +262,9 @@ namespace ClassicUO.Launcher.Custom
             shardCard.Controls.Add(_serverLabel);
             cy += 18;
 
-            _serverCombo = new ComboBox
+            _serverCombo = new ThemedComboBox
             {
-                DropDownStyle = ComboBoxStyle.DropDownList,
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Theme.Input,
-                ForeColor = Theme.Text,
-                Font = new Font("Segoe UI", 10f),
-                Bounds = new Rectangle(cx, cy, cw - 42, 30),
-                DrawMode = DrawMode.OwnerDrawFixed,
-                ItemHeight = 24
-            };
-            _serverCombo.DrawItem += (_, e) =>
-            {
-                if (e.Index < 0) return;
-                bool selected = (e.State & DrawItemState.Selected) != 0;
-                using var bg = new SolidBrush(selected ? Theme.ButtonNeutralHover : Theme.Input);
-                e.Graphics.FillRectangle(bg, e.Bounds);
-                TextRenderer.DrawText(
-                    e.Graphics,
-                    _serverCombo.Items[e.Index]!.ToString(),
-                    _serverCombo.Font,
-                    new Rectangle(e.Bounds.X + 6, e.Bounds.Y, e.Bounds.Width - 6, e.Bounds.Height),
-                    Theme.Text,
-                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter
-                );
+                Bounds = new Rectangle(cx, cy, cw - 42, 30)
             };
             _serverCombo.SelectedIndexChanged += (_, _) => OnServerComboChanged();
             shardCard.Controls.Add(_serverCombo);
@@ -419,6 +388,29 @@ namespace ClassicUO.Launcher.Custom
             _registerBtn.Click += (_, _) => OpenRegisterWindow();
             Controls.Add(_registerBtn);
 
+            // ----- Toolbar (top) -----
+            _clearPathsButton = new ThemedButton
+            {
+                Text = Loc.S("🗑 Pulisci Campi", "🗑 Clear Fields"),
+                CornerRadius = 8,
+                Font = new Font("Segoe UI Semibold", 8f, FontStyle.Bold),
+                ForeColor = Theme.Text,
+                Bounds = new Rectangle(margin, 12, 112, 26)
+            };
+            _clearPathsButton.Click += (_, _) => ClearAllPaths();
+            Controls.Add(_clearPathsButton);
+
+            _updateButton = new ThemedButton
+            {
+                Text = Loc.S("⬇ Aggiorna", "⬇ Update"),
+                CornerRadius = 8,
+                Font = new Font("Segoe UI Semibold", 8.5f, FontStyle.Bold),
+                ForeColor = Theme.Text,
+                Bounds = new Rectangle(formWidth - margin - 148, 12, 76, 26)
+            };
+            _updateButton.Click += (_, _) => CheckForUpdates();
+            Controls.Add(_updateButton);
+
             // ----- Language toggle (top-right) -----
             _langButton = new ThemedButton
             {
@@ -430,9 +422,29 @@ namespace ClassicUO.Launcher.Custom
             };
             _langButton.Click += (_, _) => ToggleLanguage();
             Controls.Add(_langButton);
+            _clearPathsButton.BringToFront();
+            _updateButton.BringToFront();
             _langButton.BringToFront();
 
             ClientSize = new Size(formWidth, y + footerH + bottomMargin);
+        }
+
+        private void ClearAllPaths()
+        {
+            _settings.ResetUserPaths();
+            _settings.Save();
+
+            _assistantCombo.SelectedIndex = 0;
+            _uoPathBox.Text = "";
+            _assistantPathBox.Text = "";
+            _clientPathBox.Text = "";
+
+            UpdateAssistantUi();
+            UpdateAssistantDownloadUi();
+            UpdateUoDownloadUi();
+
+            _statusLabel.ForeColor = Theme.SectionGreen;
+            _statusLabel.Text = Loc.S("Path resettati.", "Paths cleared.");
         }
 
         private static string LangButtonText() => Loc.IsEn ? "🌐 EN" : "🌐 IT";
@@ -451,12 +463,19 @@ namespace ClassicUO.Launcher.Custom
 
             _assistantSectionLabel.Text = Loc.S("Seleziona l'assistant", "Select assistant").ToUpperInvariant();
             _uoSectionLabel.Text = Loc.S("Client Ultima Online", "Ultima Online client").ToUpperInvariant();
-            _shardSectionLabel.Text = "Shard  —  UODreams".ToUpperInvariant();
+            _shardSectionLabel.Text = "SHARD - SERVER";
+
+            if (_assistantCombo.Items.Count > 0)
+            {
+                _assistantCombo.Items[0] = Loc.S("Seleziona un assistant", "Select an assistant");
+            }
 
             _assistantBrowseButton.Text = Loc.S("Sfoglia…", "Browse…");
             _uoBrowseButton.Text = Loc.S("Sfoglia…", "Browse…");
             _downloadAssistantButton.Text = Loc.S("⬇ Scarica", "⬇ Download");
             _downloadUoButton.Text = Loc.S("⬇ Scarica UODreams", "⬇ Download UODreams");
+            _clearPathsButton.Text = Loc.S("🗑 Pulisci Campi", "🗑 Clear Fields");
+            _updateButton.Text = Loc.S("⬇ Aggiorna", "⬇ Update");
             _launchButton.Text = Loc.S("AVVIA", "START");
             _registerBtn.Text = Loc.S("Registrati gratis", "Register for free");
 
@@ -465,7 +484,7 @@ namespace ClassicUO.Launcher.Custom
             _portLabel.Text = Loc.S("Porta", "Port");
             _encryptionCheck.Text = Loc.S("Crittografia", "Encryption");
 
-            // Owner-drawn combo: repaint so the localized "Nessuno"/"None" label updates.
+            // Owner-drawn combo: repaint after language switch.
             _assistantCombo.Invalidate();
 
             // Refresh dynamic/contextual texts.
@@ -549,12 +568,32 @@ namespace ClassicUO.Launcher.Custom
 
         private void LoadFromSettings()
         {
-            _assistantCombo.SelectedItem =
-                _assistantCombo.Items.Contains(_settings.Assistant)
-                    ? _settings.Assistant
-                    : _settings.Assistant == "Razor"
-                        ? "Razor Enhanced"
-                        : "Nessuno";
+            _suppressAssistantComboEvents = true;
+            try
+            {
+                string savedAssistant = _settings.Assistant;
+                if (savedAssistant == "Nessuno" || string.IsNullOrEmpty(savedAssistant))
+                {
+                    _assistantCombo.SelectedIndex = 0;
+                }
+                else if (savedAssistant == "Razor")
+                {
+                    _assistantCombo.SelectedItem = "Razor Enhanced";
+                }
+                else if (_assistantCombo.Items.Contains(savedAssistant))
+                {
+                    _assistantCombo.SelectedItem = savedAssistant;
+                }
+                else
+                {
+                    _assistantCombo.SelectedIndex = 0;
+                }
+            }
+            finally
+            {
+                _suppressAssistantComboEvents = false;
+            }
+
             _uoPathBox.Text = _settings.UoDirectory;
             _ipBox.Text = _settings.ShardIp;
             _portBox.Value = Math.Min(Math.Max(_settings.ShardPort, 1), 65535);
@@ -743,7 +782,18 @@ namespace ClassicUO.Launcher.Custom
             return clientPath;
         }
 
-        private string SelectedAssistant => _assistantCombo.SelectedItem as string ?? "Nessuno";
+        private string SelectedAssistant
+        {
+            get
+            {
+                if (_assistantCombo.SelectedIndex <= 0)
+                {
+                    return "Nessuno";
+                }
+
+                return _assistantCombo.SelectedItem as string ?? "Nessuno";
+            }
+        }
 
         private void UpdateAssistantUi()
         {
@@ -751,6 +801,8 @@ namespace ClassicUO.Launcher.Custom
             _assistantPathLabel.Visible = hasAssistant;
             _assistantPathPanel.Visible = hasAssistant;
             _assistantBrowseButton.Visible = hasAssistant;
+
+            bool allowAutoDetect = _settings.FirstRunCompleted;
 
             switch (SelectedAssistant)
             {
@@ -764,7 +816,7 @@ namespace ClassicUO.Launcher.Custom
                     _assistantPathLabel.Text = Loc.S(
                         "Percorso di RazorEnhanced (cartella o RazorEnhanced.exe)",
                         "Path to RazorEnhanced (folder or RazorEnhanced.exe)");
-                    _assistantPathBox.Text = string.IsNullOrWhiteSpace(_settings.RazorPath)
+                    _assistantPathBox.Text = string.IsNullOrWhiteSpace(_settings.RazorPath) && allowAutoDetect
                         ? ClientRuntimeDownloader.DetectRazorEnhancedPath() ?? ""
                         : _settings.RazorPath;
                     break;
@@ -772,7 +824,7 @@ namespace ClassicUO.Launcher.Custom
                     _assistantPathLabel.Text = Loc.S(
                         "Percorso di Orion Launcher (cartella o OrionLauncher64.exe)",
                         "Path to Orion Launcher (folder or OrionLauncher64.exe)");
-                    _assistantPathBox.Text = string.IsNullOrWhiteSpace(_settings.OrionPath)
+                    _assistantPathBox.Text = string.IsNullOrWhiteSpace(_settings.OrionPath) && allowAutoDetect
                         ? ClientRuntimeDownloader.DetectOrionInstallRoot() ?? ""
                         : _settings.OrionPath;
                     break;
@@ -780,7 +832,7 @@ namespace ClassicUO.Launcher.Custom
                     _assistantPathLabel.Text = Loc.S(
                         "Percorso di UOSteam (cartella o UOS.exe)",
                         "Path to UOSteam (folder or UOS.exe)");
-                    _assistantPathBox.Text = string.IsNullOrWhiteSpace(_settings.UOSteamPath)
+                    _assistantPathBox.Text = string.IsNullOrWhiteSpace(_settings.UOSteamPath) && allowAutoDetect
                         ? ClientRuntimeDownloader.DetectUOSteamExe() ?? ""
                         : _settings.UOSteamPath;
                     break;
@@ -1099,6 +1151,18 @@ namespace ClassicUO.Launcher.Custom
             }
         }
 
+        private void ShowUOSteamNotice()
+        {
+            ThemedMessageDialog.ShowInfo(
+                this,
+                Loc.S("UOSteam", "UOSteam"),
+                Loc.S(
+                    "UOSteam è un assistant che non supporta ClassicUO. Se vuoi provare un nuovo assistant simile, " +
+                    "prova ClassicAssist, così potrai usufruire di tutte le feature del Classic Client di UO.",
+                    "UOSteam is an assistant that does not support ClassicUO. If you want to try a similar new " +
+                    "assistant, try ClassicAssist, so you can enjoy all the features of the UO Classic Client."));
+        }
+
         private void LaunchUOSteam()
         {
             string? uosExe = AssistantPaths.ResolveUOSteamExe(_assistantPathBox.Text);
@@ -1109,18 +1173,6 @@ namespace ClassicUO.Launcher.Custom
                     "UOSteam not found. Select the folder containing UOS.exe\n(e.g. C:\\Program Files (x86)\\UOS)."));
                 return;
             }
-
-            MessageBox.Show(
-                this,
-                Loc.S(
-                    "UOSteam è un assistant che non supporta ClassicUO. Se vuoi provare un nuovo assistant simile, " +
-                    "prova ClassicAssist, così potrai usufruire di tutte le feature del Classic Client di UO.",
-                    "UOSteam is an assistant that does not support ClassicUO. If you want to try a similar new " +
-                    "assistant, try ClassicAssist, so you can enjoy all the features of the UO Classic Client."),
-                "UODreams Launcher",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information
-            );
 
             SaveSettings();
 
@@ -1156,6 +1208,103 @@ namespace ClassicUO.Launcher.Custom
             catch (Exception ex)
             {
                 ShowError(Loc.S("Errore durante l'avvio di UOSteam: ", "Error while starting UOSteam: ") + ex.Message, ex);
+            }
+        }
+
+        private async void CheckForUpdates()
+        {
+            _updateButton.Enabled = false;
+            _statusLabel.ForeColor = Theme.TextMuted;
+            _statusLabel.Text = Loc.S("Controllo aggiornamenti…", "Checking for updates…");
+
+            try
+            {
+                UpdateCheckResult? info = await LauncherUpdater.CheckForUpdatesAsync();
+                if (info == null)
+                {
+                    ShowError(Loc.S(
+                        "Impossibile controllare gli aggiornamenti su GitHub.",
+                        "Unable to check for updates on GitHub."));
+                    return;
+                }
+
+                if (!info.HasAnyUpdate)
+                {
+                    _statusLabel.ForeColor = Theme.SectionGreen;
+                    _statusLabel.Text = Loc.S(
+                        $"Sei già aggiornato (v{LauncherManifest.LauncherVersion}).",
+                        $"You are up to date (v{LauncherManifest.LauncherVersion}).");
+                    MessageBox.Show(
+                        this,
+                        Loc.S(
+                            $"Launcher e client sono aggiornati (v{LauncherManifest.LauncherVersion}).",
+                            $"Launcher and client are up to date (v{LauncherManifest.LauncherVersion})."),
+                        Loc.S("Aggiornamento", "Update"),
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                    return;
+                }
+
+                string details = Loc.S(
+                    $"Disponibile la versione v{info.LatestVersion}.\n\n" +
+                    (info.NeedsLauncherUpdate ? "• Aggiornamento launcher\n" : "") +
+                    (info.NeedsClientUpdate ? "• Aggiornamento client ClassicUO\n" : "") +
+                    "\nProcedere con il download e l'installazione?",
+                    $"Version v{info.LatestVersion} is available.\n\n" +
+                    (info.NeedsLauncherUpdate ? "• Launcher update\n" : "") +
+                    (info.NeedsClientUpdate ? "• ClassicUO client update\n" : "") +
+                    "\nProceed with download and installation?");
+
+                if (MessageBox.Show(
+                        this,
+                        details,
+                        Loc.S("Aggiornamento disponibile", "Update available"),
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Question) != DialogResult.Yes)
+                {
+                    _statusLabel.Text = "";
+                    return;
+                }
+
+                if (info.NeedsClientUpdate &&
+                    !string.IsNullOrEmpty(info.ClientDownloadUrl) &&
+                    !string.IsNullOrEmpty(info.ClientPackageFileName))
+                {
+                    using var clientForm = DownloadProgressForm.ForClientRuntimeUpdate(
+                        info.ClientDownloadUrl,
+                        info.ClientPackageFileName);
+                    if (clientForm.ShowDialog(this) != DialogResult.OK)
+                    {
+                        ShowError(Loc.S("Aggiornamento client non riuscito.", "Client update failed."));
+                        return;
+                    }
+
+                    _clientPathBox.Text = DetectDefaultClient();
+                    UpdateAssistantUi();
+                }
+
+                if (info.NeedsLauncherUpdate &&
+                    !string.IsNullOrEmpty(info.LauncherDownloadUrl) &&
+                    !string.IsNullOrEmpty(info.LauncherPackageFileName))
+                {
+                    using var launcherForm = DownloadProgressForm.ForLauncherUpdate(
+                        info.LauncherDownloadUrl,
+                        info.LauncherPackageFileName);
+                    launcherForm.ShowDialog(this);
+                    Application.Exit();
+                    return;
+                }
+
+                _statusLabel.ForeColor = Theme.SectionGreen;
+                _statusLabel.Text = Loc.S("Aggiornamento completato.", "Update completed.");
+            }
+            catch (Exception ex)
+            {
+                ShowError(Loc.S("Errore durante l'aggiornamento: ", "Error during update: ") + ex.Message, ex);
+            }
+            finally
+            {
+                _updateButton.Enabled = true;
             }
         }
 

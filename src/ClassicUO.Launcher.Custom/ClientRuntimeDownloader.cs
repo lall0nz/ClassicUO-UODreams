@@ -97,13 +97,17 @@ namespace ClassicUO.Launcher.Custom
 
         public static async Task DownloadAndInstallAsync(
             IProgress<DownloadProgressReport>? progress,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            string? packageUrl = null,
+            string? packageFileName = null)
         {
             string installRoot = AppContext.BaseDirectory;
             string tempDir = Path.Combine(Path.GetTempPath(), "UODreamsLauncher", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(tempDir);
 
-            string archivePath = Path.Combine(tempDir, LauncherManifest.ClientPackageFileName);
+            string archiveName = packageFileName ?? LauncherManifest.ClientPackageFileName;
+            string archivePath = Path.Combine(tempDir, archiveName);
+            string downloadUrl = packageUrl ?? LauncherManifest.ClientPackageUrl;
 
             try
             {
@@ -113,7 +117,7 @@ namespace ClassicUO.Launcher.Custom
                 });
 
                 await UoClientDownloader.DownloadFileFromUrlAsync(
-                    LauncherManifest.ClientPackageUrl,
+                    downloadUrl,
                     archivePath,
                     progress,
                     cancellationToken

@@ -30,7 +30,21 @@ jobs:
         shell: pwsh
         run: |
           $zip = "$env:RUNNER_TEMP\ClassicUOLauncher.zip"
-          Invoke-WebRequest -Uri "https://www.classicuo.eu/launcher/win-x64/ClassicUOLauncher-win-x64-release.zip" -OutFile $zip
+          $urls = @(
+            "https://www.classicuo.eu/launcher/win-x64/ClassicUOLauncher-win-x64-release.zip",
+            "https://github.com/ClassicUO/ClassicUO/releases/latest/download/ClassicUOLauncher-win-x64-release.zip"
+          )
+          $downloaded = $false
+          foreach ($url in $urls) {
+            try {
+              Write-Host "Trying $url"
+              Invoke-WebRequest -Uri $url -OutFile $zip -TimeoutSec 120
+              if ((Get-Item $zip).Length -gt 1MB) { $downloaded = $true; break }
+            } catch {
+              Write-Host "Failed: $_"
+            }
+          }
+          if (-not $downloaded) { throw "Could not download official ClassicUO from any mirror" }
           Expand-Archive -Path $zip -DestinationPath "$env:RUNNER_TEMP\cuo-official" -Force
           $official = Get-ChildItem "$env:RUNNER_TEMP\cuo-official" -Recurse -Directory -Filter "ClassicUO" | Select-Object -First 1
           if (-not $official) { throw "ClassicUO folder not found in official zip" }

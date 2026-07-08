@@ -26,6 +26,7 @@ namespace ClassicUO.Launcher.Custom
         public int ShardPort { get; set; } = 2593;
         public int Encryption { get; set; } = 0;
         public bool DesktopShortcutCreated { get; set; } = false;
+        public bool FirstRunCompleted { get; set; } = false;
         public string Language { get; set; } = "it"; // it | en
 
         public List<ShardServer> Servers { get; set; } = new();
@@ -73,6 +74,7 @@ namespace ClassicUO.Launcher.Custom
                     if (loaded != null)
                     {
                         loaded.EnsureDefaultServers();
+                        loaded.MigrateFirstRunFlag();
                         return loaded;
                     }
                 }
@@ -82,9 +84,50 @@ namespace ClassicUO.Launcher.Custom
                 // corrupted settings file: fall back to defaults
             }
 
+            var fresh = CreateFresh();
+            return fresh;
+        }
+
+        public static LauncherSettings CreateFresh()
+        {
             var fresh = new LauncherSettings();
             fresh.EnsureDefaultServers();
+            fresh.ResetUserPaths();
             return fresh;
+        }
+
+        public void ResetUserPaths()
+        {
+            Assistant = "Nessuno";
+            ClassicAssistPath = "";
+            RazorPath = "";
+            OrionPath = "";
+            UOSteamPath = "";
+            ClientPath = "";
+            UoDirectory = "";
+            FirstRunCompleted = false;
+        }
+
+        /// <summary>
+        /// Existing installs without FirstRunCompleted keep their saved paths.
+        /// </summary>
+        public void MigrateFirstRunFlag()
+        {
+            if (FirstRunCompleted)
+            {
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(UoDirectory) ||
+                !string.IsNullOrWhiteSpace(ClassicAssistPath) ||
+                !string.IsNullOrWhiteSpace(RazorPath) ||
+                !string.IsNullOrWhiteSpace(OrionPath) ||
+                !string.IsNullOrWhiteSpace(UOSteamPath) ||
+                !string.IsNullOrWhiteSpace(ClientPath) ||
+                !string.Equals(Assistant, "Nessuno", StringComparison.OrdinalIgnoreCase))
+            {
+                FirstRunCompleted = true;
+            }
         }
 
         public void Save()

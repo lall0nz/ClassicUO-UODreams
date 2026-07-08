@@ -42,6 +42,30 @@ namespace ClassicUO.Launcher.Custom
                 "Download componenti ClassicUO UODreams…"
             );
 
+        public static DownloadProgressForm ForClientRuntimeUpdate(string packageUrl, string packageFileName) =>
+            new(
+                async (progress, ct) =>
+                {
+                    await ClientRuntimeDownloader.DownloadAndInstallAsync(progress, ct, packageUrl, packageFileName)
+                        .ConfigureAwait(true);
+                    return AppContext.BaseDirectory;
+                },
+                Loc.S("UODreams Launcher — Aggiornamento client", "UODreams Launcher — Client update"),
+                Loc.S("Download aggiornamento client UODreams…", "Downloading UODreams client update…")
+            );
+
+        public static DownloadProgressForm ForLauncherUpdate(string packageUrl, string packageFileName) =>
+            new(
+                async (progress, ct) =>
+                {
+                    await LauncherUpdater.ApplyLauncherUpdateAsync(packageUrl, packageFileName, progress, ct)
+                        .ConfigureAwait(true);
+                    return Environment.ProcessPath;
+                },
+                Loc.S("UODreams Launcher — Aggiornamento", "UODreams Launcher — Update"),
+                Loc.S("Download aggiornamento launcher…", "Downloading launcher update…")
+            );
+
         public static DownloadProgressForm ForAssistant(string assistant, string installDirectory, string? infoMessage = null) =>
             new(
                 async (progress, ct) =>

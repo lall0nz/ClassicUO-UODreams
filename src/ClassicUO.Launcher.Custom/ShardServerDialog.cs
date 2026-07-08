@@ -20,7 +20,7 @@ namespace ClassicUO.Launcher.Custom
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new Size(360, 236);
+            ClientSize = new Size(360, 286);
             BackColor = Theme.WindowBottom;
             ForeColor = Theme.Text;
             Font = new Font("Segoe UI", 9.5f);
@@ -56,12 +56,15 @@ namespace ClassicUO.Launcher.Custom
             };
             portPanel.Controls.Add(_portBox);
             Controls.Add(portPanel);
-            y += 44;
+
+            const int buttonHeight = 34;
+            const int bottomPadding = 24;
+            int buttonY = ClientSize.Height - bottomPadding - buttonHeight;
 
             var cancelButton = new ThemedButton
             {
                 Text = Loc.S("Annulla", "Cancel"),
-                Bounds = new Rectangle(x + w - 200, y, 96, 34)
+                Bounds = new Rectangle(x + w - 200, buttonY, 96, buttonHeight)
             };
             cancelButton.Click += (_, _) => { DialogResult = DialogResult.Cancel; Close(); };
             Controls.Add(cancelButton);
@@ -72,7 +75,7 @@ namespace ClassicUO.Launcher.Custom
                 UseGradient = true,
                 ForeColor = Color.White,
                 Font = new Font("Segoe UI Semibold", 9.5f, FontStyle.Bold),
-                Bounds = new Rectangle(x + w - 96, y, 96, 34)
+                Bounds = new Rectangle(x + w - 96, buttonY, 96, buttonHeight)
             };
             okButton.Click += OnConfirm;
             Controls.Add(okButton);

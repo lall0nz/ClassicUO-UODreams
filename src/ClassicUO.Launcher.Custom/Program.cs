@@ -29,10 +29,25 @@ namespace ClassicUO.Launcher.Custom
                     return;
                 }
 
+                ResetSettingsAfterCleanInstall();
                 TryCreateDesktopShortcutOnce();
             }
 
             Application.Run(new MainForm());
+        }
+
+        private static void ResetSettingsAfterCleanInstall()
+        {
+            try
+            {
+                var settings = LauncherSettings.Load();
+                settings.ResetUserPaths();
+                settings.Save();
+            }
+            catch
+            {
+                // best-effort
+            }
         }
 
         private static void TryCreateDesktopShortcutOnce()

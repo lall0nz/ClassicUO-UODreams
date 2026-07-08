@@ -124,11 +124,15 @@ Write-Step "Writing launcher settings template"
     Assistant = "Nessuno"
     ClassicAssistPath = ""
     RazorPath = ""
+    OrionPath = ""
+    UOSteamPath = ""
     ClientPath = ""
     UoDirectory = ""
     ShardIp = "login.uodreams.com"
     ShardPort = 2593
     Encryption = 0
+    FirstRunCompleted = $false
+    DesktopShortcutCreated = $false
 } | ConvertTo-Json | Set-Content (Join-Path $OutputDir "launcher.settings.json") -Encoding UTF8
 
 Write-Step "Writing README"
