@@ -9,6 +9,12 @@
     <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
 
+  <!-- NativeAOT must emit cuo.dll (not cuo.exe) for ClassicUO.exe bootstrap host. -->
+  <PropertyGroup Condition="'$(PublishAot)' == 'true'">
+    <OutputType>Library</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+
   <!-- WPF/WinForms support (Windows only) so managed assistants (ClassicAssist, Razor)
        can be loaded in-process by TryLoadManagedPlugin on the .NET 8 runtime. -->
   <PropertyGroup Condition="'$(PublishAot)' != 'true' AND $([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Windows)))">

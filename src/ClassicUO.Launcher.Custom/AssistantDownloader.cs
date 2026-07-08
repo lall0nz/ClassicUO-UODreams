@@ -60,7 +60,7 @@ namespace ClassicUO.Launcher.Custom
         {
             if (assistant == "Razor Enhanced")
             {
-                string pluginsDir = Path.Combine(ClientRuntimeDownloader.BootstrapDir, "Data", "Plugins");
+                string pluginsDir = ClientRuntimeDownloader.PluginsDir;
                 return Path.Combine(pluginsDir, "RazorEnhanced");
             }
 

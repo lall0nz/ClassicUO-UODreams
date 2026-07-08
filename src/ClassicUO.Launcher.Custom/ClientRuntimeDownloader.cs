@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -15,8 +16,78 @@ namespace ClassicUO.Launcher.Custom
         public static string BootstrapDir =>
             Path.Combine(ClientDir, "Bootstrap");
 
+        /// <summary>
+        /// Dust765-style layout: ClassicUO.exe + native modded cuo.dll in Client root.
+        /// Supports mods and Razor Enhanced in the same session.
+        /// </summary>
+        public static bool HasUnifiedNativeClient()
+        {
+            string exe = Path.Combine(ClientDir, "ClassicUO.exe");
+            string nativeCuo = Path.Combine(ClientDir, "cuo.dll");
+            return File.Exists(exe) && IsNativeCuoDll(nativeCuo);
+        }
+
+        public static string? TryGetUnifiedNativeClientExe()
+        {
+            if (!HasUnifiedNativeClient())
+            {
+                return null;
+            }
+
+            return Path.Combine(ClientDir, "ClassicUO.exe");
+        }
+
+        public static string? TryGetLegacyBootstrapClientExe()
+        {
+            string exe = Path.Combine(BootstrapDir, "ClassicUO.exe");
+            string nativeCuo = Path.Combine(BootstrapDir, "cuo.dll");
+            if (File.Exists(exe) && IsNativeCuoDll(nativeCuo))
+            {
+                return exe;
+            }
+
+            return null;
+        }
+
+        public static string PluginsDir
+        {
+            get
+            {
+                string unified = Path.Combine(ClientDir, "Data", "Plugins");
+                if (Directory.Exists(unified))
+                {
+                    return unified;
+                }
+
+                return Path.Combine(BootstrapDir, "Data", "Plugins");
+            }
+        }
+
+        public static bool IsNativeCuoDll(string cuoDllPath)
+        {
+            if (!File.Exists(cuoDllPath))
+            {
+                return false;
+            }
+
+            try
+            {
+                AssemblyName.GetAssemblyName(cuoDllPath);
+                return false;
+            }
+            catch
+            {
+                return true;
+            }
+        }
+
         public static bool IsInstalled()
         {
+            if (HasUnifiedNativeClient())
+            {
+                return true;
+            }
+
             string modded = Path.Combine(ClientDir, "cuo-modded.exe");
             string bootstrap = Path.Combine(BootstrapDir, "ClassicUO.exe");
             string nativeCuo = Path.Combine(BootstrapDir, "cuo.dll");
@@ -67,7 +138,7 @@ namespace ClassicUO.Launcher.Custom
                 if (!IsInstalled())
                 {
                     throw new InvalidDataException(
-                        "Installazione incompleta: cuo-modded.exe o Bootstrap non trovati nel pacchetto."
+                        "Installazione incompleta: ClassicUO.exe + cuo.dll nativo o cuo-modded.exe + Bootstrap non trovati nel pacchetto."
                     );
                 }
 
@@ -96,7 +167,7 @@ namespace ClassicUO.Launcher.Custom
 
         public static string? DetectRazorEnhancedPath()
         {
-            string pluginsDir = Path.Combine(BootstrapDir, "Data", "Plugins");
+            string pluginsDir = PluginsDir;
 
             if (!Directory.Exists(pluginsDir))
             {

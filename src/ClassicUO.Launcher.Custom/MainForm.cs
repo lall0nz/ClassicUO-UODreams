@@ -681,6 +681,12 @@ namespace ClassicUO.Launcher.Custom
 
         private static string DetectDefaultClient()
         {
+            string? unified = ClientRuntimeDownloader.TryGetUnifiedNativeClientExe();
+            if (unified != null)
+            {
+                return unified;
+            }
+
             string clientDir = GetClientDir();
             string modded = Path.Combine(clientDir, "cuo-modded.exe");
 
@@ -691,28 +697,31 @@ namespace ClassicUO.Launcher.Custom
             return File.Exists(legacy) ? legacy : "";
         }
 
-        private static bool IsNativeCuoDll(string cuoDllPath)
-        {
-            if (!File.Exists(cuoDllPath))
-                return false;
-
-            try
-            {
-                AssemblyName.GetAssemblyName(cuoDllPath);
-                return false;
-            }
-            catch
-            {
-                return true;
-            }
-        }
+        private static bool IsNativeCuoDll(string cuoDllPath) =>
+            ClientRuntimeDownloader.IsNativeCuoDll(cuoDllPath);
 
         private static string ResolveClientExecutable(string clientPath, string assistant)
         {
             string clientDir = GetClientDir();
 
+            // Dust765-style: modded native cuo.dll + ClassicUO.exe (mods + Razor together).
+            string? unified = ClientRuntimeDownloader.TryGetUnifiedNativeClientExe();
+            if (unified != null)
+            {
+                if (assistant is "Razor Enhanced" or "ClassicAssist" or "Nessuno")
+                {
+                    return unified;
+                }
+            }
+
             if (assistant == "Razor Enhanced")
             {
+                string? legacyBootstrap = ClientRuntimeDownloader.TryGetLegacyBootstrapClientExe();
+                if (legacyBootstrap != null)
+                {
+                    return legacyBootstrap;
+                }
+
                 string bootstrapDir = GetBootstrapDir();
                 string bootstrap = Path.Combine(bootstrapDir, "ClassicUO.exe");
                 string nativeCuo = Path.Combine(bootstrapDir, "cuo.dll");
@@ -1214,16 +1223,18 @@ namespace ClassicUO.Launcher.Custom
 
             if (SelectedAssistant == "Razor Enhanced")
             {
-                string bootstrapDir = GetBootstrapDir();
-                string nativeCuo = Path.Combine(bootstrapDir, "cuo.dll");
+                string clientDir = Path.GetDirectoryName(effectiveClient)!;
+                string nativeCuo = Path.Combine(clientDir, "cuo.dll");
 
                 if (!File.Exists(effectiveClient) || !IsNativeCuoDll(nativeCuo))
                 {
                     ShowError(Loc.S(
-                        "Razor Enhanced richiede la cartella Client\\Bootstrap con ClassicUO.exe e cuo.dll nativo.\n" +
-                        "Il client moddato (cuo-modded.exe) non può caricare Razor in-process.",
-                        "Razor Enhanced requires the Client\\Bootstrap folder with ClassicUO.exe and native cuo.dll.\n" +
-                        "The modded client (cuo-modded.exe) cannot load Razor in-process."
+                        "Razor Enhanced richiede ClassicUO.exe con cuo.dll nativo (come Dust765).\n" +
+                        "Il client gestito cuo-modded.exe non può caricare Razor.\n\n" +
+                        "Serve il pacchetto unificato: ClassicUO.exe + cuo.dll moddato nativo nella cartella Client.",
+                        "Razor Enhanced requires ClassicUO.exe with native cuo.dll (Dust765-style).\n" +
+                        "The managed cuo-modded.exe client cannot load Razor.\n\n" +
+                        "You need the unified package: ClassicUO.exe + native modded cuo.dll in the Client folder."
                     ));
                     return;
                 }
