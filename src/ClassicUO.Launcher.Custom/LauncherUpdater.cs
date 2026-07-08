@@ -3,7 +3,9 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Net.Http;
+using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -12,6 +14,7 @@ namespace ClassicUO.Launcher.Custom
     internal sealed class UpdateCheckResult
     {
         public string LatestVersion { get; init; } = "";
+        public string ReleaseNotes { get; init; } = "";
         public bool NeedsClientUpdate { get; init; }
         public bool NeedsLauncherUpdate { get; init; }
         public string? ClientDownloadUrl { get; init; }
@@ -34,7 +37,9 @@ namespace ClassicUO.Launcher.Custom
             Http.DefaultRequestHeaders.UserAgent.ParseAdd("UODreamsLauncher");
         }
 
-        public static async Task<UpdateCheckResult?> CheckForUpdatesAsync(CancellationToken cancellationToken = default)
+        public static async Task<UpdateCheckResult?> CheckForUpdatesAsync(
+            string? localClientVersion = null,
+            CancellationToken cancellationToken = default)
         {
             string apiUrl = $"https://api.github.com/repos/{LauncherManifest.GitHubRepo}/releases/latest";
             using var response = await Http.GetAsync(apiUrl, cancellationToken).ConfigureAwait(false);
@@ -52,6 +57,10 @@ namespace ClassicUO.Launcher.Custom
             {
                 return null;
             }
+
+            string body = doc.RootElement.TryGetProperty("body", out JsonElement bodyEl)
+                ? bodyEl.GetString() ?? ""
+                : "";
 
             string? clientUrl = null;
             string? launcherUrl = null;
@@ -74,12 +83,17 @@ namespace ClassicUO.Launcher.Custom
                 }
             }
 
-            bool needsClient = IsRemoteNewer(latest, LauncherManifest.ClientRuntimeVersion) && clientUrl != null;
+            string effectiveClientVersion = string.IsNullOrWhiteSpace(localClientVersion)
+                ? LauncherManifest.ClientRuntimeVersion
+                : localClientVersion;
+
+            bool needsClient = IsRemoteNewer(latest, effectiveClientVersion) && clientUrl != null;
             bool needsLauncher = IsRemoteNewer(latest, LauncherManifest.LauncherVersion) && launcherUrl != null;
 
             return new UpdateCheckResult
             {
                 LatestVersion = latest,
+                ReleaseNotes = FormatReleaseNotes(body),
                 NeedsClientUpdate = needsClient,
                 NeedsLauncherUpdate = needsLauncher,
                 ClientDownloadUrl = clientUrl,
@@ -132,13 +146,27 @@ namespace ClassicUO.Launcher.Custom
 
                 string currentExe = Environment.ProcessPath
                     ?? Path.Combine(AppContext.BaseDirectory, "UODreams Launcher.exe");
+                int pid = Environment.ProcessId;
 
                 string updaterScript = Path.Combine(tempDir, "apply-update.cmd");
                 File.WriteAllText(updaterScript, $"""
                     @echo off
-                    ping 127.0.0.1 -n 3 > nul
-                    copy /Y "{newExe}" "{currentExe}"
-                    start "" "{currentExe}"
+                    setlocal
+                    set "PID={pid}"
+                    set "SRC={newExe}"
+                    set "DST={currentExe}"
+                    :waitloop
+                    tasklist /FI "PID eq %PID%" 2>nul | find "%PID%" >nul
+                    if %errorlevel%==0 (
+                      timeout /t 1 /nobreak >nul
+                      goto waitloop
+                    )
+                    copy /Y "%SRC%" "%DST%" >nul
+                    if errorlevel 1 (
+                      timeout /t 2 /nobreak >nul
+                      copy /Y "%SRC%" "%DST%" >nul
+                    )
+                    start "" "%DST%"
                     del "%~f0"
                     """);
 
@@ -161,6 +189,61 @@ namespace ClassicUO.Launcher.Custom
             {
                 // temp cleanup is best-effort; updater script deletes itself
             }
+        }
+
+        public static string? ParseVersionFromPackageName(string? fileName)
+        {
+            if (string.IsNullOrWhiteSpace(fileName))
+            {
+                return null;
+            }
+
+            Match match = Regex.Match(fileName, @"v([\d.]+)", RegexOptions.IgnoreCase);
+            return match.Success ? match.Groups[1].Value : null;
+        }
+
+        private static string FormatReleaseNotes(string markdown)
+        {
+            if (string.IsNullOrWhiteSpace(markdown))
+            {
+                return "";
+            }
+
+            var sb = new StringBuilder();
+            foreach (string rawLine in markdown.Replace("\r\n", "\n").Split('\n'))
+            {
+                string line = rawLine.Trim();
+                if (line.Length == 0)
+                {
+                    if (sb.Length > 0 && !sb.ToString().EndsWith("\n\n", StringComparison.Ordinal))
+                    {
+                        sb.AppendLine();
+                    }
+
+                    continue;
+                }
+
+                if (line.StartsWith('#'))
+                {
+                    continue;
+                }
+
+                if (line.StartsWith("### Install", StringComparison.OrdinalIgnoreCase) ||
+                    line.StartsWith("### Server", StringComparison.OrdinalIgnoreCase))
+                {
+                    break;
+                }
+
+                string item = line.TrimStart('-', '*', ' ', '\t');
+                if (item.Length == 0)
+                {
+                    continue;
+                }
+
+                sb.AppendLine(item.StartsWith('•') ? item : "• " + item);
+            }
+
+            return sb.ToString().Trim();
         }
 
         private static string? FindLauncherExe(string root)

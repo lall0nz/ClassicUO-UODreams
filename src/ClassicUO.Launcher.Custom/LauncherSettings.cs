@@ -28,6 +28,7 @@ namespace ClassicUO.Launcher.Custom
         public bool DesktopShortcutCreated { get; set; } = false;
         public bool FirstRunCompleted { get; set; } = false;
         public string Language { get; set; } = "it"; // it | en
+        public string InstalledClientVersion { get; set; } = "";
 
         public List<ShardServer> Servers { get; set; } = new();
         public string SelectedServer { get; set; } = "UODreams";
@@ -63,6 +64,12 @@ namespace ClassicUO.Launcher.Custom
         [JsonIgnore]
         public static string FilePath =>
             Path.Combine(AppContext.BaseDirectory, "launcher.settings.json");
+
+        [JsonIgnore]
+        public string EffectiveClientVersion =>
+            string.IsNullOrWhiteSpace(InstalledClientVersion)
+                ? LauncherManifest.ClientRuntimeVersion
+                : InstalledClientVersion;
 
         public static LauncherSettings Load()
         {

@@ -45,6 +45,8 @@ namespace ClassicUO.Launcher.Custom
         private Label _ipLabel = null!;
         private Label _portLabel = null!;
         private FooterLinkButton _registerBtn = null!;
+        private readonly System.Windows.Forms.Timer _updatePulseTimer = new() { Interval = 700 };
+        private float _updatePulsePhase;
 
         public MainForm()
         {
@@ -52,6 +54,17 @@ namespace ClassicUO.Launcher.Custom
             LoadWindowIcon();
             BuildUi();
             LoadFromSettings();
+            RefreshWindowTitle();
+
+            _updatePulseTimer.Tick += (_, _) =>
+            {
+                _updatePulsePhase += 0.22f;
+                float pulse = (float)((Math.Sin(_updatePulsePhase) + 1.0) * 0.5);
+                _updateButton.HighlightPulse = pulse;
+                _updateButton.Invalidate();
+            };
+
+            Shown += (_, _) => _ = CheckForUpdatesOnStartupAsync();
         }
 
         private void LoadWindowIcon()
@@ -95,7 +108,6 @@ namespace ClassicUO.Launcher.Custom
 
         private void BuildUi()
         {
-            Text = $"UODreams Launcher v{LauncherManifest.LauncherVersion}";
             ForeColor = Theme.Text;
             Font = new Font("Segoe UI", 9.5f);
             FormBorderStyle = FormBorderStyle.FixedSingle;
@@ -427,6 +439,86 @@ namespace ClassicUO.Launcher.Custom
             _langButton.BringToFront();
 
             ClientSize = new Size(formWidth, y + footerH + bottomMargin);
+        }
+
+        private void RefreshWindowTitle()
+        {
+            string launcherVer = LauncherManifest.LauncherVersion;
+            string clientVer = _settings.EffectiveClientVersion;
+            Text = string.Equals(launcherVer, clientVer, StringComparison.OrdinalIgnoreCase)
+                ? $"UODreams Launcher v{launcherVer}"
+                : $"UODreams Launcher v{launcherVer} · client v{clientVer}";
+        }
+
+        private void SetUpdateAvailable(bool available)
+        {
+            _updateButton.PulseHighlight = available;
+            if (available)
+            {
+                _updatePulseTimer.Start();
+            }
+            else
+            {
+                _updatePulseTimer.Stop();
+                _updateButton.HighlightPulse = 0;
+                _updateButton.Invalidate();
+            }
+        }
+
+        private async Task CheckForUpdatesOnStartupAsync()
+        {
+            try
+            {
+                UpdateCheckResult? info = await LauncherUpdater.CheckForUpdatesAsync(_settings.EffectiveClientVersion);
+                if (info?.HasAnyUpdate == true && !IsDisposed)
+                {
+                    BeginInvoke(() => SetUpdateAvailable(true));
+                }
+            }
+            catch
+            {
+                // silent background check
+            }
+        }
+
+        private static string BuildUpdateDetails(UpdateCheckResult info)
+        {
+            var lines = new System.Text.StringBuilder();
+            lines.AppendLine(Loc.S(
+                $"Disponibile la versione v{info.LatestVersion}.",
+                $"Version v{info.LatestVersion} is available."));
+            lines.AppendLine();
+
+            if (info.NeedsLauncherUpdate)
+            {
+                lines.AppendLine(Loc.S("• Aggiornamento launcher", "• Launcher update"));
+            }
+
+            if (info.NeedsClientUpdate)
+            {
+                lines.AppendLine(Loc.S("• Aggiornamento client ClassicUO", "• ClassicUO client update"));
+            }
+
+            if (!string.IsNullOrWhiteSpace(info.ReleaseNotes))
+            {
+                lines.AppendLine();
+                lines.AppendLine(Loc.S("Novità:", "What's new:"));
+                lines.AppendLine(info.ReleaseNotes);
+            }
+
+            lines.AppendLine();
+            lines.AppendLine(Loc.S(
+                "Procedere con il download e l'installazione?",
+                "Proceed with download and installation?"));
+
+            return lines.ToString().TrimEnd();
+        }
+
+        private void MarkClientUpdated(string version)
+        {
+            _settings.InstalledClientVersion = version;
+            _settings.Save();
+            RefreshWindowTitle();
         }
 
         private void ClearAllPaths()
@@ -1219,7 +1311,7 @@ namespace ClassicUO.Launcher.Custom
 
             try
             {
-                UpdateCheckResult? info = await LauncherUpdater.CheckForUpdatesAsync();
+                UpdateCheckResult? info = await LauncherUpdater.CheckForUpdatesAsync(_settings.EffectiveClientVersion);
                 if (info == null)
                 {
                     ShowError(Loc.S(
@@ -1230,37 +1322,28 @@ namespace ClassicUO.Launcher.Custom
 
                 if (!info.HasAnyUpdate)
                 {
+                    SetUpdateAvailable(false);
                     _statusLabel.ForeColor = Theme.SectionGreen;
                     _statusLabel.Text = Loc.S(
                         $"Sei già aggiornato (v{LauncherManifest.LauncherVersion}).",
                         $"You are up to date (v{LauncherManifest.LauncherVersion}).");
-                    MessageBox.Show(
+                    ThemedMessageDialog.ShowInfo(
                         this,
+                        Loc.S("Aggiornamento", "Update"),
                         Loc.S(
                             $"Launcher e client sono aggiornati (v{LauncherManifest.LauncherVersion}).",
-                            $"Launcher and client are up to date (v{LauncherManifest.LauncherVersion})."),
-                        Loc.S("Aggiornamento", "Update"),
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Information);
+                            $"Launcher and client are up to date (v{LauncherManifest.LauncherVersion})."));
                     return;
                 }
 
-                string details = Loc.S(
-                    $"Disponibile la versione v{info.LatestVersion}.\n\n" +
-                    (info.NeedsLauncherUpdate ? "• Aggiornamento launcher\n" : "") +
-                    (info.NeedsClientUpdate ? "• Aggiornamento client ClassicUO\n" : "") +
-                    "\nProcedere con il download e l'installazione?",
-                    $"Version v{info.LatestVersion} is available.\n\n" +
-                    (info.NeedsLauncherUpdate ? "• Launcher update\n" : "") +
-                    (info.NeedsClientUpdate ? "• ClassicUO client update\n" : "") +
-                    "\nProceed with download and installation?");
+                SetUpdateAvailable(true);
 
-                if (MessageBox.Show(
+                if (!ThemedMessageDialog.ShowConfirm(
                         this,
-                        details,
                         Loc.S("Aggiornamento disponibile", "Update available"),
-                        MessageBoxButtons.YesNo,
-                        MessageBoxIcon.Question) != DialogResult.Yes)
+                        BuildUpdateDetails(info),
+                        Loc.S("Aggiorna", "Update"),
+                        Loc.S("Annulla", "Cancel")))
                 {
                     _statusLabel.Text = "";
                     return;
@@ -1279,6 +1362,9 @@ namespace ClassicUO.Launcher.Custom
                         return;
                     }
 
+                    string? clientVersion = LauncherUpdater.ParseVersionFromPackageName(info.ClientPackageFileName)
+                        ?? info.LatestVersion;
+                    MarkClientUpdated(clientVersion);
                     _clientPathBox.Text = DetectDefaultClient();
                     UpdateAssistantUi();
                 }
@@ -1291,12 +1377,14 @@ namespace ClassicUO.Launcher.Custom
                         info.LauncherDownloadUrl,
                         info.LauncherPackageFileName);
                     launcherForm.ShowDialog(this);
-                    Application.Exit();
+                    Environment.Exit(0);
                     return;
                 }
 
+                SetUpdateAvailable(false);
                 _statusLabel.ForeColor = Theme.SectionGreen;
                 _statusLabel.Text = Loc.S("Aggiornamento completato.", "Update completed.");
+                RefreshWindowTitle();
             }
             catch (Exception ex)
             {

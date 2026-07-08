@@ -20,6 +20,8 @@ namespace ClassicUO.Launcher.Custom
         private bool _success;
         private bool _failed;
 
+        public bool AutoCloseOnSuccess { get; set; }
+
         public string? ResultPath { get; private set; }
 
         public static DownloadProgressForm ForUoClient(string extractDirectory) =>
@@ -64,7 +66,10 @@ namespace ClassicUO.Launcher.Custom
                 },
                 Loc.S("UODreams Launcher — Aggiornamento", "UODreams Launcher — Update"),
                 Loc.S("Download aggiornamento launcher…", "Downloading launcher update…")
-            );
+            )
+            {
+                AutoCloseOnSuccess = true
+            };
 
         public static DownloadProgressForm ForAssistant(string assistant, string installDirectory, string? infoMessage = null) =>
             new(
@@ -253,10 +258,16 @@ namespace ClassicUO.Launcher.Custom
                 _success = true;
                 _completed = true;
                 _progressBar.Value = 1000;
-                _titleLabel.Text = "Download completato";
-                _detailLabel.Text = ResultPath ?? "Pronto.";
-                _speedLabel.Text = "Pronto per giocare.";
-                _cancelButton.Text = "Chiudi";
+                _titleLabel.Text = Loc.S("Download completato", "Download completed");
+                _detailLabel.Text = ResultPath ?? Loc.S("Pronto.", "Ready.");
+                _speedLabel.Text = Loc.S("Pronto per giocare.", "Ready to play.");
+                _cancelButton.Text = Loc.S("Chiudi", "Close");
+
+                if (AutoCloseOnSuccess)
+                {
+                    DialogResult = DialogResult.OK;
+                    BeginInvoke(Close);
+                }
             }
             catch (OperationCanceledException)
             {

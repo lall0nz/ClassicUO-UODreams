@@ -4,29 +4,61 @@ using System.Windows.Forms;
 
 namespace ClassicUO.Launcher.Custom
 {
-    // Dark-themed info dialog matching the launcher palette (Theme + ThemedButton).
+    // Dark-themed dialogs matching the launcher palette (Theme + ThemedButton).
     internal static class ThemedMessageDialog
     {
         private const int Padding = 24;
         private const int ButtonWidth = 120;
         private const int ButtonHeight = 38;
-        private const int DialogWidth = 440;
+        private const int ButtonGap = 10;
+        private const int DialogWidth = 460;
         private const int MinDialogHeight = 170;
 
-        public static void ShowInfo(IWin32Window? owner, string title, string message)
+        public static void ShowInfo(IWin32Window? owner, string title, string message) =>
+            ShowDialog(owner, title, message, confirmOnly: true);
+
+        public static bool ShowConfirm(
+            IWin32Window? owner,
+            string title,
+            string message,
+            string confirmText = "OK",
+            string cancelText = "Cancel")
         {
-            using var dialog = CreateDialog(owner, title, message);
-            if (owner is Control { Visible: true } parent)
-            {
-                dialog.ShowDialog(parent);
-            }
-            else
-            {
-                dialog.ShowDialog();
-            }
+            using var dialog = CreateDialog(owner, title, message, confirmOnly: false, confirmText, cancelText);
+            DialogResult result = ShowModal(dialog, owner);
+            return result == DialogResult.Yes;
         }
 
-        private static Form CreateDialog(IWin32Window? owner, string title, string message)
+        private static void ShowDialog(
+            IWin32Window? owner,
+            string title,
+            string message,
+            bool confirmOnly,
+            string confirmText = "OK",
+            string cancelText = "Cancel")
+        {
+            using var dialog = CreateDialog(owner, title, message, confirmOnly, confirmText, cancelText);
+            ShowModal(dialog, owner);
+        }
+
+        private static DialogResult ShowModal(Form dialog, IWin32Window? owner)
+        {
+            if (owner is Control { Visible: true })
+            {
+                return dialog.ShowDialog(owner);
+            }
+
+            dialog.ShowDialog();
+            return dialog.DialogResult;
+        }
+
+        private static Form CreateDialog(
+            IWin32Window? owner,
+            string title,
+            string message,
+            bool confirmOnly,
+            string confirmText = "OK",
+            string cancelText = "Cancel")
         {
             int messageWidth = DialogWidth - Padding * 2;
             var messageFont = Theme.ComboFont;
@@ -77,27 +109,60 @@ namespace ClassicUO.Launcher.Custom
                 Font = messageFont
             };
 
-            var okButton = new ThemedButton
+            int buttonY = clientHeight - Padding - ButtonHeight;
+            ThemedButton primaryButton;
+            if (confirmOnly)
             {
-                Text = Loc.S("OK", "OK"),
-                UseGradient = true,
-                ForeColor = Color.White,
-                Font = new Font("Segoe UI Semibold", 9.5f, FontStyle.Bold),
-                Bounds = new Rectangle(
-                    DialogWidth - Padding - ButtonWidth,
-                    clientHeight - Padding - ButtonHeight,
-                    ButtonWidth,
-                    ButtonHeight)
-            };
-            okButton.Click += (_, _) =>
+                primaryButton = new ThemedButton
+                {
+                    Text = confirmText,
+                    UseGradient = true,
+                    ForeColor = Color.White,
+                    Font = new Font("Segoe UI Semibold", 9.5f, FontStyle.Bold),
+                    Bounds = new Rectangle(DialogWidth - Padding - ButtonWidth, buttonY, ButtonWidth, ButtonHeight)
+                };
+                primaryButton.Click += (_, _) =>
+                {
+                    dialog.DialogResult = DialogResult.OK;
+                    dialog.Close();
+                };
+                dialog.Controls.Add(primaryButton);
+                dialog.AcceptButton = primaryButton;
+            }
+            else
             {
-                dialog.DialogResult = DialogResult.OK;
-                dialog.Close();
-            };
+                var cancelButton = new ThemedButton
+                {
+                    Text = cancelText,
+                    Bounds = new Rectangle(DialogWidth - Padding - ButtonWidth * 2 - ButtonGap, buttonY, ButtonWidth, ButtonHeight)
+                };
+                cancelButton.Click += (_, _) =>
+                {
+                    dialog.DialogResult = DialogResult.No;
+                    dialog.Close();
+                };
+
+                primaryButton = new ThemedButton
+                {
+                    Text = confirmText,
+                    UseGradient = true,
+                    ForeColor = Color.White,
+                    Font = new Font("Segoe UI Semibold", 9.5f, FontStyle.Bold),
+                    Bounds = new Rectangle(DialogWidth - Padding - ButtonWidth, buttonY, ButtonWidth, ButtonHeight)
+                };
+                primaryButton.Click += (_, _) =>
+                {
+                    dialog.DialogResult = DialogResult.Yes;
+                    dialog.Close();
+                };
+
+                dialog.Controls.Add(cancelButton);
+                dialog.Controls.Add(primaryButton);
+                dialog.AcceptButton = primaryButton;
+                dialog.CancelButton = cancelButton;
+            }
 
             dialog.Controls.Add(messageLabel);
-            dialog.Controls.Add(okButton);
-            dialog.AcceptButton = okButton;
 
             return dialog;
         }
