@@ -26,6 +26,7 @@ namespace ClassicUO.Launcher.Custom
         private readonly WebView2 _webView;
         private readonly Label _statusLabel;
         private readonly Label _openInBrowserBar;
+        private readonly Label _instructionBanner;
         private bool _webViewReady;
 
         // Guards against multiple redirects / re-entrant success detection.
@@ -46,7 +47,7 @@ namespace ClassicUO.Launcher.Custom
 
             LoadWindowIcon();
 
-            var banner = new Label
+            _instructionBanner = new Label
             {
                 Dock = DockStyle.Top,
                 Height = 54,
@@ -102,7 +103,7 @@ namespace ClassicUO.Launcher.Custom
             // bar last so it sits at the very top edge.
             Controls.Add(_webView);
             Controls.Add(_statusLabel);
-            Controls.Add(banner);
+            Controls.Add(_instructionBanner);
             Controls.Add(_openInBrowserBar);
 
             Shown += OnShown;
@@ -174,6 +175,8 @@ namespace ClassicUO.Launcher.Custom
                     string currentUrl = core.Source ?? string.Empty;
                     bool onUodreams = currentUrl.IndexOf("uodreams.it", StringComparison.OrdinalIgnoreCase) >= 0;
                     _openInBrowserBar.Visible = onUodreams;
+                    // The registration instructions only make sense on the register page.
+                    _instructionBanner.Visible = !onUodreams;
 
                     if (_registrationSucceeded)
                     {
@@ -355,14 +358,13 @@ namespace ClassicUO.Launcher.Custom
 
         private void ShowSuccessPopupAndRedirect()
         {
-            MessageBox.Show(
-                this,
-                Loc.S(
-                    "Controlla l'email per attivare l'account.",
-                    "Check your email to activate the account."),
+            ShowThemedInfoDialog(
                 Loc.S("Registrazione completata", "Registration complete"),
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information
+                Loc.S(
+                    "Controlla la tua email per attivare l'account. A breve verrai reindirizzato "
+                        + "al sito di UODreams per effettuare il primo accesso.",
+                    "Check your email to activate the account. You will shortly be redirected "
+                        + "to the UODreams website for your first login.")
             );
 
             try
@@ -375,6 +377,68 @@ namespace ClassicUO.Launcher.Custom
             catch (Exception ex)
             {
                 LauncherLog.Error("Redirect to uodreams.it failed", ex);
+            }
+        }
+
+        // Small dark-themed confirmation dialog matching the launcher aesthetic
+        // (Theme colors + gradient ThemedButton), used instead of the plain MessageBox.
+        private void ShowThemedInfoDialog(string title, string message)
+        {
+            using var dialog = new Form
+            {
+                Text = title,
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                MaximizeBox = false,
+                MinimizeBox = false,
+                ShowInTaskbar = false,
+                StartPosition = FormStartPosition.CenterParent,
+                ClientSize = new Size(420, 190),
+                BackColor = Theme.WindowBottom,
+                ForeColor = Theme.Text,
+                Font = new Font("Segoe UI", 9.5f)
+            };
+
+            try
+            {
+                dialog.Icon = Icon;
+            }
+            catch
+            {
+                // ignore icon issues
+            }
+
+            var messageLabel = new Label
+            {
+                Text = message,
+                ForeColor = Theme.Text,
+                BackColor = Color.Transparent,
+                AutoSize = false,
+                Bounds = new Rectangle(24, 24, dialog.ClientSize.Width - 48, 96),
+                TextAlign = ContentAlignment.TopLeft,
+                Font = new Font("Segoe UI", 10f)
+            };
+
+            var okButton = new ThemedButton
+            {
+                Text = Loc.S("OK", "OK"),
+                UseGradient = true,
+                ForeColor = Color.White,
+                Font = new Font("Segoe UI Semibold", 10f, FontStyle.Bold),
+                Bounds = new Rectangle(dialog.ClientSize.Width - 24 - 120, dialog.ClientSize.Height - 24 - 38, 120, 38)
+            };
+            okButton.Click += (_, _) => { dialog.DialogResult = DialogResult.OK; dialog.Close(); };
+
+            dialog.Controls.Add(messageLabel);
+            dialog.Controls.Add(okButton);
+            dialog.AcceptButton = okButton;
+
+            if (Visible)
+            {
+                dialog.ShowDialog(this);
+            }
+            else
+            {
+                dialog.ShowDialog();
             }
         }
 

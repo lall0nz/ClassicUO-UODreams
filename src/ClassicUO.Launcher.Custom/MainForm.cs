@@ -150,9 +150,15 @@ namespace ClassicUO.Launcher.Custom
                 bool selected = (e.State & DrawItemState.Selected) != 0;
                 using var bg = new SolidBrush(selected ? Theme.ButtonNeutralHover : Theme.Input);
                 e.Graphics.FillRectangle(bg, e.Bounds);
+                // "Nessuno" stays the internal key; only its displayed label is localized.
+                string itemText = _assistantCombo.Items[e.Index]!.ToString()!;
+                if (itemText == "Nessuno")
+                {
+                    itemText = Loc.S("Nessuno", "None");
+                }
                 TextRenderer.DrawText(
                     e.Graphics,
-                    _assistantCombo.Items[e.Index]!.ToString(),
+                    itemText,
                     _assistantCombo.Font,
                     new Rectangle(e.Bounds.X + 6, e.Bounds.Y, e.Bounds.Width - 6, e.Bounds.Height),
                     Theme.Text,
@@ -458,6 +464,9 @@ namespace ClassicUO.Launcher.Custom
             _ipLabel.Text = Loc.S("Indirizzo", "Address");
             _portLabel.Text = Loc.S("Porta", "Port");
             _encryptionCheck.Text = Loc.S("Crittografia", "Encryption");
+
+            // Owner-drawn combo: repaint so the localized "Nessuno"/"None" label updates.
+            _assistantCombo.Invalidate();
 
             // Refresh dynamic/contextual texts.
             UpdateAssistantUi();
