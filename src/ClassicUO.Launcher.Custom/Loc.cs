@@ -4,7 +4,7 @@ namespace ClassicUO.Launcher.Custom
     // Language is a process-wide toggle applied by re-running the text setters.
     internal static class Loc
     {
-        public static string Lang { get; set; } = "it";
+        public static string Lang { get; set; } = "en";
 
         public static bool IsEn => Lang == "en";
 

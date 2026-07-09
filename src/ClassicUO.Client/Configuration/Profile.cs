@@ -177,6 +177,7 @@ namespace ClassicUO.Configuration
         public bool HoldDownKeyTab { get; set; } = true;
         public bool HoldShiftForContext { get; set; } = false;
         public bool HoldShiftToSplitStack { get; set; } = true;
+        public bool ForceGargoyleWalk { get; set; } = true;
 
         // general
         [JsonConverter(typeof(Point2Converter))] public Point WindowClientBounds { get; set; } = new Point(600, 480);

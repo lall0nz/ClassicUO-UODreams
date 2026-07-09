@@ -65,7 +65,7 @@ namespace ClassicUO.Game.UI.Gumps
         private InputField _autoOpenCorpseRange;
 
         //experimental
-        private Checkbox _autoOpenDoors, _autoOpenCorpse, _skipEmptyCorpse, _disableTabBtn, _disableCtrlQWBtn, _disableDefaultHotkeys, _disableArrowBtn, _disableAutoMove, _overrideContainerLocation, _smoothDoors, _showTargetRangeIndicator, _customBars, _customBarsBBG, _saveHealthbars;
+        private Checkbox _autoOpenDoors, _autoOpenCorpse, _skipEmptyCorpse, _disableTabBtn, _disableCtrlQWBtn, _disableDefaultHotkeys, _disableArrowBtn, _disableAutoMove, _overrideContainerLocation, _smoothDoors, _showTargetRangeIndicator, _forceGargoyleWalk, _customBars, _customBarsBBG, _saveHealthbars;
         private Checkbox _avoidObstacles, _avoidObstaclesIgnoreHumanoids;
         private HSliderBar _cellSize;
         private Checkbox _containerScaleItems, _containerDoubleClickToLoot, _relativeDragAnDropItems, _useLargeContianersGumps, _highlightContainersWhenMouseIsOver;
@@ -1247,6 +1247,18 @@ namespace ClassicUO.Game.UI.Gumps
                     null,
                     ResGumps.ShowTarRangeIndic,
                     _currentProfile.ShowTargetRangeIndicator,
+                    startX,
+                    startY
+                )
+            );
+
+            section4.Add
+            (
+                _forceGargoyleWalk = AddCheckBox
+                (
+                    null,
+                    ResGumps.ForceGargoyleWalk,
+                    _currentProfile.ForceGargoyleWalk,
                     startX,
                     startY
                 )
@@ -4350,6 +4362,7 @@ namespace ClassicUO.Game.UI.Gumps
             _currentProfile.OverrideContainerLocationSetting = _overrideContainerLocationSetting.SelectedIndex;
 
             _currentProfile.ShowTargetRangeIndicator = _showTargetRangeIndicator.IsChecked;
+            _currentProfile.ForceGargoyleWalk = _forceGargoyleWalk.IsChecked;
 
 
             bool updateHealthBars = _currentProfile.CustomBarsToggled != _customBars.IsChecked;

@@ -2022,7 +2022,16 @@ namespace ClassicUO.Resources {
                 return ResourceManager.GetString("HueContainerGumps", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to Force gargoyle to walk instead of fly.
+        /// </summary>
+        public static string ForceGargoyleWalk {
+            get {
+                return ResourceManager.GetString("ForceGargoyleWalk", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Hide alliance chat.
         /// </summary>

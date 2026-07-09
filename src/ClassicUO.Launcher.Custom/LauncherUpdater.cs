@@ -87,8 +87,8 @@ namespace ClassicUO.Launcher.Custom
                 ? LauncherManifest.ClientRuntimeVersion
                 : localClientVersion;
 
-            bool needsClient = IsRemoteNewer(latest, effectiveClientVersion) && clientUrl != null;
-            bool needsLauncher = IsRemoteNewer(latest, LauncherManifest.LauncherVersion) && launcherUrl != null;
+            bool needsClient = NeedsComponentUpdate(latest, effectiveClientVersion, clientUrl != null);
+            bool needsLauncher = NeedsComponentUpdate(latest, LauncherManifest.LauncherVersion, launcherUrl != null);
 
             return new UpdateCheckResult
             {
@@ -279,18 +279,68 @@ namespace ClassicUO.Launcher.Custom
             return null;
         }
 
-        private static bool IsRemoteNewer(string remote, string local)
+        internal static int CompareVersions(string? left, string? right)
         {
+            left = NormalizeVersion(left);
+            right = NormalizeVersion(right);
+
+            if (string.IsNullOrWhiteSpace(left) && string.IsNullOrWhiteSpace(right))
+            {
+                return 0;
+            }
+
+            if (string.IsNullOrWhiteSpace(left))
+            {
+                return -1;
+            }
+
+            if (string.IsNullOrWhiteSpace(right))
+            {
+                return 1;
+            }
+
             try
             {
-                remote = remote.Trim().TrimStart('v', 'V');
-                local = local.Trim().TrimStart('v', 'V');
-                return Version.Parse(remote) > Version.Parse(local);
+                return Version.Parse(left).CompareTo(Version.Parse(right));
             }
             catch
             {
-                return !string.Equals(remote, local, StringComparison.OrdinalIgnoreCase);
+                return string.Compare(left, right, StringComparison.OrdinalIgnoreCase);
             }
+        }
+
+        internal static string MaxVersion(string? left, string? right)
+        {
+            left = NormalizeVersion(left);
+            right = NormalizeVersion(right);
+
+            if (string.IsNullOrWhiteSpace(left))
+            {
+                return right ?? "";
+            }
+
+            if (string.IsNullOrWhiteSpace(right))
+            {
+                return left;
+            }
+
+            return CompareVersions(left, right) >= 0 ? left : right;
+        }
+
+        private static bool NeedsComponentUpdate(string remoteLatest, string localVersion, bool packageAvailable)
+        {
+            if (!packageAvailable)
+            {
+                return false;
+            }
+
+            // Only offer an update when GitHub is strictly newer than local; equal or local-ahead means up to date.
+            return CompareVersions(remoteLatest, localVersion) > 0;
+        }
+
+        private static string NormalizeVersion(string? version)
+        {
+            return (version ?? "").Trim().TrimStart('v', 'V');
         }
     }
 }

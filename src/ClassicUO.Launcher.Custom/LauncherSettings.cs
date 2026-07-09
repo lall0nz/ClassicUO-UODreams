@@ -27,7 +27,7 @@ namespace ClassicUO.Launcher.Custom
         public int Encryption { get; set; } = 0;
         public bool DesktopShortcutCreated { get; set; } = false;
         public bool FirstRunCompleted { get; set; } = false;
-        public string Language { get; set; } = "it"; // it | en
+        public string Language { get; set; } = "en"; // it | en
         public string InstalledClientVersion { get; set; } = "";
 
         public List<ShardServer> Servers { get; set; } = new();
@@ -67,9 +67,33 @@ namespace ClassicUO.Launcher.Custom
 
         [JsonIgnore]
         public string EffectiveClientVersion =>
-            string.IsNullOrWhiteSpace(InstalledClientVersion)
-                ? LauncherManifest.ClientRuntimeVersion
-                : InstalledClientVersion;
+            LauncherUpdater.MaxVersion(InstalledClientVersion, LauncherManifest.ClientRuntimeVersion);
+
+        /// <summary>
+        /// When the client is installed, keep settings in sync with the launcher build so stale
+        /// InstalledClientVersion values do not trigger false update prompts.
+        /// </summary>
+        public void SyncInstalledClientVersionFromRuntime()
+        {
+            if (!ClientRuntimeDownloader.IsInstalled())
+            {
+                return;
+            }
+
+            string effective = EffectiveClientVersion;
+            if (string.IsNullOrWhiteSpace(effective))
+            {
+                return;
+            }
+
+            if (string.Equals(InstalledClientVersion, effective, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            InstalledClientVersion = effective;
+            Save();
+        }
 
         public static LauncherSettings Load()
         {

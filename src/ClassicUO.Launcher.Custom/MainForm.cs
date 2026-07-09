@@ -53,6 +53,7 @@ namespace ClassicUO.Launcher.Custom
             LoadWindowIcon();
             BuildUi();
             LoadFromSettings();
+            _settings.SyncInstalledClientVersionFromRuntime();
             RefreshWindowTitle();
 
             Shown += (_, _) => _ = CheckForUpdatesOnStartupAsync();
@@ -455,10 +456,11 @@ namespace ClassicUO.Launcher.Custom
         {
             try
             {
+                _settings.SyncInstalledClientVersionFromRuntime();
                 UpdateCheckResult? info = await LauncherUpdater.CheckForUpdatesAsync(_settings.EffectiveClientVersion);
-                if (info?.HasAnyUpdate == true && !IsDisposed)
+                if (!IsDisposed)
                 {
-                    BeginInvoke(() => SetUpdateAvailable(true));
+                    BeginInvoke(() => SetUpdateAvailable(info?.HasAnyUpdate == true));
                 }
             }
             catch
@@ -1299,6 +1301,8 @@ namespace ClassicUO.Launcher.Custom
 
             try
             {
+                _settings.SyncInstalledClientVersionFromRuntime();
+                RefreshWindowTitle();
                 UpdateCheckResult? info = await LauncherUpdater.CheckForUpdatesAsync(_settings.EffectiveClientVersion);
                 if (info == null)
                 {
@@ -1311,16 +1315,18 @@ namespace ClassicUO.Launcher.Custom
                 if (!info.HasAnyUpdate)
                 {
                     SetUpdateAvailable(false);
+                    string launcherVer = LauncherManifest.LauncherVersion;
+                    string clientVer = _settings.EffectiveClientVersion;
                     _statusLabel.ForeColor = Theme.SectionGreen;
                     _statusLabel.Text = Loc.S(
-                        $"Sei già aggiornato (v{LauncherManifest.LauncherVersion}).",
-                        $"You are up to date (v{LauncherManifest.LauncherVersion}).");
+                        $"Sei già aggiornato (launcher v{launcherVer}, client v{clientVer}).",
+                        $"You are up to date (launcher v{launcherVer}, client v{clientVer}).");
                     ThemedMessageDialog.ShowInfo(
                         this,
                         Loc.S("Aggiornamento", "Update"),
                         Loc.S(
-                            $"Launcher e client sono aggiornati (v{LauncherManifest.LauncherVersion}).",
-                            $"Launcher and client are up to date (v{LauncherManifest.LauncherVersion})."));
+                            $"Launcher e client sono aggiornati (launcher v{launcherVer}, client v{clientVer}).",
+                            $"Launcher and client are up to date (launcher v{launcherVer}, client v{clientVer})."));
                     return;
                 }
 
