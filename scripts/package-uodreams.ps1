@@ -30,16 +30,13 @@ function Copy-BootstrapHostFiles([string]$SourceDir, [string]$TargetDir) {
     }
 }
 
-function Copy-RazorPlugins([string]$OfficialRoot, [string]$TargetPluginsDir) {
-    $officialPlugins = Join-Path $OfficialRoot "Data\Plugins"
-    if (-not (Test-Path $officialPlugins)) { return }
-    New-Item -ItemType Directory -Force -Path $TargetPluginsDir | Out-Null
-    Get-ChildItem $officialPlugins -Directory | Where-Object { $_.Name -like "RazorEnhanced*" } | ForEach-Object {
-        $dest = Join-Path $TargetPluginsDir $_.Name
-        if (-not (Test-Path $dest)) {
-            robocopy $_.FullName $dest /E /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
+function Remove-PrebundledRazorPlugins([string]$ClientRoot) {
+    Get-ChildItem $ClientRoot -Directory -Recurse -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -like "RazorEnhanced*" } |
+        ForEach-Object {
+            Write-Host "Removing pre-bundled plugin: $($_.FullName)" -ForegroundColor DarkYellow
+            Remove-Item $_.FullName -Recurse -Force
         }
-    }
 }
 
 $clientOut = Join-Path $RepoRoot "bin\client-out"
@@ -105,9 +102,8 @@ Get-ChildItem $clientDir -Filter "createdump.exe" -Recurse | Remove-Item -Force 
 if (Test-Path "$clientDir\Logs") { Remove-Item "$clientDir\Logs" -Recurse -Force -ErrorAction SilentlyContinue }
 
 if ($useUnifiedNative) {
-    Write-Step "Assembling unified Dust765-style client (mods + Razor)"
+    Write-Step "Assembling unified Dust765-style client (mods only, no pre-installed plugins)"
     Copy-BootstrapHostFiles $bootstrapOut $clientDir
-    Copy-RazorPlugins $OfficialCuo (Join-Path $clientDir "Data\Plugins")
     if (Test-Path "$clientDir\cuo.exe") { Remove-Item "$clientDir\cuo.exe" -Force -ErrorAction SilentlyContinue }
 } else {
     Write-Step "Assembling legacy dual-client layout"
@@ -118,6 +114,9 @@ if ($useUnifiedNative) {
     robocopy $OfficialCuo $bootstrapDir /E /XF settings.json /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
     Copy-BootstrapHostFiles $bootstrapOut $bootstrapDir
 }
+
+Write-Step "Stripping pre-bundled Razor Enhanced plugins"
+Remove-PrebundledRazorPlugins $clientDir
 
 Write-Step "Writing launcher settings template"
 @{
@@ -136,7 +135,7 @@ Write-Step "Writing launcher settings template"
 } | ConvertTo-Json | Set-Content (Join-Path $OutputDir "launcher.settings.json") -Encoding UTF8
 
 Write-Step "Writing README"
-$layout = if ($useUnifiedNative) { "unificato (mod + Razor insieme, stile Dust765)" } else { "dual (cuo-modded + Bootstrap)" }
+$layout = if ($useUnifiedNative) { "unificato (solo mod, senza plugin preinstallati)" } else { "dual (cuo-modded + Bootstrap)" }
 @"
 
 # UODreams Launcher

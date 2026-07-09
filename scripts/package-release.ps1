@@ -30,16 +30,13 @@ function Copy-BootstrapHostFiles([string]$SourceDir, [string]$TargetDir) {
     }
 }
 
-function Copy-RazorPlugins([string]$OfficialRoot, [string]$TargetPluginsDir) {
-    $officialPlugins = Join-Path $OfficialRoot "Data\Plugins"
-    if (-not (Test-Path $officialPlugins)) { return }
-    New-Item -ItemType Directory -Force -Path $TargetPluginsDir | Out-Null
-    Get-ChildItem $officialPlugins -Directory | Where-Object { $_.Name -like "RazorEnhanced*" } | ForEach-Object {
-        $dest = Join-Path $TargetPluginsDir $_.Name
-        if (-not (Test-Path $dest)) {
-            robocopy $_.FullName $dest /E /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
+function Remove-PrebundledRazorPlugins([string]$ClientRoot) {
+    Get-ChildItem $ClientRoot -Directory -Recurse -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -like "RazorEnhanced*" } |
+        ForEach-Object {
+            Write-Host "Removing pre-bundled plugin: $($_.FullName)" -ForegroundColor DarkYellow
+            Remove-Item $_.FullName -Recurse -Force
         }
-    }
 }
 
 if ([string]::IsNullOrWhiteSpace($OutputDir)) {
@@ -121,12 +118,11 @@ Get-ChildItem $clientDir -Filter "createdump.exe" -Recurse | Remove-Item -Force 
 if (Test-Path "$clientDir\Logs") { Remove-Item "$clientDir\Logs" -Recurse -Force -ErrorAction SilentlyContinue }
 
 if ($useUnifiedNative) {
-    Write-Step "Assembling unified Dust765-style client (mods + Razor)"
+    Write-Step "Assembling unified Dust765-style client (mods only, no pre-installed plugins)"
     Copy-BootstrapHostFiles $bootstrapOut $clientDir
-    Copy-RazorPlugins $OfficialCuo (Join-Path $clientDir "Data\Plugins")
     if (Test-Path "$clientDir\cuo.exe") { Remove-Item "$clientDir\cuo.exe" -Force -ErrorAction SilentlyContinue }
 } else {
-    Write-Step "Assembling legacy dual-client layout (managed mods + vanilla Razor bootstrap)"
+    Write-Step "Assembling legacy dual-client layout (managed mods + vanilla bootstrap host)"
     New-Item -ItemType Directory -Force -Path $bootstrapDir | Out-Null
     if (Test-Path "$clientDir\cuo.exe") {
         Move-Item -Force "$clientDir\cuo.exe" "$clientDir\cuo-modded.exe"
@@ -134,6 +130,9 @@ if ($useUnifiedNative) {
     robocopy $OfficialCuo $bootstrapDir /E /XF settings.json /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
     Copy-BootstrapHostFiles $bootstrapOut $bootstrapDir
 }
+
+Write-Step "Stripping pre-bundled Razor Enhanced plugins"
+Remove-PrebundledRazorPlugins $clientDir
 
 Write-Step "Creating $([IO.Path]::GetFileName($clientZip))"
 if (Test-Path $clientZip) { Remove-Item $clientZip -Force }
@@ -150,7 +149,7 @@ Compress-Archive -Path $launcherExe -DestinationPath $launcherZip -CompressionLe
 
 $launcherMb = [math]::Round((Get-Item $launcherZip).Length / 1MB, 1)
 $clientMb = [math]::Round((Get-Item $clientZip).Length / 1MB, 1)
-$layout = if ($useUnifiedNative) { "unified (mods+Razor)" } else { "dual (managed + Bootstrap)" }
+$layout = if ($useUnifiedNative) { "unified (mods only)" } else { "dual (managed + Bootstrap)" }
 
 Write-Host ""
 Write-Host "Release assets ready." -ForegroundColor Green
