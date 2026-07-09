@@ -96,8 +96,7 @@ namespace ClassicUO.Launcher.Custom
         private bool _down;
 
         public bool UseGradient { get; set; }
-        public bool PulseHighlight { get; set; }
-        public float HighlightPulse { get; set; }
+        public bool HighlightAsUpdate { get; set; }
         public int CornerRadius { get; set; } = 10;
 
         public ThemedButton()
@@ -129,7 +128,18 @@ namespace ClassicUO.Launcher.Custom
             var rect = new Rectangle(0, 0, Width - 1, Height - 1);
             using var path = Theme.RoundedRect(rect, CornerRadius);
 
-            if (UseGradient)
+            Color textColor = ForeColor;
+
+            if (HighlightAsUpdate)
+            {
+                Color fillColor = Theme.SectionGreen;
+                if (_hover) fillColor = ControlPaint.Light(fillColor, 0.15f);
+                if (_down) fillColor = ControlPaint.Dark(fillColor, 0.08f);
+                using var brush = new SolidBrush(fillColor);
+                e.Graphics.FillPath(brush, path);
+                textColor = Color.White;
+            }
+            else if (UseGradient)
             {
                 Color start = Theme.GradientStart, end = Theme.GradientEnd;
 
@@ -158,19 +168,8 @@ namespace ClassicUO.Launcher.Custom
                 e.Graphics.DrawPath(pen, path);
             }
 
-            if (PulseHighlight && HighlightPulse > 0.01f)
-            {
-                int alpha = (int)(60 + 140 * HighlightPulse);
-                using var glowPen = new Pen(Color.FromArgb(alpha, Theme.GradientStart), 2f);
-                e.Graphics.DrawPath(glowPen, path);
-
-                int fillAlpha = (int)(25 + 45 * HighlightPulse);
-                using var glowFill = new SolidBrush(Color.FromArgb(fillAlpha, Theme.GradientEnd));
-                e.Graphics.FillPath(glowFill, path);
-            }
-
             TextRenderer.DrawText(
-                e.Graphics, Text, Font, rect, ForeColor,
+                e.Graphics, Text, Font, rect, textColor,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis
             );
         }

@@ -45,8 +45,7 @@ namespace ClassicUO.Launcher.Custom
         private Label _ipLabel = null!;
         private Label _portLabel = null!;
         private FooterLinkButton _registerBtn = null!;
-        private readonly System.Windows.Forms.Timer _updatePulseTimer = new() { Interval = 700 };
-        private float _updatePulsePhase;
+        private bool _updateAvailable;
 
         public MainForm()
         {
@@ -55,14 +54,6 @@ namespace ClassicUO.Launcher.Custom
             BuildUi();
             LoadFromSettings();
             RefreshWindowTitle();
-
-            _updatePulseTimer.Tick += (_, _) =>
-            {
-                _updatePulsePhase += 0.22f;
-                float pulse = (float)((Math.Sin(_updatePulsePhase) + 1.0) * 0.5);
-                _updateButton.HighlightPulse = pulse;
-                _updateButton.Invalidate();
-            };
 
             Shown += (_, _) => _ = CheckForUpdatesOnStartupAsync();
         }
@@ -452,17 +443,12 @@ namespace ClassicUO.Launcher.Custom
 
         private void SetUpdateAvailable(bool available)
         {
-            _updateButton.PulseHighlight = available;
-            if (available)
-            {
-                _updatePulseTimer.Start();
-            }
-            else
-            {
-                _updatePulseTimer.Stop();
-                _updateButton.HighlightPulse = 0;
-                _updateButton.Invalidate();
-            }
+            _updateAvailable = available;
+            _updateButton.HighlightAsUpdate = available;
+            _updateButton.Text = available
+                ? Loc.S("★ Aggiorna", "★ Update")
+                : Loc.S("⬇ Aggiorna", "⬇ Update");
+            _updateButton.Invalidate();
         }
 
         private async Task CheckForUpdatesOnStartupAsync()
@@ -567,7 +553,9 @@ namespace ClassicUO.Launcher.Custom
             _downloadAssistantButton.Text = Loc.S("⬇ Scarica", "⬇ Download");
             _downloadUoButton.Text = Loc.S("⬇ Scarica UODreams", "⬇ Download UODreams");
             _clearPathsButton.Text = Loc.S("🗑 Pulisci Campi", "🗑 Clear Fields");
-            _updateButton.Text = Loc.S("⬇ Aggiorna", "⬇ Update");
+            _updateButton.Text = _updateAvailable
+                ? Loc.S("★ Aggiorna", "★ Update")
+                : Loc.S("⬇ Aggiorna", "⬇ Update");
             _launchButton.Text = Loc.S("AVVIA", "START");
             _registerBtn.Text = Loc.S("Registrati gratis", "Register for free");
 

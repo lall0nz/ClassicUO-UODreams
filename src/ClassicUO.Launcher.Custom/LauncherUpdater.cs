@@ -209,13 +209,14 @@ namespace ClassicUO.Launcher.Custom
                 return "";
             }
 
+            bool inNovita = false;
             var sb = new StringBuilder();
             foreach (string rawLine in markdown.Replace("\r\n", "\n").Split('\n'))
             {
                 string line = rawLine.Trim();
                 if (line.Length == 0)
                 {
-                    if (sb.Length > 0 && !sb.ToString().EndsWith("\n\n", StringComparison.Ordinal))
+                    if (inNovita && sb.Length > 0 && !sb.ToString().EndsWith("\n\n", StringComparison.Ordinal))
                     {
                         sb.AppendLine();
                     }
@@ -223,18 +224,34 @@ namespace ClassicUO.Launcher.Custom
                     continue;
                 }
 
-                if (line.StartsWith('#'))
+                if (line.StartsWith("### ", StringComparison.Ordinal))
+                {
+                    if (!inNovita)
+                    {
+                        if (line.StartsWith("### Novit", StringComparison.OrdinalIgnoreCase))
+                        {
+                            inNovita = true;
+                        }
+
+                        continue;
+                    }
+
+                    if (line.StartsWith("### Install", StringComparison.OrdinalIgnoreCase) ||
+                        line.StartsWith("### Server", StringComparison.OrdinalIgnoreCase))
+                    {
+                        break;
+                    }
+
+                    continue;
+                }
+
+                if (!inNovita)
                 {
                     continue;
                 }
 
-                if (line.StartsWith("### Install", StringComparison.OrdinalIgnoreCase) ||
-                    line.StartsWith("### Server", StringComparison.OrdinalIgnoreCase))
-                {
-                    break;
-                }
-
                 string item = line.TrimStart('-', '*', ' ', '\t');
+                item = item.Replace("**", "");
                 if (item.Length == 0)
                 {
                     continue;
