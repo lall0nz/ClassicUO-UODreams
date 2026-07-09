@@ -60,6 +60,7 @@ namespace ClassicUO.Game.UI.Gumps
 
         NameOverHeadHandler,
 
-        GridContainer
+        GridContainer,
+        DurabilityGump
     }
 }

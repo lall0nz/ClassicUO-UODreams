@@ -34,6 +34,7 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using ClassicUO.Configuration;
+using ClassicUO.Game;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
@@ -435,6 +436,17 @@ namespace ClassicUO.Game.Scenes
                 }
             }
 
+            Profile invisibleProfile = ProfileManager.CurrentProfile;
+
+            if (
+                invisibleProfile != null
+                && invisibleProfile.InvisibleHousesEnabled
+                && InvisibleHousesHelper.ShouldHide(obj, _world)
+            )
+            {
+                return false;
+            }
+
             return true;
         }
 
@@ -560,35 +572,9 @@ namespace ClassicUO.Game.Scenes
             return !(itemData.IsFoliage && !itemData.IsMultiMovable && season >= Season.Winter);
         }
 
-        // Dust765 Invisible Houses: hide the COMPLETE house structure (walls, roofs,
-        // floors, decorative pieces) - not just custom-house Multi tiles. Any static,
-        // multi or world item whose Z sits above the player (and well above the ground
-        // at that tile) is skipped, matching Dust's behaviour of removing the whole
-        // building rather than only the roof/multi components.
         private bool IsHiddenByInvisibleHouses(GameObject obj)
         {
-            Profile profile = ProfileManager.CurrentProfile;
-
-            if (
-                profile == null
-                || !profile.InvisibleHousesEnabled
-                || _world.Player == null
-                || obj is Mobile
-                || obj is Land
-            )
-            {
-                return false;
-            }
-
-            if ((obj.Z - _world.Player.Z) <= profile.InvisibleHousesZ)
-            {
-                return false;
-            }
-
-            GameObject groundTile = _world.Map?.GetTile(obj.X, obj.Y);
-            int groundZ = groundTile?.Z ?? 0;
-
-            return (obj.Z - groundZ) > profile.DontRemoveHouseBelowZ;
+            return InvisibleHousesHelper.ShouldHide(obj, _world);
         }
 
         private bool HasSurfaceOverhead(Entity obj)
@@ -616,6 +602,25 @@ namespace ClassicUO.Game.Scenes
 
                         if (tile.Z > obj.Z && (tile is Static || tile is Multi))
                         {
+                            if (tile is Multi multiTile)
+                            {
+                                if ((multiTile.State & CUSTOM_HOUSE_MULTI_OBJECT_FLAGS.CHMOF_IGNORE_IN_RENDER) != 0
+                                    || (multiTile.State & CUSTOM_HOUSE_MULTI_OBJECT_FLAGS.CHMOF_PREVIEW) != 0
+                                    || (multiTile.State & CUSTOM_HOUSE_MULTI_OBJECT_FLAGS.CHMOF_TRANSPARENT) != 0)
+                                {
+                                    tile = next;
+                                    continue;
+                                }
+                            }
+
+                            Profile profile = ProfileManager.CurrentProfile;
+
+                            if (profile?.InvisibleHousesEnabled == true && InvisibleHousesHelper.ShouldHide(tile, _world))
+                            {
+                                tile = next;
+                                continue;
+                            }
+
                             ref var itemData = ref TileDataLoader.Instance.StaticData[tile.Graphic];
 
                             if (itemData.IsNoShoot || itemData.IsWindow)
@@ -986,7 +991,9 @@ namespace ClassicUO.Game.Scenes
                         continue;
                     }
 
-                    obj.AllowedToDraw = !HasSurfaceOverhead(mobile);
+                    obj.AllowedToDraw =
+                        (ProfileManager.CurrentProfile?.InvisibleHousesEnabled == true)
+                        || !HasSurfaceOverhead(mobile);
 
                     PushToRenderList(
                         obj,

@@ -30,6 +30,7 @@
 
 #endregion
 
+using System;
 using System.Collections.Generic;
 using ClassicUO.Network;
 
@@ -47,17 +48,17 @@ namespace ClassicUO.Game.Managers
                 prop = new ItemProperty();
                 _itemsProperties[serial] = prop;
             }
-            else
-            {
-                
-            }
 
             prop.Serial = serial;
             prop.Revision = revision;
             prop.Name = name;
             prop.Data = data;
             prop.NameCliloc = namecliloc;
+
+            EntryUpdated?.Invoke(serial, data);
         }
+
+        public event Action<uint, string> EntryUpdated;
 
 
         public bool Contains(uint serial)

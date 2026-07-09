@@ -31,6 +31,7 @@
 #endregion
 
 using ClassicUO.Configuration;
+using ClassicUO.Game;
 using ClassicUO.Game.Managers;
 using ClassicUO.Game.Scenes;
 using ClassicUO.IO;
@@ -95,18 +96,13 @@ namespace ClassicUO.Game.GameObjects
 
             // Dust765: Invisible Houses - skip drawing house multi tiles that sit
             // above the player, revealing the interior/lower floors.
-            if (currentProfile != null && currentProfile.InvisibleHousesEnabled && World.Player != null)
+            if (
+                currentProfile != null
+                && currentProfile.InvisibleHousesEnabled
+                && InvisibleHousesHelper.ShouldHide(this, World)
+            )
             {
-                GameObject groundTile = World.Map?.GetTile(X, Y);
-
-                if (
-                    groundTile != null
-                    && (Z - World.Player.Z) > currentProfile.InvisibleHousesZ
-                    && (Z - groundTile.Z) > currentProfile.DontRemoveHouseBelowZ
-                )
-                {
-                    return false;
-                }
+                return false;
             }
 
             if (currentProfile.HighlightGameObjects && SelectedObject.Object == this)

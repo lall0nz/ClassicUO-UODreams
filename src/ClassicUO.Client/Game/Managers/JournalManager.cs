@@ -32,8 +32,10 @@
 
 using System;
 using System.IO;
+using System.Linq;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
+using ClassicUO.Game.UI.Gumps;
 using ClassicUO.Utility;
 using ClassicUO.Utility.Collections;
 using ClassicUO.Utility.Logging;
@@ -49,18 +51,56 @@ namespace ClassicUO.Game.Managers
 
         public event EventHandler<JournalEntry> EntryAdded;
 
+        /// <summary>
+        /// Applies profile font override / force-unicode journal settings.
+        /// When override is on, <see cref="Profile.ChatFont"/> is the journal font.
+        /// Force unicode only changes rendering mode; it must not reset the selected speech font.
+        /// </summary>
+        public static void ResolveJournalFont(ref byte font, ref bool isUnicode)
+        {
+            Profile profile = ProfileManager.CurrentProfile;
 
-        public void Add(string text, ushort hue, string name, TextType type, bool isunicode = true)
+            if (profile == null)
+            {
+                return;
+            }
+
+            if (profile.OverrideAllFonts)
+            {
+                font = profile.ChatFont;
+                isUnicode = profile.OverrideAllFontsIsUnicode;
+            }
+
+            if (profile.ForceUnicodeJournal)
+            {
+                isUnicode = true;
+
+                if (!profile.OverrideAllFonts)
+                {
+                    font = 0;
+                }
+            }
+        }
+
+        public static void RefreshOpenJournalGumps()
+        {
+            foreach (ResizableJournal journal in UIManager.Gumps.OfType<ResizableJournal>())
+            {
+                journal.RebuildEntries();
+            }
+
+            foreach (JournalGump journal in UIManager.Gumps.OfType<JournalGump>())
+            {
+                journal.RebuildEntries();
+            }
+        }
+
+        public void Add(string text, ushort hue, string name, TextType type, bool isunicode = true, MessageType messageType = MessageType.Regular)
         {
             JournalEntry entry = Entries.Count >= Constants.MAX_JOURNAL_HISTORY_COUNT ? Entries.RemoveFromFront() : new JournalEntry();
 
             byte font = (byte) (isunicode ? 0 : 9);
-
-            if (ProfileManager.CurrentProfile != null && ProfileManager.CurrentProfile.OverrideAllFonts)
-            {
-                font = ProfileManager.CurrentProfile.ChatFont;
-                isunicode = ProfileManager.CurrentProfile.OverrideAllFontsIsUnicode;
-            }
+            ResolveJournalFont(ref font, ref isunicode);
 
             DateTime timeNow = DateTime.Now;
 
@@ -71,12 +111,7 @@ namespace ClassicUO.Game.Managers
             entry.IsUnicode = isunicode;
             entry.Time = timeNow;
             entry.TextType = type;
-
-            if (ProfileManager.CurrentProfile != null && ProfileManager.CurrentProfile.ForceUnicodeJournal)
-            {
-                entry.Font = 0;
-                entry.IsUnicode = true;
-            }
+            entry.MessageType = messageType;
 
             Entries.AddToBack(entry);
             EntryAdded.Raise(entry);
@@ -157,6 +192,7 @@ namespace ClassicUO.Game.Managers
         public string Text;
 
         public TextType TextType;
+        public MessageType MessageType;
         public DateTime Time;
     }
 }

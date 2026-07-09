@@ -4,6 +4,7 @@ param(
     [ValidateSet("pvp", "classic")]
     [string]$Edition = "pvp",
     [string]$OfficialCuo = "$env:USERPROFILE\Downloads\ClassicUOLauncher-win-x64-release\ClassicUO",
+    [string]$RazorEnhancedZip = "$env:USERPROFILE\Desktop\RazorEnhanced-Custom.zip",
     [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path,
     [string]$OutputDir = "",
     [switch]$ForceManagedClient
@@ -32,24 +33,24 @@ function Copy-BootstrapHostFiles([string]$SourceDir, [string]$TargetDir) {
     }
 }
 
-function Copy-RazorPlugins([string]$SourcePluginsDir, [string]$TargetPluginsDir) {
-    if (-not (Test-Path $SourcePluginsDir)) {
-        Write-Host "Razor plugin source not found: $SourcePluginsDir" -ForegroundColor Yellow
+function Expand-RazorPluginsZip([string]$ZipPath, [string]$TargetPluginsDir) {
+    if (-not (Test-Path $ZipPath)) {
+        Write-Host "Custom Razor zip not found: $ZipPath" -ForegroundColor Yellow
         return $false
     }
 
-    New-Item -ItemType Directory -Force -Path $TargetPluginsDir | Out-Null
-    $copied = $false
-    Get-ChildItem $SourcePluginsDir -Directory | Where-Object { $_.Name -like "RazorEnhanced*" } | ForEach-Object {
-        $dest = Join-Path $TargetPluginsDir $_.Name
-        if (-not (Test-Path $dest)) {
-            Write-Host "Bundling Razor plugin: $($_.Name)" -ForegroundColor Green
-            robocopy $_.FullName $dest /E /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
-            $copied = $true
+    if (Test-Path $TargetPluginsDir) {
+        Get-ChildItem $TargetPluginsDir -Force -ErrorAction SilentlyContinue | ForEach-Object {
+            Write-Host "Clearing existing plugin artifact: $($_.FullName)" -ForegroundColor DarkYellow
+            Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
         }
+    } else {
+        New-Item -ItemType Directory -Force -Path $TargetPluginsDir | Out-Null
     }
 
-    return $copied
+    Write-Host "Extracting custom Razor into: $TargetPluginsDir" -ForegroundColor Green
+    Expand-Archive -Path $ZipPath -DestinationPath $TargetPluginsDir -Force
+    return Test-Path (Join-Path $TargetPluginsDir "RazorEnhanced.exe")
 }
 
 function Test-BundledRazorPlugins([string]$ClientRoot) {
@@ -60,6 +61,9 @@ function Test-BundledRazorPlugins([string]$ClientRoot) {
 
     foreach ($pluginsDir in $pluginsRoots) {
         if (-not (Test-Path $pluginsDir)) { continue }
+        if (Test-Path (Join-Path $pluginsDir "RazorEnhanced.exe")) {
+            return $pluginsDir
+        }
         $match = Get-ChildItem $pluginsDir -Directory -ErrorAction SilentlyContinue |
             Where-Object { $_.Name -like "RazorEnhanced*" } |
             Select-Object -First 1
@@ -78,6 +82,39 @@ function Remove-PrebundledRazorPlugins([string]$ClientRoot) {
             Write-Host "Removing pre-bundled plugin: $($_.FullName)" -ForegroundColor DarkYellow
             Remove-Item $_.FullName -Recurse -Force
         }
+}
+
+function Clear-ClientPluginsDirectory([string]$ClientRoot) {
+    $pluginsRoots = @(
+        (Join-Path $ClientRoot "Data\Plugins"),
+        (Join-Path $ClientRoot "Bootstrap\Data\Plugins")
+    )
+
+    foreach ($pluginsDir in $pluginsRoots) {
+        if (-not (Test-Path $pluginsDir)) { continue }
+
+        Get-ChildItem $pluginsDir -Force -ErrorAction SilentlyContinue | ForEach-Object {
+            Write-Host "Removing plugin artifact: $($_.FullName)" -ForegroundColor DarkYellow
+            Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+function Test-ClientPluginsEmpty([string]$ClientRoot) {
+    $pluginsRoots = @(
+        (Join-Path $ClientRoot "Data\Plugins"),
+        (Join-Path $ClientRoot "Bootstrap\Data\Plugins")
+    )
+
+    foreach ($pluginsDir in $pluginsRoots) {
+        if (-not (Test-Path $pluginsDir)) { continue }
+        $leftover = Get-ChildItem $pluginsDir -Force -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($leftover) {
+            return $leftover.FullName
+        }
+    }
+
+    return $null
 }
 
 function Remove-BuildArtifacts([string]$ClientRoot) {
@@ -123,7 +160,12 @@ if ($Edition -eq "classic") {
     Write-Step "Assembling classic (unmodded) client from official ClassicUO"
     robocopy $OfficialCuo $clientDir /E /XF settings.json /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
     Remove-BuildArtifacts $clientDir
-    Remove-PrebundledRazorPlugins $clientDir
+    Clear-ClientPluginsDirectory $clientDir
+    $leftoverPlugin = Test-ClientPluginsEmpty $clientDir
+    if ($leftoverPlugin) {
+        throw "Classic edition requires an empty plugins folder. Leftover: $leftoverPlugin"
+    }
+    Write-Host "Classic plugins folder: empty" -ForegroundColor Green
 } else {
     $useUnifiedNative = $false
     if (-not $ForceManagedClient) {
@@ -164,12 +206,12 @@ if ($Edition -eq "classic") {
     robocopy $clientOut $clientDir /E /XD Bootstrap /XF "ClassicUO.exe" /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
     Remove-BuildArtifacts $clientDir
 
-    $razorPluginsSource = Join-Path $OfficialCuo "Data\Plugins"
+    Remove-PrebundledRazorPlugins $clientDir
 
     if ($useUnifiedNative) {
-        Write-Step "Assembling unified Dust765-style client (mods + bundled Razor)"
+        Write-Step "Assembling unified Dust765-style client (mods + custom Razor)"
         Copy-BootstrapHostFiles $bootstrapOut $clientDir
-        Copy-RazorPlugins $razorPluginsSource (Join-Path $clientDir "Data\Plugins") | Out-Null
+        Expand-RazorPluginsZip $RazorEnhancedZip (Join-Path $clientDir "Data\Plugins") | Out-Null
         if (Test-Path "$clientDir\cuo.exe") { Remove-Item "$clientDir\cuo.exe" -Force -ErrorAction SilentlyContinue }
     } else {
         Write-Step "Assembling legacy dual-client layout (managed mods + Razor bootstrap)"
@@ -177,13 +219,14 @@ if ($Edition -eq "classic") {
         if (Test-Path "$clientDir\cuo.exe") {
             Move-Item -Force "$clientDir\cuo.exe" "$clientDir\cuo-modded.exe"
         }
-        robocopy $OfficialCuo $bootstrapDir /E /XF settings.json /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
+        robocopy $OfficialCuo $bootstrapDir /E /XD "Data\Plugins" /XF settings.json /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
         Copy-BootstrapHostFiles $bootstrapOut $bootstrapDir
+        Expand-RazorPluginsZip $RazorEnhancedZip (Join-Path $bootstrapDir "Data\Plugins") | Out-Null
     }
 
     $bundledRazor = Test-BundledRazorPlugins $clientDir
     if (-not $bundledRazor) {
-        throw "PVP edition requires bundled RazorEnhanced plugins. Expected RazorEnhanced* under $razorPluginsSource."
+        throw "PVP edition requires bundled custom RazorEnhanced. Expected RazorEnhanced.exe in plugins folder from $RazorEnhancedZip."
     }
     Write-Host "Bundled Razor: $bundledRazor" -ForegroundColor Green
 }

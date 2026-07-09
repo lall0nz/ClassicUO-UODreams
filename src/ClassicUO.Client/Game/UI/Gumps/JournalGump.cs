@@ -345,6 +345,12 @@ namespace ClassicUO.Game.UI.Gumps
             _scrollBar.MinValue = 0;
         }
 
+        public void RebuildEntries()
+        {
+            _journalEntries.ClearEntries();
+            InitializeJournalEntries();
+        }
+
         private void _gumpPic_MouseDoubleClick(object sender, MouseDoubleClickEventArgs e)
         {
             if (e.Button == MouseButtonType.Left && IsMinimized)
@@ -544,6 +550,23 @@ namespace ClassicUO.Game.UI.Gumps
                 }
             }
 
+            public void ClearEntries()
+            {
+                while (_entries.Count > 0)
+                {
+                    _entries.RemoveFromFront().Destroy();
+                }
+
+                while (_hours.Count > 0)
+                {
+                    _hours.RemoveFromFront().Destroy();
+                }
+
+                _text_types.Clear();
+                _scrollBar.MaxValue = 0;
+                _scrollBar.Value = 0;
+            }
+
             public void AddEntry
             (
                 string text,
@@ -563,6 +586,15 @@ namespace ClassicUO.Game.UI.Gumps
                     _hours.RemoveFromFront().Destroy();
 
                     _text_types.RemoveFromFront();
+                }
+
+                byte resolvedFont = (byte) font;
+                JournalManager.ResolveJournalFont(ref resolvedFont, ref isUnicode);
+                font = resolvedFont;
+
+                if (hue == 0)
+                {
+                    hue = 0x0481;
                 }
 
                 RenderedText h = RenderedText.Create

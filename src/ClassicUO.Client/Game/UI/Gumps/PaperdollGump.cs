@@ -359,10 +359,26 @@ namespace ClassicUO.Game.UI.Gumps
                 }
             }
 
-            // Name and title
-            _titleLabel = new Label("", false, 0x0386, 185, font: 1) { X = 39, Y = 262 };
+            // Name and title - white for readability on stone plaque; match unicode mode to selected speech font.
+            Profile profile = ProfileManager.CurrentProfile;
+            byte titleFont = 1;
+            bool titleUnicode = false;
+
+            if (profile != null && profile.OverrideAllFonts)
+            {
+                titleFont = profile.ChatFont;
+                titleUnicode = profile.OverrideAllFontsIsUnicode;
+            }
+
+            _titleLabel = new Label("", titleUnicode, 0xFFFF, 185, font: titleFont) { X = 39, Y = 262 };
 
             Add(_titleLabel);
+
+            if (LocalSerial == World.Player?.Serial
+                && ProfileManager.CurrentProfile?.ShowEquipmentDurabilityButton == true)
+            {
+                Add(new DurabilityGumpMinimized(World) { X = 0, Y = 40 });
+            }
 
             RequestUpdateContents();
         }
@@ -378,6 +394,30 @@ namespace ClassicUO.Game.UI.Gumps
         public void UpdateTitle(string text)
         {
             _titleLabel.Text = text;
+        }
+
+        public void RefreshTitleFont()
+        {
+            if (_titleLabel == null)
+            {
+                return;
+            }
+
+            string text = _titleLabel.Text;
+            Remove(_titleLabel);
+            _titleLabel.Dispose();
+
+            Profile profile = ProfileManager.CurrentProfile;
+            byte titleFont = 1;
+            bool titleUnicode = false;
+
+            if (profile != null && profile.OverrideAllFonts)
+            {
+                titleFont = profile.ChatFont;
+                titleUnicode = profile.OverrideAllFontsIsUnicode;
+            }
+
+            Add(_titleLabel = new Label(text, titleUnicode, 0xFFFF, 185, font: titleFont) { X = 39, Y = 262 });
         }
 
         private void UpdateSlotVisibility()

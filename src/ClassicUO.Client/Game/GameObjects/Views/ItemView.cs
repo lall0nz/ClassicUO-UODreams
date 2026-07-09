@@ -33,6 +33,7 @@
 using System;
 using System.Collections.Generic;
 using ClassicUO.Configuration;
+using ClassicUO.Game;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.Managers;
 using ClassicUO.Game.Scenes;
@@ -176,6 +177,17 @@ namespace ClassicUO.Game.GameObjects
             )
             {
                 hueVec.Z = 0.5f;
+            }
+
+            Profile invisibleProfile = ProfileManager.CurrentProfile;
+
+            if (
+                invisibleProfile != null
+                && invisibleProfile.InvisibleHousesEnabled
+                && InvisibleHousesHelper.ShouldHide(this, World)
+            )
+            {
+                return false;
             }
 
             DrawStaticAnimated(batcher, graphic, posX, posY, hueVec, false, depth);

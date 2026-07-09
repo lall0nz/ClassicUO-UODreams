@@ -108,6 +108,36 @@ namespace ClassicUO.Game.UI.Controls
         }
 
 
+        internal bool MatchesSearch(string term)
+        {
+            if (string.IsNullOrEmpty(term))
+            {
+                return false;
+            }
+
+            if (_label != null && !string.IsNullOrEmpty(_label.Text)
+                && _label.Text.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return true;
+            }
+
+            if (_items == null)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < _items.Length; i++)
+            {
+                if (!string.IsNullOrEmpty(_items[i])
+                    && _items[i].IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         public int SelectedIndex
         {
             get => _selectedIndex;

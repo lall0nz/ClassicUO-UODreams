@@ -40,6 +40,7 @@ using System.Text.Json.Serialization;
 using System.Xml;
 using ClassicUO.Configuration.Json;
 using ClassicUO.Game;
+using ClassicUO.Game.Data;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
 using ClassicUO.Game.UI.Gumps;
@@ -50,6 +51,9 @@ namespace ClassicUO.Configuration
 {
     //[JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.Unspecified)]
     [JsonSerializable(typeof(Profile), GenerationMode = JsonSourceGenerationMode.Metadata)]
+    [JsonSerializable(typeof(MessageType))]
+    [JsonSerializable(typeof(MessageType[]))]
+    [JsonSerializable(typeof(Dictionary<string, MessageType[]>))]
     sealed partial class ProfileJsonContext : JsonSerializerContext
     {
         sealed class SnakeCaseNamingPolicy : JsonNamingPolicy
@@ -96,7 +100,7 @@ namespace ClassicUO.Configuration
         public int SpeechDelay { get; set; } = 100;
         public bool ScaleSpeechDelay { get; set; } = true;
         public bool SaveJournalToFile { get; set; } = false;
-        public bool ForceUnicodeJournal { get; set; } = true;
+        public bool ForceUnicodeJournal { get; set; }
         public bool IgnoreAllianceMessages { get; set; }
         public bool IgnoreGuildMessages { get; set; }
 
@@ -221,7 +225,7 @@ namespace ClassicUO.Configuration
         // you can see inside/under roofs and walls. Toggled by the
         // ToggleInvisibleHouses macro.
         public bool InvisibleHousesEnabled { get; set; } = false;
-        public int InvisibleHousesZ { get; set; } = 1;
+        public int InvisibleHousesZ { get; set; } = 0;
         public int DontRemoveHouseBelowZ { get; set; } = 6;
 
         // Visual Helpers (Dust765): "Highlight tiles on range". Colors the ring of
@@ -314,7 +318,7 @@ namespace ClassicUO.Configuration
 
         public bool ReduceFPSWhenInactive { get; set; } = false;
 
-        public bool OverrideAllFonts { get; set; } = true;
+        public bool OverrideAllFonts { get; set; }
         public bool OverrideAllFontsIsUnicode { get; set; } = true;
 
         public bool SallosEasyGrab { get; set; }
@@ -364,6 +368,19 @@ namespace ClassicUO.Configuration
         public bool ShowJournalSystem { get; set; } = true;
         public bool ShowJournalGuildAlly { get; set; } = true;
 
+        // Modern journal (TazUO-style)
+        public bool UseModernJournal { get; set; } = true;
+        public bool HideJournalTimestamp { get; set; }
+        public int JournalOpacity { get; set; } = 100;
+        public int MaxJournalEntries { get; set; } = 200;
+        public int LastJournalTab { get; set; }
+        [JsonConverter(typeof(Point2Converter))] public Point JournalPosition { get; set; } = new Point(100, 100);
+        [JsonConverter(typeof(Point2Converter))] public Point ResizeJournalSize { get; set; } = new Point(400, 300);
+        public Dictionary<string, MessageType[]> JournalTabs { get; set; } = CreateDefaultJournalTabs();
+
+        // Equipment durability tracker
+        public bool ShowEquipmentDurabilityButton { get; set; } = true;
+
         public int WorldMapWidth { get; set; } = 400;
         public int WorldMapHeight { get; set; } = 400;
         public int WorldMapFont { get; set; } = 3;
@@ -389,6 +406,40 @@ namespace ClassicUO.Configuration
 
 
         public static uint GumpsVersion { get; private set; }
+
+        public static Dictionary<string, MessageType[]> CreateDefaultJournalTabs()
+        {
+            return new Dictionary<string, MessageType[]>
+            {
+                {
+                    "All",
+                    new[]
+                    {
+                        MessageType.Alliance, MessageType.Command, MessageType.Emote,
+                        MessageType.Encoded, MessageType.Focus, MessageType.Guild,
+                        MessageType.Label, MessageType.Limit3Spell, MessageType.Party,
+                        MessageType.Regular, MessageType.Spell, MessageType.System,
+                        MessageType.Whisper, MessageType.Yell
+                    }
+                },
+                {
+                    "Chat",
+                    new[]
+                    {
+                        MessageType.Regular, MessageType.Guild, MessageType.Alliance,
+                        MessageType.Emote, MessageType.Party, MessageType.Whisper, MessageType.Yell
+                    }
+                },
+                {
+                    "Guild|Party",
+                    new[] { MessageType.Guild, MessageType.Alliance, MessageType.Party }
+                },
+                {
+                    "System",
+                    new[] { MessageType.System }
+                }
+            };
+        }
 
         public void Save(World world, string path)
         {
@@ -610,7 +661,19 @@ namespace ClassicUO.Configuration
                                     break;
 
                                 case GumpType.Journal:
-                                    gump = new JournalGump(world);
+                                    if (UseModernJournal)
+                                    {
+                                        gump = new ResizableJournal(world);
+                                    }
+                                    else
+                                    {
+                                        gump = new JournalGump(world);
+                                    }
+
+                                    break;
+
+                                case GumpType.DurabilityGump:
+                                    gump = new DurabilitysGump(world);
 
                                     break;
 

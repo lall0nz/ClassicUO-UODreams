@@ -41,6 +41,7 @@ using ClassicUO.Input;
 using ClassicUO.Network;
 using ClassicUO.Resources;
 using ClassicUO.Utility;
+using ClassicUO.Utility.Logging;
 using Microsoft.Xna.Framework;
 using static ClassicUO.Network.NetClient;
 
@@ -157,8 +158,57 @@ namespace ClassicUO.Game
             }
         }
 
+        public static void OpenDurabilityGump(World world)
+        {
+            if (UIManager.GetGump<DurabilitysGump>() == null)
+            {
+                UIManager.Add(new DurabilitysGump(world));
+            }
+            else
+            {
+                UIManager.GetGump<DurabilitysGump>()?.BringOnTop();
+            }
+        }
+
+        public static bool CloseDurabilityGump()
+        {
+            DurabilitysGump gump = UIManager.GetGump<DurabilitysGump>();
+
+            if (gump != null)
+            {
+                gump.Dispose();
+                return true;
+            }
+
+            return false;
+        }
+
         public static void OpenJournal(World world)
         {
+            if (ProfileManager.CurrentProfile?.UseModernJournal == true)
+            {
+                try
+                {
+                    ResizableJournal journal = UIManager.GetGump<ResizableJournal>();
+
+                    if (journal == null)
+                    {
+                        UIManager.Add(new ResizableJournal(world) { X = 64, Y = 64 });
+                    }
+                    else
+                    {
+                        journal.SetInScreen();
+                        journal.BringOnTop();
+                    }
+
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    Log.Error($"Failed to open modern journal, falling back to classic: {ex}");
+                }
+            }
+
             JournalGump journalGump = UIManager.GetGump<JournalGump>();
 
             if (journalGump == null)
