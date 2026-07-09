@@ -117,6 +117,8 @@ Write-Step "Preparing $editionLabel edition output: $OutputDir"
 if (Test-Path $OutputDir) { Remove-Item $OutputDir -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $OutputDir, $clientPackageRoot, $clientDir | Out-Null
 
+$useUnifiedNative = $false
+
 if ($Edition -eq "classic") {
     Write-Step "Assembling classic (unmodded) client from official ClassicUO"
     robocopy $OfficialCuo $clientDir /E /XF settings.json /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
@@ -162,12 +164,15 @@ if ($Edition -eq "classic") {
     robocopy $clientOut $clientDir /E /XD Bootstrap /XF "ClassicUO.exe" /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
     Remove-BuildArtifacts $clientDir
 
+    $razorPluginsSource = Join-Path $OfficialCuo "Data\Plugins"
+
     if ($useUnifiedNative) {
-        Write-Step "Assembling unified Dust765-style client (mods only, no pre-installed plugins)"
+        Write-Step "Assembling unified Dust765-style client (mods + bundled Razor)"
         Copy-BootstrapHostFiles $bootstrapOut $clientDir
+        Copy-RazorPlugins $razorPluginsSource (Join-Path $clientDir "Data\Plugins") | Out-Null
         if (Test-Path "$clientDir\cuo.exe") { Remove-Item "$clientDir\cuo.exe" -Force -ErrorAction SilentlyContinue }
     } else {
-        Write-Step "Assembling legacy dual-client layout (managed mods + vanilla bootstrap host)"
+        Write-Step "Assembling legacy dual-client layout (managed mods + Razor bootstrap)"
         New-Item -ItemType Directory -Force -Path $bootstrapDir | Out-Null
         if (Test-Path "$clientDir\cuo.exe") {
             Move-Item -Force "$clientDir\cuo.exe" "$clientDir\cuo-modded.exe"
@@ -176,8 +181,11 @@ if ($Edition -eq "classic") {
         Copy-BootstrapHostFiles $bootstrapOut $bootstrapDir
     }
 
-    Write-Step "Stripping pre-bundled Razor Enhanced plugins"
-    Remove-PrebundledRazorPlugins $clientDir
+    $bundledRazor = Test-BundledRazorPlugins $clientDir
+    if (-not $bundledRazor) {
+        throw "PVP edition requires bundled RazorEnhanced plugins. Expected RazorEnhanced* under $razorPluginsSource."
+    }
+    Write-Host "Bundled Razor: $bundledRazor" -ForegroundColor Green
 }
 
 Write-Step "Publishing single-file $editionLabel launcher v$Version"
@@ -206,7 +214,7 @@ Compress-Archive -Path $launcherExe -DestinationPath $launcherZip -CompressionLe
 
 $launcherMb = [math]::Round((Get-Item $launcherZip).Length / 1MB, 1)
 $clientMb = [math]::Round((Get-Item $clientZip).Length / 1MB, 1)
-$layout = if ($Edition -eq "classic") { "classic (official unmodded)" } elseif ($useUnifiedNative) { "pvp unified (mods only)" } else { "pvp dual (managed + Bootstrap)" }
+$layout = if ($Edition -eq "classic") { "classic (official unmodded, no Razor)" } elseif ($useUnifiedNative) { "pvp unified (mods + bundled Razor)" } else { "pvp dual (managed + Razor bootstrap)" }
 $releaseTitle = if ($Edition -eq "pvp") { "UODreams PVP Launcher v$Version" } else { "UODreams Launcher v$Version" }
 
 Write-Host ""
