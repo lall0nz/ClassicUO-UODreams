@@ -3,7 +3,8 @@ name: UODreams Release
 on:
   push:
     tags:
-      - 'v*'
+      - 'pvp-v*'
+      - 'classic-v*'
 
 permissions:
   contents: write
@@ -26,7 +27,7 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Download official ClassicUO (Razor bootstrap)
+      - name: Download official ClassicUO (Razor bootstrap / classic client)
         shell: pwsh
         run: |
           $zip = "$env:RUNNER_TEMP\ClassicUOLauncher.zip"
@@ -50,26 +51,42 @@ jobs:
           if (-not $official) { throw "ClassicUO folder not found in official zip" }
           "OFFICIAL_CUO=$($official.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Extract version from tag
+      - name: Parse edition and version from tag
         shell: pwsh
         run: |
-          $version = "${{ github.ref_name }}".TrimStart('v')
+          $tag = "${{ github.ref_name }}"
+          if ($tag -match '^pvp-v(.+)$') {
+            $edition = 'pvp'
+            $version = $Matches[1]
+            $title = "UODreams PVP Launcher v$version"
+            $label = 'PVP'
+          } elseif ($tag -match '^classic-v(.+)$') {
+            $edition = 'classic'
+            $version = $Matches[1]
+            $title = "UODreams Launcher v$version"
+            $label = 'Classic'
+          } else {
+            throw "Unsupported release tag: $tag (expected pvp-v* or classic-v*)"
+          }
+          "RELEASE_EDITION=$edition" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_TITLE=$title" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_LABEL=$label" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Build release assets
         shell: pwsh
         run: |
-          ./scripts/package-release.ps1 -Version $env:RELEASE_VERSION -OfficialCuo $env:OFFICIAL_CUO
+          ./scripts/package-release.ps1 -Version $env:RELEASE_VERSION -Edition $env:RELEASE_EDITION -OfficialCuo $env:OFFICIAL_CUO
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: UODreams Launcher v${{ env.RELEASE_VERSION }}
+          name: ${{ env.RELEASE_TITLE }}
           body: |
-            ## UODreams Launcher v${{ env.RELEASE_VERSION }}
+            ## ${{ env.RELEASE_TITLE }}
 
             ### Installazione
-            1. Scarica **UODreams-Launcher-v${{ env.RELEASE_VERSION }}.zip**
+            1. Scarica **UODreams-${{ env.RELEASE_LABEL }}-Launcher-v${{ env.RELEASE_VERSION }}.zip**
             2. Estrai e avvia **UODreams Launcher.exe**
             3. Al primo avvio scarica automaticamente i componenti ClassicUO
             4. Scarica anche il client Ultima Online UODreams dal launcher (pulsante Scarica)
@@ -77,7 +94,7 @@ jobs:
             ### Server
             - `login.uodreams.com:2593`
           files: |
-            bin/release-v${{ env.RELEASE_VERSION }}/UODreams-Launcher-v${{ env.RELEASE_VERSION }}.zip
-            bin/release-v${{ env.RELEASE_VERSION }}/UODreams-Client-v${{ env.RELEASE_VERSION }}.zip
+            bin/release-${{ env.RELEASE_EDITION }}-v${{ env.RELEASE_VERSION }}/UODreams-${{ env.RELEASE_LABEL }}-Launcher-v${{ env.RELEASE_VERSION }}.zip
+            bin/release-${{ env.RELEASE_EDITION }}-v${{ env.RELEASE_VERSION }}/UODreams-${{ env.RELEASE_LABEL }}-Client-v${{ env.RELEASE_VERSION }}.zip
           draft: false
           prerelease: false

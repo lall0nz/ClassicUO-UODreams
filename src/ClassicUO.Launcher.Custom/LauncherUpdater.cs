@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
@@ -41,7 +42,15 @@ namespace ClassicUO.Launcher.Custom
             string? localClientVersion = null,
             CancellationToken cancellationToken = default)
         {
-            string apiUrl = $"https://api.github.com/repos/{LauncherManifest.GitHubRepo}/releases/latest";
+            string? latestTag = null;
+            string? releaseNotes = null;
+            string? clientUrl = null;
+            string? launcherUrl = null;
+            string? clientFile = null;
+            string? launcherFile = null;
+            string bestVersion = "";
+
+            string apiUrl = $"https://api.github.com/repos/{LauncherManifest.GitHubRepo}/releases?per_page=30";
             using var response = await Http.GetAsync(apiUrl, cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
@@ -51,49 +60,89 @@ namespace ClassicUO.Launcher.Custom
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
             using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-            string tag = doc.RootElement.GetProperty("tag_name").GetString() ?? "";
-            string latest = tag.TrimStart('v', 'V');
-            if (string.IsNullOrWhiteSpace(latest))
+            foreach (JsonElement release in doc.RootElement.EnumerateArray())
             {
-                return null;
+                if (release.TryGetProperty("draft", out JsonElement draftEl) && draftEl.GetBoolean())
+                {
+                    continue;
+                }
+
+                if (release.TryGetProperty("prerelease", out JsonElement preEl) && preEl.GetBoolean())
+                {
+                    continue;
+                }
+
+                string tag = release.GetProperty("tag_name").GetString() ?? "";
+                if (!MatchesEditionTag(tag))
+                {
+                    continue;
+                }
+
+                string? version = ParseVersionFromTag(tag);
+                if (string.IsNullOrWhiteSpace(version))
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(bestVersion) &&
+                    CompareVersions(version, bestVersion) <= 0)
+                {
+                    continue;
+                }
+
+                string? candidateClientUrl = null;
+                string? candidateLauncherUrl = null;
+                string? candidateClientFile = null;
+                string? candidateLauncherFile = null;
+
+                foreach (JsonElement asset in release.GetProperty("assets").EnumerateArray())
+                {
+                    string name = asset.GetProperty("name").GetString() ?? "";
+                    string url = asset.GetProperty("browser_download_url").GetString() ?? "";
+                    if (IsClientPackage(name))
+                    {
+                        candidateClientUrl = url;
+                        candidateClientFile = name;
+                    }
+                    else if (IsLauncherPackage(name))
+                    {
+                        candidateLauncherUrl = url;
+                        candidateLauncherFile = name;
+                    }
+                }
+
+                if (candidateClientUrl == null && candidateLauncherUrl == null)
+                {
+                    continue;
+                }
+
+                bestVersion = version;
+                latestTag = tag;
+                releaseNotes = release.TryGetProperty("body", out JsonElement bodyEl)
+                    ? bodyEl.GetString() ?? ""
+                    : "";
+                clientUrl = candidateClientUrl;
+                launcherUrl = candidateLauncherUrl;
+                clientFile = candidateClientFile;
+                launcherFile = candidateLauncherFile;
             }
 
-            string body = doc.RootElement.TryGetProperty("body", out JsonElement bodyEl)
-                ? bodyEl.GetString() ?? ""
-                : "";
-
-            string? clientUrl = null;
-            string? launcherUrl = null;
-            string? clientFile = null;
-            string? launcherFile = null;
-
-            foreach (JsonElement asset in doc.RootElement.GetProperty("assets").EnumerateArray())
+            if (string.IsNullOrWhiteSpace(bestVersion) || latestTag == null)
             {
-                string name = asset.GetProperty("name").GetString() ?? "";
-                string url = asset.GetProperty("browser_download_url").GetString() ?? "";
-                if (name.StartsWith("UODreams-Client-v", StringComparison.OrdinalIgnoreCase) && name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
-                {
-                    clientUrl = url;
-                    clientFile = name;
-                }
-                else if (name.StartsWith("UODreams-Launcher-v", StringComparison.OrdinalIgnoreCase) && name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
-                {
-                    launcherUrl = url;
-                    launcherFile = name;
-                }
+                return null;
             }
 
             string effectiveClientVersion = string.IsNullOrWhiteSpace(localClientVersion)
                 ? LauncherManifest.ClientRuntimeVersion
                 : localClientVersion;
 
-            bool needsClient = NeedsComponentUpdate(latest, effectiveClientVersion, clientUrl != null);
-            bool needsLauncher = NeedsComponentUpdate(latest, LauncherManifest.LauncherVersion, launcherUrl != null);
+            bool needsClient = NeedsComponentUpdate(bestVersion, effectiveClientVersion, clientUrl != null);
+            bool needsLauncher = NeedsComponentUpdate(bestVersion, LauncherManifest.LauncherVersion, launcherUrl != null);
 
             return new UpdateCheckResult
             {
-                LatestVersion = latest,
-                ReleaseNotes = FormatReleaseNotes(body),
+                LatestVersion = bestVersion,
+                ReleaseNotes = FormatReleaseNotes(releaseNotes ?? ""),
                 NeedsClientUpdate = needsClient,
                 NeedsLauncherUpdate = needsLauncher,
                 ClientDownloadUrl = clientUrl,
@@ -200,6 +249,70 @@ namespace ClassicUO.Launcher.Custom
 
             Match match = Regex.Match(fileName, @"v([\d.]+)", RegexOptions.IgnoreCase);
             return match.Success ? match.Groups[1].Value : null;
+        }
+
+        private static bool MatchesEditionTag(string tag)
+        {
+            if (string.IsNullOrWhiteSpace(tag))
+            {
+                return false;
+            }
+
+            if (LauncherManifest.IsPvpEdition)
+            {
+                if (tag.StartsWith("pvp-v", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                // Legacy single-channel releases (v1.0.x) were the modded/PVP line.
+                return tag.StartsWith("v", StringComparison.OrdinalIgnoreCase) &&
+                       !tag.StartsWith("classic-", StringComparison.OrdinalIgnoreCase);
+            }
+
+            return tag.StartsWith("classic-v", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string? ParseVersionFromTag(string tag)
+        {
+            Match match = Regex.Match(tag, @"(?:pvp-v|classic-v|v)([\d.]+)$", RegexOptions.IgnoreCase);
+            return match.Success ? match.Groups[1].Value : null;
+        }
+
+        private static bool IsClientPackage(string name)
+        {
+            if (!name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            if (LauncherManifest.IsPvpEdition)
+            {
+                return name.StartsWith($"{LauncherManifest.AssetPrefix}-Client-v", StringComparison.OrdinalIgnoreCase) ||
+                       (name.StartsWith("UODreams-Client-v", StringComparison.OrdinalIgnoreCase) &&
+                        !name.StartsWith("UODreams-Classic-", StringComparison.OrdinalIgnoreCase) &&
+                        !name.StartsWith("UODreams-PVP-", StringComparison.OrdinalIgnoreCase));
+            }
+
+            return name.StartsWith($"{LauncherManifest.AssetPrefix}-Client-v", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsLauncherPackage(string name)
+        {
+            if (!name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            if (LauncherManifest.IsPvpEdition)
+            {
+                return name.StartsWith($"{LauncherManifest.AssetPrefix}-Launcher-v", StringComparison.OrdinalIgnoreCase) ||
+                       (name.StartsWith("UODreams-Launcher-v", StringComparison.OrdinalIgnoreCase) &&
+                        !name.StartsWith("UODreams-Classic-", StringComparison.OrdinalIgnoreCase) &&
+                        !name.StartsWith("UODreams-PVP-", StringComparison.OrdinalIgnoreCase));
+            }
+
+            return name.StartsWith($"{LauncherManifest.AssetPrefix}-Launcher-v", StringComparison.OrdinalIgnoreCase);
         }
 
         private static string FormatReleaseNotes(string markdown)

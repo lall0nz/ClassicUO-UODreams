@@ -437,9 +437,10 @@ namespace ClassicUO.Launcher.Custom
         {
             string launcherVer = LauncherManifest.LauncherVersion;
             string clientVer = _settings.EffectiveClientVersion;
+            string title = LauncherManifest.ProductTitle;
             Text = string.Equals(launcherVer, clientVer, StringComparison.OrdinalIgnoreCase)
-                ? $"UODreams Launcher v{launcherVer}"
-                : $"UODreams Launcher v{launcherVer} · client v{clientVer}";
+                ? $"{title} v{launcherVer}"
+                : $"{title} v{launcherVer} · client v{clientVer}";
         }
 
         private void SetUpdateAvailable(bool available)

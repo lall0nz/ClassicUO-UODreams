@@ -88,6 +88,11 @@ namespace ClassicUO.Launcher.Custom
                 return true;
             }
 
+            if (!LauncherManifest.IsPvpEdition)
+            {
+                return false;
+            }
+
             string modded = Path.Combine(ClientDir, "cuo-modded.exe");
             string bootstrap = Path.Combine(BootstrapDir, "ClassicUO.exe");
             string nativeCuo = Path.Combine(BootstrapDir, "cuo.dll");
@@ -141,9 +146,10 @@ namespace ClassicUO.Launcher.Custom
 
                 if (!IsInstalled())
                 {
-                    throw new InvalidDataException(
-                        "Installazione incompleta: ClassicUO.exe + cuo.dll nativo o cuo-modded.exe + Bootstrap non trovati nel pacchetto."
-                    );
+                    string message = LauncherManifest.IsPvpEdition
+                        ? "Installazione incompleta: ClassicUO.exe + cuo.dll nativo o cuo-modded.exe + Bootstrap non trovati nel pacchetto."
+                        : "Installazione incompleta: ClassicUO.exe + cuo.dll ufficiale non trovati nel pacchetto.";
+                    throw new InvalidDataException(message);
                 }
 
                 progress?.Report(new DownloadProgressReport
