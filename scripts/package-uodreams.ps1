@@ -45,6 +45,27 @@ function Copy-NativeRuntimeFiles([string[]]$SourceDirs, [string]$TargetDir) {
     }
 }
 
+function Get-RazorPluginRoots([string]$PluginsDir) {
+    $roots = @()
+    if (Test-Path (Join-Path $PluginsDir "RazorEnhanced.exe")) {
+        $roots += $PluginsDir
+    }
+    Get-ChildItem $PluginsDir -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -like "RazorEnhanced*" } |
+        ForEach-Object { $roots += $_.FullName }
+    return $roots
+}
+
+function Remove-RazorUserData([string]$RazorRoot) {
+    foreach ($folder in @("Profiles", "Backup")) {
+        $path = Join-Path $RazorRoot $folder
+        if (Test-Path $path) {
+            Write-Host "Stripping Razor user data from bundle: $path" -ForegroundColor DarkYellow
+            Remove-Item $path -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 function Expand-RazorPluginsZip([string]$ZipPath, [string]$TargetPluginsDir) {
     if (-not (Test-Path $ZipPath)) {
         Write-Host "Custom Razor zip not found: $ZipPath" -ForegroundColor Yellow
@@ -60,9 +81,33 @@ function Expand-RazorPluginsZip([string]$ZipPath, [string]$TargetPluginsDir) {
         New-Item -ItemType Directory -Force -Path $TargetPluginsDir | Out-Null
     }
 
-    Write-Host "Extracting custom Razor into: $TargetPluginsDir" -ForegroundColor Green
-    Expand-Archive -Path $ZipPath -DestinationPath $TargetPluginsDir -Force
-    return Test-Path (Join-Path $TargetPluginsDir "RazorEnhanced.exe")
+    $tempDir = Join-Path ([IO.Path]::GetTempPath()) ("razor-pack-" + [guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
+    try {
+        Write-Host "Extracting custom Razor into staging: $tempDir" -ForegroundColor Green
+        Expand-Archive -Path $ZipPath -DestinationPath $tempDir -Force
+
+        foreach ($razorRoot in (Get-RazorPluginRoots $tempDir)) {
+            Remove-RazorUserData $razorRoot
+        }
+
+        Write-Host "Copying sanitized Razor into: $TargetPluginsDir" -ForegroundColor Green
+        Copy-Item -Path (Join-Path $tempDir "*") -Destination $TargetPluginsDir -Recurse -Force
+    } finally {
+        if (Test-Path $tempDir) {
+            Remove-Item $tempDir -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    if (Test-Path (Join-Path $TargetPluginsDir "RazorEnhanced.exe")) {
+        return $true
+    }
+
+    return $null -ne (
+        Get-ChildItem $TargetPluginsDir -Directory -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -like "RazorEnhanced*" } |
+            Select-Object -First 1
+    )
 }
 
 function Test-BundledRazorPlugins([string]$ClientRoot) {

@@ -239,6 +239,8 @@ namespace ClassicUO.Configuration
         public bool LTHighlightRangeOnCast { get; set; } = true;
         public int LTHighlightRangeOnCastRange { get; set; } = 10;
         public ushort LTHighlightRangeOnCastHue { get; set; } = 0x0017;
+        // Width of the highlighted range ring in tile units (0.2 = thin, 1 = one tile band).
+        public float LTHighlightRangeLineThickness { get; set; } = 1f;
         public bool AutoOpenCorpses { get; set; } = true;
         public int AutoOpenCorpseRange { get; set; } = 2;
         public int CorpseOpenOptions { get; set; } = 3;

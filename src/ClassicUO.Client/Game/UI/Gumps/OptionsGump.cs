@@ -141,7 +141,7 @@ namespace ClassicUO.Game.UI.Gumps
 
         // Visual Helpers (Dust765) - Highlight tiles on range
         private Checkbox _ltHighlightRangeOnActivated, _ltHighlightRangeOnCast;
-        private HSliderBar _ltHighlightRangeOnActivatedRange, _ltHighlightRangeOnCastRange;
+        private HSliderBar _ltHighlightRangeOnActivatedRange, _ltHighlightRangeOnCastRange, _ltHighlightRangeLineThickness;
         private ClickableColorBox _ltHighlightRangeOnActivatedHue, _ltHighlightRangeOnCastHue;
         private Checkbox _showEquipmentDurabilityButton, _useModernJournal, _hideJournalTimestamp, _invisibleHousesEnabled, _autoOpenUiOnLogin;
         private HSliderBar _invisibleHousesZ;
@@ -820,6 +820,8 @@ namespace ClassicUO.Game.UI.Gumps
             combat.AddRight(_ltHighlightRangeOnCastRange = AddHSlider(null, 1, 18, _currentProfile.LTHighlightRangeOnCastRange, startX, startY, 150));
             combat.Add(AddLabel(null, "Tile color", startX, startY));
             combat.AddRight(_ltHighlightRangeOnCastHue = AddColorBox(null, startX, startY, _currentProfile.LTHighlightRangeOnCastHue, string.Empty), 2);
+            combat.Add(AddLabel(null, "Line thickness (tiles)", startX, startY));
+            combat.AddRight(_ltHighlightRangeLineThickness = AddHSlider(null, 2, 10, ThicknessToSlider(_currentProfile.LTHighlightRangeLineThickness), startX, startY, 150));
 
             SettingsSection ui = AddSettingsSection(box, "UI");
             ui.Y = combat.Bounds.Bottom + 40;
@@ -4205,6 +4207,7 @@ namespace ClassicUO.Game.UI.Gumps
             _currentProfile.LTHighlightRangeOnCast = _ltHighlightRangeOnCast.IsChecked;
             _currentProfile.LTHighlightRangeOnCastRange = _ltHighlightRangeOnCastRange.Value;
             _currentProfile.LTHighlightRangeOnCastHue = _ltHighlightRangeOnCastHue.Hue;
+            _currentProfile.LTHighlightRangeLineThickness = SliderToThickness(_ltHighlightRangeLineThickness.Value);
             _currentProfile.HidePersistentNPCNames = _hidePersistentNPCNames.IsChecked;
             _currentProfile.ShowAllLayersPaperdoll = _showAllLayersPaperdoll.IsChecked;
             _currentProfile.AutoOpenUiOnLogin = _autoOpenUiOnLogin.IsChecked;
@@ -4927,6 +4930,12 @@ namespace ClassicUO.Game.UI.Gumps
 
             return combobox;
         }
+
+        private static int ThicknessToSlider(float thickness) =>
+            (int)Math.Clamp(Math.Round(thickness * 10f), 2, 10);
+
+        private static float SliderToThickness(int sliderValue) =>
+            Math.Clamp(sliderValue, 2, 10) / 10f;
 
         private HSliderBar AddHSlider
         (

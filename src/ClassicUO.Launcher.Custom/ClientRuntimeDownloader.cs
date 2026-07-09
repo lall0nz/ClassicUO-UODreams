@@ -10,6 +10,7 @@ namespace ClassicUO.Launcher.Custom
 {
     internal static class ClientRuntimeDownloader
     {
+        private static readonly string[] RazorUserDataFolders = { "Profiles", "Backup" };
         public static string ClientDir =>
             Path.Combine(AppContext.BaseDirectory, "Client");
 
@@ -142,7 +143,7 @@ namespace ClassicUO.Launcher.Custom
                     );
                 }
 
-                ZipFile.ExtractToDirectory(archivePath, installRoot, overwriteFiles: true);
+                ExtractClientPackagePreservingRazorProfiles(archivePath, installRoot);
 
                 if (!IsInstalled())
                 {
@@ -270,6 +271,194 @@ namespace ClassicUO.Launcher.Custom
             Span<byte> header = stackalloc byte[4];
             fs.Read(header);
             return header[0] == 0x50 && header[1] == 0x4B;
+        }
+
+        private static void ExtractClientPackagePreservingRazorProfiles(string archivePath, string installRoot)
+        {
+            List<(string Target, string Backup)> preserved = BackupRazorUserData(installRoot);
+
+            try
+            {
+                using ZipArchive archive = ZipFile.OpenRead(archivePath);
+
+                foreach (ZipArchiveEntry entry in archive.Entries)
+                {
+                    if (IsRazorUserDataZipEntry(entry.FullName))
+                    {
+                        continue;
+                    }
+
+                    string destinationPath = Path.GetFullPath(Path.Combine(installRoot, entry.FullName));
+
+                    if (!destinationPath.StartsWith(Path.GetFullPath(installRoot), StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    if (string.IsNullOrEmpty(entry.Name))
+                    {
+                        Directory.CreateDirectory(destinationPath);
+                        continue;
+                    }
+
+                    string? parent = Path.GetDirectoryName(destinationPath);
+
+                    if (!string.IsNullOrEmpty(parent))
+                    {
+                        Directory.CreateDirectory(parent);
+                    }
+
+                    entry.ExtractToFile(destinationPath, overwrite: true);
+                }
+            }
+            finally
+            {
+                RestoreRazorUserData(preserved);
+            }
+        }
+
+        private static bool IsRazorUserDataZipEntry(string entryPath)
+        {
+            string normalized = entryPath.Replace('\\', '/');
+            const string marker = "/Data/Plugins/";
+            int pluginsIdx = normalized.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+
+            if (pluginsIdx < 0)
+            {
+                return false;
+            }
+
+            string afterPlugins = normalized[(pluginsIdx + marker.Length)..];
+            string[] parts = afterPlugins.Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+            if (parts.Length == 0)
+            {
+                return false;
+            }
+
+            if (IsRazorUserDataFolder(parts[0]))
+            {
+                return true;
+            }
+
+            if (parts.Length >= 2 &&
+                parts[0].Contains("RazorEnhanced", StringComparison.OrdinalIgnoreCase) &&
+                IsRazorUserDataFolder(parts[1]))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsRazorUserDataFolder(string name)
+        {
+            foreach (string folder in RazorUserDataFolders)
+            {
+                if (name.Equals(folder, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static List<(string Target, string Backup)> BackupRazorUserData(string installRoot)
+        {
+            var preserved = new List<(string Target, string Backup)>();
+            string tempRoot = Path.Combine(
+                Path.GetTempPath(),
+                "UODreamsLauncher",
+                "razor-preserve",
+                Guid.NewGuid().ToString("N")
+            );
+            Directory.CreateDirectory(tempRoot);
+
+            int backupIndex = 0;
+
+            foreach (string razorRoot in FindRazorRoots(installRoot))
+            {
+                foreach (string folder in RazorUserDataFolders)
+                {
+                    string source = Path.Combine(razorRoot, folder);
+
+                    if (!Directory.Exists(source))
+                    {
+                        continue;
+                    }
+
+                    string backup = Path.Combine(tempRoot, $"{backupIndex:D3}_{folder}");
+                    CopyDirectory(source, backup);
+                    preserved.Add((source, backup));
+                    backupIndex++;
+                }
+            }
+
+            return preserved;
+        }
+
+        private static void RestoreRazorUserData(List<(string Target, string Backup)> preserved)
+        {
+            foreach ((string target, string backup) in preserved)
+            {
+                if (!Directory.Exists(backup))
+                {
+                    continue;
+                }
+
+                CopyDirectory(backup, target, overwrite: true);
+            }
+        }
+
+        private static IEnumerable<string> FindRazorRoots(string installRoot)
+        {
+            string clientDir = Path.Combine(installRoot, "Client");
+            string[] pluginsDirs =
+            {
+                Path.Combine(clientDir, "Data", "Plugins"),
+                Path.Combine(clientDir, "Bootstrap", "Data", "Plugins")
+            };
+
+            foreach (string pluginsDir in pluginsDirs)
+            {
+                if (!Directory.Exists(pluginsDir))
+                {
+                    continue;
+                }
+
+                if (File.Exists(Path.Combine(pluginsDir, "RazorEnhanced.exe")))
+                {
+                    yield return pluginsDir;
+                }
+
+                foreach (string dir in Directory.EnumerateDirectories(pluginsDir))
+                {
+                    if (dir.Contains("RazorEnhanced", StringComparison.OrdinalIgnoreCase))
+                    {
+                        yield return dir;
+                    }
+                }
+            }
+        }
+
+        private static void CopyDirectory(string sourceDir, string destDir, bool overwrite = false)
+        {
+            Directory.CreateDirectory(destDir);
+
+            foreach (string file in Directory.EnumerateFiles(sourceDir, "*", SearchOption.AllDirectories))
+            {
+                string relative = Path.GetRelativePath(sourceDir, file);
+                string target = Path.Combine(destDir, relative);
+                string? parent = Path.GetDirectoryName(target);
+
+                if (!string.IsNullOrEmpty(parent))
+                {
+                    Directory.CreateDirectory(parent);
+                }
+
+                File.Copy(file, target, overwrite);
+            }
         }
     }
 }

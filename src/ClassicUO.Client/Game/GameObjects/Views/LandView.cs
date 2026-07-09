@@ -202,14 +202,15 @@ namespace ClassicUO.Game.GameObjects
                 Math.Abs(Y - World.Player.Y)
             );
 
-            if (spellRingActive && distance == profile.LTHighlightRangeOnCastRange)
+            if (spellRingActive && IsOnRangeRing(distance, profile.LTHighlightRangeOnCastRange, profile.LTHighlightRangeLineThickness))
             {
                 hue = profile.LTHighlightRangeOnCastHue;
 
                 return true;
             }
 
-            if (profile.LTHighlightRangeOnActivated && distance == profile.LTHighlightRangeOnActivatedRange)
+            if (profile.LTHighlightRangeOnActivated &&
+                IsOnRangeRing(distance, profile.LTHighlightRangeOnActivatedRange, profile.LTHighlightRangeLineThickness))
             {
                 hue = profile.LTHighlightRangeOnActivatedHue;
 
@@ -217,6 +218,13 @@ namespace ClassicUO.Game.GameObjects
             }
 
             return false;
+        }
+
+        private static bool IsOnRangeRing(int distance, int targetRange, float thickness)
+        {
+            float band = Math.Max(0.2f, Math.Min(1f, thickness));
+
+            return Math.Abs(distance - targetRange) < band;
         }
 
         public override bool CheckMouseSelection()
