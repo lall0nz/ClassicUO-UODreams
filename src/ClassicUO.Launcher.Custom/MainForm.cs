@@ -45,6 +45,10 @@ namespace ClassicUO.Launcher.Custom
         private Label _ipLabel = null!;
         private Label _portLabel = null!;
         private FooterLinkButton _registerBtn = null!;
+        private Label _enhancedMapLink = null!;
+        private CheckBox _enhancedMapAutoOpenCheck = null!;
+        private ThemedContextMenu? _enhancedMapMenu;
+        private int _enhancedMapRowY;
         private bool _updateAvailable;
 
         public MainForm()
@@ -118,7 +122,7 @@ namespace ClassicUO.Launcher.Custom
 
             if (logo != null)
             {
-                int bannerH = 118;
+                const int bannerH = 148;
                 var logoBox = new PictureBox
                 {
                     Image = logo,
@@ -127,8 +131,40 @@ namespace ClassicUO.Launcher.Custom
                     Bounds = new Rectangle(margin, y, width, bannerH)
                 };
                 Controls.Add(logoBox);
-                y += bannerH + 10;
+                y += bannerH + 4;
             }
+
+            // ----- Enhanced Map (right-aligned below banner) -----
+            _enhancedMapRowY = y;
+            _enhancedMapLink = new Label
+            {
+                Text = Loc.S("🌍 ENHANCED MAP", "🌍 ENHANCED MAP"),
+                Font = new Font("Segoe UI Semibold", 8.5f, FontStyle.Bold),
+                ForeColor = Theme.SectionGreen,
+                BackColor = Color.Transparent,
+                AutoSize = true,
+                Cursor = Cursors.Hand
+            };
+            _enhancedMapLink.Click += (_, _) => ShowEnhancedMapMenu();
+            _enhancedMapLink.MouseEnter += (_, _) => _enhancedMapLink.ForeColor = Color.FromArgb(72, 228, 154);
+            _enhancedMapLink.MouseLeave += (_, _) => _enhancedMapLink.ForeColor = Theme.SectionGreen;
+            Controls.Add(_enhancedMapLink);
+
+            _enhancedMapAutoOpenCheck = new CheckBox
+            {
+                Text = Loc.S("apri mappa automaticamente", "autoopen map"),
+                ForeColor = Theme.TextMuted,
+                BackColor = Color.Transparent,
+                AutoSize = true
+            };
+            _enhancedMapAutoOpenCheck.CheckedChanged += (_, _) =>
+            {
+                _settings.EnhancedMapAutoOpen = _enhancedMapAutoOpenCheck.Checked;
+                _settings.Save();
+            };
+            Controls.Add(_enhancedMapAutoOpenCheck);
+            LayoutEnhancedMapControls(margin, width, _enhancedMapRowY);
+            y += 50;
 
             // ----- Card 1: assistant -----
             var assistantCard = new CardPanel { Bounds = new Rectangle(margin, y, width, 190) };
@@ -519,6 +555,7 @@ namespace ClassicUO.Launcher.Custom
             _uoPathBox.Text = "";
             _assistantPathBox.Text = "";
             _clientPathBox.Text = "";
+            _enhancedMapAutoOpenCheck.Checked = false;
 
             UpdateAssistantUi();
             UpdateAssistantDownloadUi();
@@ -561,6 +598,9 @@ namespace ClassicUO.Launcher.Custom
                 : Loc.S("⬇ Aggiorna", "⬇ Update");
             _launchButton.Text = Loc.S("AVVIA", "START");
             _registerBtn.Text = Loc.S("Registrati gratis", "Register for free");
+            _enhancedMapLink.Text = Loc.S("🌍 ENHANCED MAP", "🌍 ENHANCED MAP");
+            _enhancedMapAutoOpenCheck.Text = Loc.S("apri mappa automaticamente", "autoopen map");
+            LayoutEnhancedMapControls(24, 620 - 48, _enhancedMapRowY);
 
             _serverLabel.Text = "Server";
             _ipLabel.Text = Loc.S("Indirizzo", "Address");
@@ -681,6 +721,7 @@ namespace ClassicUO.Launcher.Custom
             _ipBox.Text = _settings.ShardIp;
             _portBox.Value = Math.Min(Math.Max(_settings.ShardPort, 1), 65535);
             _encryptionCheck.Checked = _settings.Encryption != 0;
+            _enhancedMapAutoOpenCheck.Checked = _settings.EnhancedMapAutoOpen;
             RefreshServerCombo();
 
             _clientPathBox.Text = !string.IsNullOrEmpty(_settings.ClientPath) && File.Exists(_settings.ClientPath)
@@ -971,39 +1012,239 @@ namespace ClassicUO.Launcher.Custom
 
         private void BrowseAssistant()
         {
+            string assistant = SelectedAssistant;
+            if (assistant == "Nessuno")
+            {
+                return;
+            }
+
             using var dialog = new OpenFileDialog
             {
-                Title = SelectedAssistant switch
+                Title = assistant switch
                 {
                     "ClassicAssist" => Loc.S("Seleziona ClassicAssist.dll", "Select ClassicAssist.dll"),
-                    "Orion" => Loc.S(
-                        "Seleziona OrionLauncher64.exe o la cartella di Orion Launcher",
-                        "Select OrionLauncher64.exe or the Orion Launcher folder"),
-                    "UOSteam" => Loc.S(
-                        "Seleziona UOS.exe o la cartella di UOSteam",
-                        "Select UOS.exe or the UOSteam folder"),
-                    _ => Loc.S(
-                        "Seleziona RazorEnhanced.exe o la sua cartella",
-                        "Select RazorEnhanced.exe or its folder")
+                    "Orion" => Loc.S("Seleziona OrionLauncher64.exe", "Select OrionLauncher64.exe"),
+                    "UOSteam" => Loc.S("Seleziona UOS.exe", "Select UOS.exe"),
+                    _ => Loc.S("Seleziona RazorEnhanced.exe", "Select RazorEnhanced.exe")
                 },
-                Filter = Loc.S(
-                    "Plugin (*.dll;*.exe)|*.dll;*.exe|Tutti i file (*.*)|*.*",
-                    "Plugin (*.dll;*.exe)|*.dll;*.exe|All files (*.*)|*.*")
+                Filter = GetAssistantBrowseFilter(assistant),
+                CheckFileExists = true,
+                ValidateNames = true,
+                Multiselect = false
             };
 
             if (!string.IsNullOrEmpty(_assistantPathBox.Text))
             {
                 try
                 {
-                    dialog.InitialDirectory = Path.GetDirectoryName(_assistantPathBox.Text);
+                    string? initial = _assistantPathBox.Text.Trim().Trim('"');
+                    if (File.Exists(initial))
+                    {
+                        dialog.InitialDirectory = Path.GetDirectoryName(initial);
+                        dialog.FileName = Path.GetFileName(initial);
+                    }
+                    else if (Directory.Exists(initial))
+                    {
+                        dialog.InitialDirectory = initial;
+                    }
                 }
                 catch { }
             }
 
-            if (dialog.ShowDialog(this) == DialogResult.OK)
+            if (dialog.ShowDialog(this) != DialogResult.OK)
             {
-                _assistantPathBox.Text = dialog.FileName;
-                UpdateAssistantDownloadUi();
+                return;
+            }
+
+            if (!IsValidAssistantBrowseSelection(assistant, dialog.FileName))
+            {
+                ThemedMessageDialog.ShowInfo(
+                    this,
+                    Loc.S("Percorso non valido", "Invalid path"),
+                    assistant switch
+                    {
+                        "ClassicAssist" => Loc.S(
+                            "Seleziona il file ClassicAssist.dll.",
+                            "Select the ClassicAssist.dll file."),
+                        "Orion" => Loc.S(
+                            "Seleziona OrionLauncher64.exe.",
+                            "Select OrionLauncher64.exe."),
+                        "UOSteam" => Loc.S(
+                            "Seleziona UOS.exe.",
+                            "Select UOS.exe."),
+                        _ => Loc.S(
+                            "Seleziona RazorEnhanced.exe.",
+                            "Select RazorEnhanced.exe.")
+                    });
+                return;
+            }
+
+            _assistantPathBox.Text = dialog.FileName;
+            UpdateAssistantDownloadUi();
+        }
+
+        private static string GetAssistantBrowseFilter(string assistant) => assistant switch
+        {
+            "ClassicAssist" => Loc.S("ClassicAssist (*.dll)|ClassicAssist.dll", "ClassicAssist (*.dll)|ClassicAssist.dll"),
+            "Razor Enhanced" => Loc.S(
+                "Razor Enhanced (*.exe)|RazorEnhanced.exe",
+                "Razor Enhanced (*.exe)|RazorEnhanced.exe"),
+            "Orion" => Loc.S(
+                "Orion Launcher (*.exe)|OrionLauncher64.exe;Orion Launcher64.exe",
+                "Orion Launcher (*.exe)|OrionLauncher64.exe;Orion Launcher64.exe"),
+            "UOSteam" => Loc.S("UOSteam (UOS.exe)|UOS.exe", "UOSteam (UOS.exe)|UOS.exe"),
+            _ => Loc.S("File (*.exe)|*.exe", "File (*.exe)|*.exe")
+        };
+
+        private static bool IsValidAssistantBrowseSelection(string assistant, string filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+            {
+                return false;
+            }
+
+            string fileName = Path.GetFileName(filePath);
+            return assistant switch
+            {
+                "ClassicAssist" => fileName.Equals("ClassicAssist.dll", StringComparison.OrdinalIgnoreCase),
+                "Razor Enhanced" => fileName.Equals("RazorEnhanced.exe", StringComparison.OrdinalIgnoreCase),
+                "Orion" => fileName.Equals("OrionLauncher64.exe", StringComparison.OrdinalIgnoreCase) ||
+                           fileName.Equals("Orion Launcher64.exe", StringComparison.OrdinalIgnoreCase),
+                "UOSteam" => fileName.Equals("UOS.exe", StringComparison.OrdinalIgnoreCase),
+                _ => false
+            };
+        }
+
+        private void LayoutEnhancedMapControls(int margin, int contentWidth, int rowY)
+        {
+            int rightEdge = margin + contentWidth;
+            _enhancedMapLink.Location = new Point(rightEdge - _enhancedMapLink.PreferredSize.Width, rowY);
+            _enhancedMapAutoOpenCheck.Location = new Point(
+                rightEdge - _enhancedMapAutoOpenCheck.PreferredSize.Width,
+                rowY + 22);
+        }
+
+        private void ShowEnhancedMapMenu()
+        {
+            if (_enhancedMapMenu == null || _enhancedMapMenu.IsDisposed)
+            {
+                _enhancedMapMenu = new ThemedContextMenu();
+                _enhancedMapMenu.AddAction(Loc.S("Sfoglia…", "Browse…"), BrowseEnhancedMap);
+                _enhancedMapMenu.AddAction(Loc.S("Scarica", "Download"), DownloadEnhancedMap);
+            }
+
+            _enhancedMapMenu.ShowBelow(_enhancedMapLink);
+        }
+
+        private void BrowseEnhancedMap()
+        {
+            using var dialog = new OpenFileDialog
+            {
+                Title = Loc.S("Seleziona EnhancedMap.exe", "Select EnhancedMap.exe"),
+                Filter = Loc.S(
+                    "Enhanced Map (*.exe)|EnhancedMap.exe",
+                    "Enhanced Map (*.exe)|EnhancedMap.exe"),
+                CheckFileExists = true,
+                ValidateNames = true,
+                Multiselect = false
+            };
+
+            string? saved = _settings.EnhancedMapPath;
+            if (!string.IsNullOrWhiteSpace(saved))
+            {
+                try
+                {
+                    string? resolved = EnhancedMapDownloader.ResolveExePath(saved);
+                    if (resolved != null)
+                    {
+                        dialog.InitialDirectory = Path.GetDirectoryName(resolved);
+                        dialog.FileName = EnhancedMapDownloader.ExeFileName;
+                    }
+                    else if (Directory.Exists(saved))
+                    {
+                        dialog.InitialDirectory = saved;
+                    }
+                }
+                catch { }
+            }
+
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+
+            if (!Path.GetFileName(dialog.FileName)
+                    .Equals(EnhancedMapDownloader.ExeFileName, StringComparison.OrdinalIgnoreCase))
+            {
+                ThemedMessageDialog.ShowInfo(
+                    this,
+                    Loc.S("Percorso non valido", "Invalid path"),
+                    Loc.S("Seleziona EnhancedMap.exe.", "Select EnhancedMap.exe."));
+                return;
+            }
+
+            _settings.EnhancedMapPath = dialog.FileName;
+            _settings.Save();
+            _statusLabel.ForeColor = Theme.SectionGreen;
+            _statusLabel.Text = Loc.S("Enhanced Map configurato.", "Enhanced Map configured.");
+        }
+
+        private void DownloadEnhancedMap()
+        {
+            string installDir = EnhancedMapDownloader.DefaultInstallDirectory;
+
+            _statusLabel.ForeColor = Theme.TextMuted;
+            _statusLabel.Text = Loc.S("Download Enhanced Map in corso…", "Downloading Enhanced Map…");
+
+            using var progressForm = DownloadProgressForm.ForEnhancedMap(installDir);
+            var result = progressForm.ShowDialog(this);
+
+            if (result == DialogResult.OK && !string.IsNullOrWhiteSpace(progressForm.ResultPath))
+            {
+                _settings.EnhancedMapPath = progressForm.ResultPath;
+                _settings.Save();
+                _statusLabel.ForeColor = Theme.SectionGreen;
+                _statusLabel.Text = Loc.S("Enhanced Map installato correttamente.", "Enhanced Map installed successfully.");
+            }
+            else if (result == DialogResult.Abort)
+            {
+                _statusLabel.ForeColor = Theme.Error;
+                _statusLabel.Text = Loc.S(
+                    "Download Enhanced Map non riuscito. Riprova o seleziona manualmente il percorso.",
+                    "Enhanced Map download failed. Retry or select the path manually.");
+            }
+            else
+            {
+                _statusLabel.Text = "";
+            }
+        }
+
+        private void LaunchEnhancedMapIfNeeded()
+        {
+            if (!_enhancedMapAutoOpenCheck.Checked)
+            {
+                return;
+            }
+
+            string? exe = EnhancedMapDownloader.ResolveExePath(_settings.EnhancedMapPath);
+            if (exe == null)
+            {
+                return;
+            }
+
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = exe,
+                    WorkingDirectory = Path.GetDirectoryName(exe)!,
+                    UseShellExecute = true
+                });
+                LauncherLog.Info($"Enhanced Map avviato exe={exe}");
+            }
+            catch (Exception ex)
+            {
+                LauncherLog.Error("Impossibile avviare Enhanced Map", ex);
             }
         }
 
@@ -1226,6 +1467,7 @@ namespace ClassicUO.Launcher.Custom
                     "Orion Launcher avviato. Seleziona il profilo e premi Launch.",
                     "Orion Launcher started. Select the profile and press Launch.");
                 LauncherLog.Info($"Orion Launcher avviato PID={process.Id}");
+                LaunchEnhancedMapIfNeeded();
                 Close();
             }
             catch (Exception ex)
@@ -1286,6 +1528,7 @@ namespace ClassicUO.Launcher.Custom
                     "UOSteam avviato. Configura shard/porta nell'interfaccia UOS.",
                     "UOSteam started. Configure shard/port in the UOS interface.");
                 LauncherLog.Info($"UOSteam avviato PID={process.Id}");
+                LaunchEnhancedMapIfNeeded();
                 Close();
             }
             catch (Exception ex)
@@ -1400,6 +1643,7 @@ namespace ClassicUO.Launcher.Custom
             _settings.ShardPort = (int)_portBox.Value;
             _settings.Encryption = _encryptionCheck.Checked ? 1 : 0;
             _settings.SelectedServer = _serverCombo.SelectedItem as string ?? _settings.SelectedServer;
+            _settings.EnhancedMapAutoOpen = _enhancedMapAutoOpenCheck.Checked;
 
             switch (SelectedAssistant)
             {
@@ -1515,10 +1759,18 @@ namespace ClassicUO.Launcher.Custom
 
             SaveSettings();
 
+            string clientWorkingDir = Path.GetDirectoryName(effectiveClient)!;
+            string? runtimeError = ClientNativeRuntime.Validate(clientWorkingDir);
+            if (runtimeError != null)
+            {
+                ShowError(runtimeError);
+                return;
+            }
+
             var psi = new ProcessStartInfo
             {
                 FileName = effectiveClient,
-                WorkingDirectory = Path.GetDirectoryName(effectiveClient)!,
+                WorkingDirectory = clientWorkingDir,
                 UseShellExecute = false,
                 CreateNoWindow = false
             };
@@ -1558,6 +1810,7 @@ namespace ClassicUO.Launcher.Custom
                     : Loc.S($"Client avviato con {SelectedAssistant}.", $"Client started with {SelectedAssistant}.");
 
                 LauncherLog.Info($"Client avviato PID={process.Id}");
+                LaunchEnhancedMapIfNeeded();
                 Close();
             }
             catch (Exception ex)

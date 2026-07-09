@@ -2289,6 +2289,14 @@ namespace ClassicUO.Network
                         UIManager.Add(gump);
                     }
                 }
+
+                if (
+                    ProfileManager.CurrentProfile != null
+                    && (ProfileManager.CurrentProfile.AutoOpenBackpackOnLogin ?? true)
+                )
+                {
+                    scene.PendingAutoOpenBackpack = true;
+                }
             }
         }
 

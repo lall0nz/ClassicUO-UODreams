@@ -1,36 +1,36 @@
-<Project Sdk="Microsoft.NET.Sdk">
-
-  <PropertyGroup>
-    <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
-    <UseWindowsForms>true</UseWindowsForms>
-    <AssemblyName>UODreams Launcher</AssemblyName>
-    <RootNamespace>ClassicUO.Launcher.Custom</RootNamespace>
-    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
-    <Nullable>enable</Nullable>
-    <PublishAot>false</PublishAot>
-    <ApplicationIcon>Resources\uodreams.ico</ApplicationIcon>
-    <LauncherEdition Condition="'$(LauncherEdition)' == ''">pvp</LauncherEdition>
-    <Version>1.1.0.0</Version>
-    <AssemblyVersion>1.1.0.0</AssemblyVersion>
-    <FileVersion>1.1.0.0</FileVersion>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(LauncherEdition)' == 'pvp'">
-    <DefineConstants>$(DefineConstants);LAUNCHER_EDITION_PVP</DefineConstants>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <EmbeddedResource Include="Resources\uodreams_logo.png" />
-    <EmbeddedResource Include="Resources\uodreams.ico" />
-    <Content Include="Resources\uodreams.ico" Link="uodreams.ico">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4078.44" />
-  </ItemGroup>
-
-</Project>
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>UODreams Launcher</AssemblyName>
+    <RootNamespace>ClassicUO.Launcher.Custom</RootNamespace>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <Nullable>enable</Nullable>
+    <PublishAot>false</PublishAot>
+    <ApplicationIcon>Resources\uodreams.ico</ApplicationIcon>
+    <LauncherEdition Condition="'$(LauncherEdition)' == ''">pvp</LauncherEdition>
+    <Version>1.1.1.0</Version>
+    <AssemblyVersion>1.1.1.0</AssemblyVersion>
+    <FileVersion>1.1.1.0</FileVersion>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(LauncherEdition)' == 'pvp'">
+    <DefineConstants>$(DefineConstants);LAUNCHER_EDITION_PVP</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\uodreams_logo.png" />
+    <EmbeddedResource Include="Resources\uodreams.ico" />
+    <Content Include="Resources\uodreams.ico" Link="uodreams.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4078.44" />
+  </ItemGroup>
+
+</Project>
 

@@ -33,6 +33,18 @@ function Copy-BootstrapHostFiles([string]$SourceDir, [string]$TargetDir) {
     }
 }
 
+function Copy-NativeRuntimeFiles([string[]]$SourceDirs, [string]$TargetDir) {
+    foreach ($name in @('zlib.dll','SDL2.dll','FAudio.dll','FNA3D.dll','libtheorafile.dll')) {
+        foreach ($sourceDir in $SourceDirs) {
+            $src = Join-Path $sourceDir $name
+            if (Test-Path $src) {
+                Copy-Item -Force $src (Join-Path $TargetDir $name)
+                break
+            }
+        }
+    }
+}
+
 function Expand-RazorPluginsZip([string]$ZipPath, [string]$TargetPluginsDir) {
     if (-not (Test-Path $ZipPath)) {
         Write-Host "Custom Razor zip not found: $ZipPath" -ForegroundColor Yellow
@@ -206,9 +218,12 @@ if ($Edition -eq "classic") {
 
     Remove-PrebundledRazorPlugins $clientDir
 
+    $nativeSources = @($clientOut, $OfficialCuo, (Join-Path $RepoRoot "external\x64"))
+
     if ($useUnifiedNative) {
         Write-Step "Assembling unified Dust765-style client (mods + custom Razor)"
         Copy-BootstrapHostFiles $bootstrapOut $clientDir
+        Copy-NativeRuntimeFiles $nativeSources $clientDir
         Expand-RazorPluginsZip $RazorEnhancedZip (Join-Path $clientDir "Data\Plugins") | Out-Null
         if (Test-Path "$clientDir\cuo.exe") { Remove-Item "$clientDir\cuo.exe" -Force -ErrorAction SilentlyContinue }
     } else {
@@ -217,8 +232,10 @@ if ($Edition -eq "classic") {
         if (Test-Path "$clientDir\cuo.exe") {
             Move-Item -Force "$clientDir\cuo.exe" "$clientDir\cuo-modded.exe"
         }
+        Copy-NativeRuntimeFiles $nativeSources $clientDir
         robocopy $OfficialCuo $bootstrapDir /E /XD "Data\Plugins" /XF settings.json /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
         Copy-BootstrapHostFiles $bootstrapOut $bootstrapDir
+        Copy-NativeRuntimeFiles @($OfficialCuo, (Join-Path $RepoRoot "external\x64")) $bootstrapDir
         Expand-RazorPluginsZip $RazorEnhancedZip (Join-Path $bootstrapDir "Data\Plugins") | Out-Null
     }
 

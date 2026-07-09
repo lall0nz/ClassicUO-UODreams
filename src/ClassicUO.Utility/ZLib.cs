@@ -31,6 +31,7 @@
 #endregion
 
 using System;
+using System.IO;
 using System.Runtime.InteropServices;
 using ClassicUO.Utility.Platforms;
 
@@ -44,11 +45,13 @@ namespace ClassicUO.Utility
 
         static ZLib()
         {
-            if(Environment.Is64BitProcess) 
+            if (Environment.Is64BitProcess)
             {
-                if(PlatformHelper.IsWindows)
+                if (PlatformHelper.IsWindows)
                 {
-                    _compressor = new Compressor64();
+                    // Fall back to managed decompression when zlib.dll is missing or its
+                    // VC++ runtime dependencies are not installed (common on fresh VMs).
+                    _compressor = CanLoadNativeZLib() ? new Compressor64() : new ManagedUniversal();
                 }
                 else
                 {
@@ -58,6 +61,36 @@ namespace ClassicUO.Utility
             else
             {
                 _compressor = new ManagedUniversal();
+            }
+        }
+
+        private static bool CanLoadNativeZLib()
+        {
+            try
+            {
+                if (NativeLibrary.TryLoad("zlib", typeof(ZLib).Assembly, null, out IntPtr handle))
+                {
+                    NativeLibrary.Free(handle);
+                    return true;
+                }
+
+                string localZlib = Path.Combine(AppContext.BaseDirectory, "zlib.dll");
+                if (!File.Exists(localZlib))
+                {
+                    return false;
+                }
+
+                if (NativeLibrary.TryLoad(localZlib, typeof(ZLib).Assembly, null, out handle))
+                {
+                    NativeLibrary.Free(handle);
+                    return true;
+                }
+
+                return false;
+            }
+            catch
+            {
+                return false;
             }
         }
 

@@ -217,6 +217,7 @@ namespace ClassicUO.Configuration
         public bool FastSpellsAssign { get; set; }
         public bool AutoOpenDoors { get; set; } = true;
         public bool SmoothDoors { get; set; } = true;
+        public bool? AutoOpenBackpackOnLogin { get; set; }
         // Auto Avoid Obstacles
         public bool AvoidObstacles { get; set; } = true;
         public bool AvoidObstaclesIgnoreHumanoids { get; set; } = true;

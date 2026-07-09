@@ -71,6 +71,15 @@ namespace ClassicUO.Launcher.Custom
                 AutoCloseOnSuccess = true
             };
 
+        public static DownloadProgressForm ForEnhancedMap(string installDirectory) =>
+            new(
+                async (progress, ct) =>
+                    await EnhancedMapDownloader.DownloadAndInstallAsync(installDirectory, progress, ct)
+                        .ConfigureAwait(true),
+                Loc.S("UODreams Launcher — Enhanced Map", "UODreams Launcher — Enhanced Map"),
+                Loc.S("Scaricamento Enhanced Map…", "Downloading Enhanced Map…")
+            );
+
         public static DownloadProgressForm ForAssistant(string assistant, string installDirectory, string? infoMessage = null) =>
             new(
                 async (progress, ct) =>

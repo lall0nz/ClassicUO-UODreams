@@ -20,6 +20,8 @@ namespace ClassicUO.Launcher.Custom
         public string RazorPath { get; set; } = "";
         public string OrionPath { get; set; } = "";
         public string UOSteamPath { get; set; } = "";
+        public string EnhancedMapPath { get; set; } = "";
+        public bool EnhancedMapAutoOpen { get; set; } = false;
         public string ClientPath { get; set; } = "";
         public string UoDirectory { get; set; } = "";
         public string ShardIp { get; set; } = "login.uodreams.com";
@@ -134,6 +136,8 @@ namespace ClassicUO.Launcher.Custom
             RazorPath = "";
             OrionPath = "";
             UOSteamPath = "";
+            EnhancedMapPath = "";
+            EnhancedMapAutoOpen = false;
             ClientPath = "";
             UoDirectory = "";
             FirstRunCompleted = false;

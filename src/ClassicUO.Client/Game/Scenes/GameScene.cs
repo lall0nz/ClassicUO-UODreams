@@ -123,6 +123,8 @@ namespace ClassicUO.Game.Scenes
             _useItemQueue.Add(serial);
         }
 
+        public bool PendingAutoOpenBackpack { get; set; }
+
         public override void Load()
         {
             base.Load();
@@ -829,6 +831,16 @@ namespace ClassicUO.Game.Scenes
             }
 
             _useItemQueue.Update();
+
+            if (
+                PendingAutoOpenBackpack
+                && ProfileManager.CurrentProfile != null
+                && (ProfileManager.CurrentProfile.AutoOpenBackpackOnLogin ?? true)
+                && GameActions.OpenBackpack(_world)
+            )
+            {
+                PendingAutoOpenBackpack = false;
+            }
 
             if (!UIManager.IsMouseOverWorld)
             {
