@@ -1,6 +1,6 @@
 # Builds GitHub Release assets for UODreams Launcher (PVP or Classic edition).
 param(
-    [string]$Version = "1.1.2",
+    [string]$Version = "1.1.3",
     [ValidateSet("pvp", "classic")]
     [string]$Edition = "pvp",
     [string]$OfficialCuo = "$env:USERPROFILE\Downloads\ClassicUOLauncher-win-x64-release\ClassicUO",

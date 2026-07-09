@@ -2260,12 +2260,10 @@ namespace ClassicUO.Network
                 var scene = new GameScene(world);
                 Client.Game.SetScene(scene);
 
-                //GameActions.OpenPaperdoll(world.Player);
-                GameActions.RequestMobileStatus(world,world.Player);
+                GameActions.RequestMobileStatus(world, world.Player);
                 NetClient.Socket.Send_OpenChat("");
 
                 NetClient.Socket.Send_SkillsRequest(world.Player);
-                scene.DoubleClickDelayed(world.Player);
 
                 if (Client.Game.UO.Version >= Utility.ClientVersion.CV_306E)
                 {
@@ -2292,10 +2290,10 @@ namespace ClassicUO.Network
 
                 if (
                     ProfileManager.CurrentProfile != null
-                    && (ProfileManager.CurrentProfile.AutoOpenBackpackOnLogin ?? true)
+                    && ProfileManager.CurrentProfile.AutoOpenUiOnLogin
                 )
                 {
-                    scene.PendingAutoOpenBackpack = true;
+                    scene.BeginPendingAutoOpenUi();
                 }
             }
         }

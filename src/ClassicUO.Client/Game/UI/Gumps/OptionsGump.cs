@@ -143,7 +143,7 @@ namespace ClassicUO.Game.UI.Gumps
         private Checkbox _ltHighlightRangeOnActivated, _ltHighlightRangeOnCast;
         private HSliderBar _ltHighlightRangeOnActivatedRange, _ltHighlightRangeOnCastRange;
         private ClickableColorBox _ltHighlightRangeOnActivatedHue, _ltHighlightRangeOnCastHue;
-        private Checkbox _showEquipmentDurabilityButton, _useModernJournal, _hideJournalTimestamp, _invisibleHousesEnabled, _autoOpenBackpackOnLogin;
+        private Checkbox _showEquipmentDurabilityButton, _useModernJournal, _hideJournalTimestamp, _invisibleHousesEnabled, _autoOpenUiOnLogin;
         private HSliderBar _invisibleHousesZ;
 
         private InputField _optionsSearchField;
@@ -827,7 +827,7 @@ namespace ClassicUO.Game.UI.Gumps
             ui.Add(_useModernJournal = AddCheckBox(null, "Modern journal (tabs)", _currentProfile.UseModernJournal, startX, startY));
             ui.Add(_hideJournalTimestamp = AddCheckBox(null, "Hide journal timestamps", _currentProfile.HideJournalTimestamp, startX, startY));
             ui.Add(_showAllLayersPaperdoll = AddCheckBox(null, "Show all equipment slots on paperdoll", _currentProfile.ShowAllLayersPaperdoll, startX, startY));
-            ui.Add(_autoOpenBackpackOnLogin = AddCheckBox(null, "Auto-open backpack on login", _currentProfile.AutoOpenBackpackOnLogin ?? true, startX, startY));
+            ui.Add(_autoOpenUiOnLogin = AddCheckBox(null, "Auto-open UI on login (backpack, paperdoll, status)", _currentProfile.AutoOpenUiOnLogin, startX, startY));
             ui.Add(_hidePersistentNPCNames = AddCheckBox(null, "Hide persistent NPC names (vendors, mannequins, parrots, statues)", _currentProfile.HidePersistentNPCNames, startX, startY));
 
             SettingsSection world = AddSettingsSection(box, "World");
@@ -4207,7 +4207,7 @@ namespace ClassicUO.Game.UI.Gumps
             _currentProfile.LTHighlightRangeOnCastHue = _ltHighlightRangeOnCastHue.Hue;
             _currentProfile.HidePersistentNPCNames = _hidePersistentNPCNames.IsChecked;
             _currentProfile.ShowAllLayersPaperdoll = _showAllLayersPaperdoll.IsChecked;
-            _currentProfile.AutoOpenBackpackOnLogin = _autoOpenBackpackOnLogin.IsChecked;
+            _currentProfile.AutoOpenUiOnLogin = _autoOpenUiOnLogin.IsChecked;
 
             _currentProfile.NoColorObjectsOutOfRange = _noColorOutOfRangeObjects.IsChecked;
             _currentProfile.UseCircleOfTransparency = _useCircleOfTransparency.IsChecked;

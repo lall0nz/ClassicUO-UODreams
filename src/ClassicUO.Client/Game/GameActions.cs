@@ -326,6 +326,85 @@ namespace ClassicUO.Game
             return true;
         }
 
+        public static bool IsPlayerReadyForLoginUi(World world)
+        {
+            return world.Player != null && !world.Player.IsDestroyed && world.Player.Serial != 0;
+        }
+
+        public static bool IsBackpackGumpOpen(World world)
+        {
+            if (!IsPlayerReadyForLoginUi(world))
+            {
+                return false;
+            }
+
+            Item backpack = world.Player.FindItemByLayer(Layer.Backpack);
+
+            if (backpack == null)
+            {
+                return false;
+            }
+
+            ContainerGump container = UIManager.GetGump<ContainerGump>(backpack);
+
+            if (container != null)
+            {
+                return !container.IsMinimized;
+            }
+
+            return UIManager.GetGump<GridContainer>(backpack) != null;
+        }
+
+        public static bool IsPaperdollGumpOpen(World world)
+        {
+            if (!IsPlayerReadyForLoginUi(world))
+            {
+                return false;
+            }
+
+            PaperDollGump paperdoll = UIManager.GetGump<PaperDollGump>(world.Player);
+
+            return paperdoll != null && !paperdoll.IsMinimized;
+        }
+
+        public static bool IsStatusGumpOpen()
+        {
+            return StatusGumpBase.GetStatusGump() != null;
+        }
+
+        public static bool TryAutoOpenLoginUi(World world)
+        {
+            if (!IsPlayerReadyForLoginUi(world))
+            {
+                return false;
+            }
+
+            bool backpackOpen = IsBackpackGumpOpen(world);
+            bool paperdollOpen = IsPaperdollGumpOpen(world);
+            bool statusOpen = IsStatusGumpOpen();
+
+            if (!backpackOpen)
+            {
+                OpenBackpack(world);
+                backpackOpen = IsBackpackGumpOpen(world);
+            }
+
+            if (!paperdollOpen)
+            {
+                OpenPaperdoll(world, world.Player);
+                paperdollOpen = IsPaperdollGumpOpen(world);
+            }
+
+            if (!statusOpen)
+            {
+                OpenStatusBar(world);
+                RequestMobileStatus(world, world.Player);
+                statusOpen = IsStatusGumpOpen();
+            }
+
+            return backpackOpen && paperdollOpen && statusOpen;
+        }
+
         public static bool OpenBackpack(World world)
         {
             Item backpack = world.Player.FindItemByLayer(Layer.Backpack);
@@ -363,7 +442,7 @@ namespace ClassicUO.Game
                 backpackGump.BringOnTop();
             }
 
-            return true;
+            return IsBackpackGumpOpen(world);
         }
 
         public static void Attack(World world, uint serial)

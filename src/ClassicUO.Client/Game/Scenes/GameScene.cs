@@ -123,7 +123,20 @@ namespace ClassicUO.Game.Scenes
             _useItemQueue.Add(serial);
         }
 
-        public bool PendingAutoOpenBackpack { get; set; }
+        public bool PendingAutoOpenUi { get; set; }
+
+        private long _autoOpenUiDeadline;
+        private long _nextAutoOpenUiAttempt;
+
+        private const long AUTO_OPEN_UI_TIMEOUT_MS = 30_000;
+        private const long AUTO_OPEN_UI_RETRY_MS = 250;
+
+        public void BeginPendingAutoOpenUi()
+        {
+            PendingAutoOpenUi = true;
+            _autoOpenUiDeadline = Time.Ticks + AUTO_OPEN_UI_TIMEOUT_MS;
+            _nextAutoOpenUiAttempt = 0;
+        }
 
         public override void Load()
         {
@@ -359,6 +372,7 @@ namespace ClassicUO.Game.Scenes
             _world.DelayedObjectClickManager.Clear();
 
             _useItemQueue?.Clear();
+            PendingAutoOpenUi = false;
             _world.MessageManager.MessageReceived -= ChatOnMessageReceived;
 
             Settings.GlobalSettings.WindowSize = new Point(
@@ -833,13 +847,24 @@ namespace ClassicUO.Game.Scenes
             _useItemQueue.Update();
 
             if (
-                PendingAutoOpenBackpack
+                PendingAutoOpenUi
                 && ProfileManager.CurrentProfile != null
-                && (ProfileManager.CurrentProfile.AutoOpenBackpackOnLogin ?? true)
-                && GameActions.OpenBackpack(_world)
+                && ProfileManager.CurrentProfile.AutoOpenUiOnLogin
             )
             {
-                PendingAutoOpenBackpack = false;
+                if (Time.Ticks > _autoOpenUiDeadline)
+                {
+                    PendingAutoOpenUi = false;
+                }
+                else if (Time.Ticks >= _nextAutoOpenUiAttempt)
+                {
+                    _nextAutoOpenUiAttempt = Time.Ticks + AUTO_OPEN_UI_RETRY_MS;
+
+                    if (GameActions.TryAutoOpenLoginUi(_world))
+                    {
+                        PendingAutoOpenUi = false;
+                    }
+                }
             }
 
             if (!UIManager.IsMouseOverWorld)
