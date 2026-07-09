@@ -1129,6 +1129,7 @@ namespace ClassicUO.Launcher.Custom
             if (_enhancedMapMenu == null || _enhancedMapMenu.IsDisposed)
             {
                 _enhancedMapMenu = new ThemedContextMenu();
+                _enhancedMapMenu.AddAction(Loc.S("Avvia", "Launch"), () => LaunchEnhancedMap());
                 _enhancedMapMenu.AddAction(Loc.S("Sfoglia…", "Browse…"), BrowseEnhancedMap);
                 _enhancedMapMenu.AddAction(Loc.S("Scarica", "Download"), DownloadEnhancedMap);
             }
@@ -1226,25 +1227,42 @@ namespace ClassicUO.Launcher.Custom
                 return;
             }
 
+            LaunchEnhancedMap(silent: true);
+        }
+
+        private void LaunchEnhancedMap(bool silent = false)
+        {
             string? exe = EnhancedMapDownloader.ResolveExePath(_settings.EnhancedMapPath);
             if (exe == null)
             {
+                if (!silent)
+                {
+                    ShowError(Loc.S(
+                        "Enhanced Map non trovato. Scaricalo o seleziona il percorso di EnhancedMap.exe.",
+                        "Enhanced Map not found. Download it or select the path to EnhancedMap.exe."));
+                }
+
                 return;
             }
 
             try
             {
-                Process.Start(new ProcessStartInfo
+                if (EnhancedMapDownloader.LaunchOrFocus(exe))
                 {
-                    FileName = exe,
-                    WorkingDirectory = Path.GetDirectoryName(exe)!,
-                    UseShellExecute = true
-                });
-                LauncherLog.Info($"Enhanced Map avviato exe={exe}");
+                    LauncherLog.Info($"Enhanced Map avviato exe={exe}");
+                }
+                else
+                {
+                    LauncherLog.Info($"Enhanced Map già in esecuzione, portato in primo piano exe={exe}");
+                }
             }
             catch (Exception ex)
             {
                 LauncherLog.Error("Impossibile avviare Enhanced Map", ex);
+                if (!silent)
+                {
+                    ShowError(Loc.S("Errore durante l'avvio di Enhanced Map: ", "Error while starting Enhanced Map: ") + ex.Message, ex);
+                }
             }
         }
 

@@ -1,6 +1,8 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -13,6 +15,9 @@ namespace ClassicUO.Launcher.Custom
 
         public const string ArchiveFileName = "EnhancedMap-release.zip";
         public const string ExeFileName = "EnhancedMap.exe";
+
+        public static string ProcessName =>
+            Path.GetFileNameWithoutExtension(ExeFileName);
 
         public static string DefaultInstallDirectory =>
             Path.Combine(AppContext.BaseDirectory, "EnhancedMap");
@@ -46,6 +51,106 @@ namespace ClassicUO.Launcher.Custom
 
             return null;
         }
+
+        /// <summary>
+        /// Starts Enhanced Map or brings an existing instance to the foreground.
+        /// Returns true when a new process was started.
+        /// </summary>
+        public static bool LaunchOrFocus(string exePath)
+        {
+            string normalizedExe = Path.GetFullPath(exePath);
+
+            if (TryFindRunningProcess(normalizedExe, out Process? existing) && existing != null)
+            {
+                TryBringToForeground(existing);
+                existing.Dispose();
+                return false;
+            }
+
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = normalizedExe,
+                WorkingDirectory = Path.GetDirectoryName(normalizedExe)!,
+                UseShellExecute = true
+            });
+
+            return true;
+        }
+
+        public static bool TryFindRunningProcess(string exePath, out Process? process)
+        {
+            process = null;
+            string normalizedExe = Path.GetFullPath(exePath);
+            Process[] candidates = Process.GetProcessesByName(ProcessName);
+            Process? nameOnlyMatch = null;
+
+            try
+            {
+                foreach (Process candidate in candidates)
+                {
+                    try
+                    {
+                        string? runningExe = candidate.MainModule?.FileName;
+                        if (runningExe != null &&
+                            string.Equals(Path.GetFullPath(runningExe), normalizedExe, StringComparison.OrdinalIgnoreCase))
+                        {
+                            process = candidate;
+                            return true;
+                        }
+                    }
+                    catch
+                    {
+                        nameOnlyMatch ??= candidate;
+                    }
+                }
+
+                if (nameOnlyMatch != null)
+                {
+                    process = nameOnlyMatch;
+                    return true;
+                }
+
+                return false;
+            }
+            finally
+            {
+                foreach (Process candidate in candidates)
+                {
+                    if (!ReferenceEquals(candidate, process))
+                    {
+                        candidate.Dispose();
+                    }
+                }
+            }
+        }
+
+        private static void TryBringToForeground(Process process)
+        {
+            try
+            {
+                process.Refresh();
+                IntPtr handle = process.MainWindowHandle;
+                if (handle == IntPtr.Zero)
+                {
+                    return;
+                }
+
+                ShowWindow(handle, SW_RESTORE);
+                SetForegroundWindow(handle);
+            }
+            catch
+            {
+                // foreground activation is best-effort
+            }
+        }
+
+        private const int SW_RESTORE = 9;
+
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
         public static async Task<string> DownloadAndInstallAsync(
             string installDirectory,
