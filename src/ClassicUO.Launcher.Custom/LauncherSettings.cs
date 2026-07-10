@@ -69,11 +69,13 @@ namespace ClassicUO.Launcher.Custom
 
         [JsonIgnore]
         public string EffectiveClientVersion =>
-            LauncherUpdater.MaxVersion(InstalledClientVersion, LauncherManifest.ClientRuntimeVersion);
+            string.IsNullOrWhiteSpace(InstalledClientVersion)
+                ? LauncherManifest.ClientRuntimeVersion
+                : InstalledClientVersion;
 
         /// <summary>
-        /// When the client is installed, keep settings in sync with the launcher build so stale
-        /// InstalledClientVersion values do not trigger false update prompts.
+        /// Seeds InstalledClientVersion on first install only. Never overwrites a stored value,
+        /// so a client updated via GitHub is not downgraded to the launcher's compile-time floor.
         /// </summary>
         public void SyncInstalledClientVersionFromRuntime()
         {
@@ -82,18 +84,17 @@ namespace ClassicUO.Launcher.Custom
                 return;
             }
 
-            string effective = EffectiveClientVersion;
-            if (string.IsNullOrWhiteSpace(effective))
+            if (!string.IsNullOrWhiteSpace(InstalledClientVersion))
             {
                 return;
             }
 
-            if (string.Equals(InstalledClientVersion, effective, StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrWhiteSpace(LauncherManifest.ClientRuntimeVersion))
             {
                 return;
             }
 
-            InstalledClientVersion = effective;
+            InstalledClientVersion = LauncherManifest.ClientRuntimeVersion;
             Save();
         }
 

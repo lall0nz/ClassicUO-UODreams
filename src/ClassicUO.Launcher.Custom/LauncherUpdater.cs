@@ -137,7 +137,7 @@ namespace ClassicUO.Launcher.Custom
                 : localClientVersion;
 
             bool needsClient = NeedsComponentUpdate(bestVersion, effectiveClientVersion, clientUrl != null);
-            bool needsLauncher = NeedsComponentUpdate(bestVersion, LauncherManifest.LauncherVersion, launcherUrl != null);
+            bool needsLauncher = NeedsComponentUpdate(bestVersion, LauncherManifest.RuntimeLauncherVersion, launcherUrl != null);
 
             return new UpdateCheckResult
             {
@@ -195,6 +195,8 @@ namespace ClassicUO.Launcher.Custom
 
                 string currentExe = Environment.ProcessPath
                     ?? Path.Combine(AppContext.BaseDirectory, "UODreams Launcher.exe");
+                string stagingExe = currentExe + ".new";
+                string logFile = Path.Combine(tempDir, "launcher-update.log");
                 int pid = Environment.ProcessId;
 
                 string updaterScript = Path.Combine(tempDir, "apply-update.cmd");
@@ -204,19 +206,36 @@ namespace ClassicUO.Launcher.Custom
                     set "PID={pid}"
                     set "SRC={newExe}"
                     set "DST={currentExe}"
+                    set "STG={stagingExe}"
+                    set "LOG={logFile}"
+                    echo [%date% %time%] Waiting for launcher PID %PID%>>"%LOG%"
                     :waitloop
                     tasklist /FI "PID eq %PID%" 2>nul | find "%PID%" >nul
                     if %errorlevel%==0 (
                       timeout /t 1 /nobreak >nul
                       goto waitloop
                     )
-                    copy /Y "%SRC%" "%DST%" >nul
+                    if exist "%STG%" del /F /Q "%STG%" >>"%LOG%" 2>&1
+                    echo [%date% %time%] Copying update to staging>>"%LOG%"
+                    copy /Y "%SRC%" "%STG%" >>"%LOG%" 2>&1
                     if errorlevel 1 (
                       timeout /t 2 /nobreak >nul
-                      copy /Y "%SRC%" "%DST%" >nul
+                      copy /Y "%SRC%" "%STG%" >>"%LOG%" 2>&1
                     )
+                    if errorlevel 1 goto copyfailed
+                    echo [%date% %time%] Replacing launcher>>"%LOG%"
+                    move /Y "%STG%" "%DST%" >>"%LOG%" 2>&1
+                    if errorlevel 1 (
+                      copy /Y "%STG%" "%DST%" >>"%LOG%" 2>&1
+                    )
+                    if errorlevel 1 goto copyfailed
+                    echo [%date% %time%] Restarting launcher>>"%LOG%"
                     start "" "%DST%"
                     del "%~f0"
+                    exit /b 0
+                    :copyfailed
+                    echo [%date% %time%] Launcher update failed>>"%LOG%"
+                    exit /b 1
                     """);
 
                 Process.Start(new ProcessStartInfo

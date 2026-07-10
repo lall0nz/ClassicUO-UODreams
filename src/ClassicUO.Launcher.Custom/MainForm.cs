@@ -471,7 +471,7 @@ namespace ClassicUO.Launcher.Custom
 
         private void RefreshWindowTitle()
         {
-            string launcherVer = LauncherManifest.LauncherVersion;
+            string launcherVer = LauncherManifest.RuntimeLauncherVersion;
             string clientVer = _settings.EffectiveClientVersion;
             string title = LauncherManifest.ProductTitle;
             Text = string.Equals(launcherVer, clientVer, StringComparison.OrdinalIgnoreCase)
@@ -523,7 +523,6 @@ namespace ClassicUO.Launcher.Custom
             {
                 lines.AppendLine(Loc.S("• Aggiornamento client ClassicUO", "• ClassicUO client update"));
             }
-
             if (!string.IsNullOrWhiteSpace(info.ReleaseNotes))
             {
                 lines.AppendLine();
@@ -1577,7 +1576,7 @@ namespace ClassicUO.Launcher.Custom
                 if (!info.HasAnyUpdate)
                 {
                     SetUpdateAvailable(false);
-                    string launcherVer = LauncherManifest.LauncherVersion;
+                    string launcherVer = LauncherManifest.RuntimeLauncherVersion;
                     string clientVer = _settings.EffectiveClientVersion;
                     _statusLabel.ForeColor = Theme.SectionGreen;
                     _statusLabel.Text = Loc.S(
@@ -1605,6 +1604,18 @@ namespace ClassicUO.Launcher.Custom
                     return;
                 }
 
+                if (info.NeedsLauncherUpdate &&
+                    !string.IsNullOrEmpty(info.LauncherDownloadUrl) &&
+                    !string.IsNullOrEmpty(info.LauncherPackageFileName))
+                {
+                    using var launcherForm = DownloadProgressForm.ForLauncherUpdate(
+                        info.LauncherDownloadUrl,
+                        info.LauncherPackageFileName);
+                    launcherForm.ShowDialog(this);
+                    Environment.Exit(0);
+                    return;
+                }
+
                 if (info.NeedsClientUpdate &&
                     !string.IsNullOrEmpty(info.ClientDownloadUrl) &&
                     !string.IsNullOrEmpty(info.ClientPackageFileName))
@@ -1623,18 +1634,6 @@ namespace ClassicUO.Launcher.Custom
                     MarkClientUpdated(clientVersion);
                     _clientPathBox.Text = DetectDefaultClient();
                     UpdateAssistantUi();
-                }
-
-                if (info.NeedsLauncherUpdate &&
-                    !string.IsNullOrEmpty(info.LauncherDownloadUrl) &&
-                    !string.IsNullOrEmpty(info.LauncherPackageFileName))
-                {
-                    using var launcherForm = DownloadProgressForm.ForLauncherUpdate(
-                        info.LauncherDownloadUrl,
-                        info.LauncherPackageFileName);
-                    launcherForm.ShowDialog(this);
-                    Environment.Exit(0);
-                    return;
                 }
 
                 SetUpdateAvailable(false);

@@ -1,4 +1,4 @@
-# Builds GitHub Release assets for UODreams Launcher (PVP or Classic edition).
+﻿# Builds GitHub Release assets for UODreams Launcher (PVP or Classic edition).
 #
 # RELEASE PACKAGES MUST BE "VIRGIN": no personal account or runtime user data.
 # Stripped before zipping (Clear-UserClientData): Data/Profiles, Data/Client/JournalLogs,
@@ -370,6 +370,19 @@ if ($Edition -eq "pvp" -and -not (Test-Path $OfficialCuo)) {
 }
 
 Write-Step "Preparing $editionLabel edition output: $OutputDir"
+
+$manifestPath = Join-Path $RepoRoot "src\ClassicUO.Launcher.Custom\LauncherManifest.cs"
+$manifestContent = Get-Content $manifestPath -Raw
+if ($Edition -eq "pvp") {
+    if ($manifestContent -notmatch '#if LAUNCHER_EDITION_PVP[\s\S]*?LauncherVersion = "' + [regex]::Escape($Version) + '"') {
+        throw "LauncherManifest.cs PVP LauncherVersion must be $Version before packaging (found mismatch)."
+    }
+} else {
+    if ($manifestContent -notmatch '#else\s+public const string LauncherVersion = "' + [regex]::Escape($Version) + '"') {
+        throw "LauncherManifest.cs Classic LauncherVersion must be $Version before packaging (found mismatch)."
+    }
+}
+
 if (Test-Path $OutputDir) { Remove-Item $OutputDir -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $OutputDir, $clientPackageRoot, $clientDir | Out-Null
 
