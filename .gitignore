@@ -277,4 +277,7 @@ bin/launcher-out/
 bin/bootstrap-out/
 bin/gdrive-test.bin
 *.zip
+# Bundled Razor for CI/local PVP packaging
+!vendor/
+!vendor/RazorEnhanced-Custom.zip
 

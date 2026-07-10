@@ -4,7 +4,7 @@ param(
     [ValidateSet("pvp", "classic")]
     [string]$Edition = "pvp",
     [string]$OfficialCuo = "$env:USERPROFILE\Downloads\ClassicUOLauncher-win-x64-release\ClassicUO",
-    [string]$RazorEnhancedZip = "$env:USERPROFILE\Desktop\RazorEnhanced-Custom.zip",
+    [string]$RazorEnhancedZip = "",
     [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path,
     [string]$OutputDir = "",
     [switch]$ForceManagedClient
@@ -180,6 +180,49 @@ function Remove-BuildArtifacts([string]$ClientRoot) {
     if (Test-Path "$ClientRoot\Logs") { Remove-Item "$ClientRoot\Logs" -Recurse -Force -ErrorAction SilentlyContinue }
 }
 
+function Resolve-OfficialCuoRoot([string]$Path) {
+    if (-not (Test-Path $Path)) { return $null }
+
+    foreach ($marker in @("cuo.exe", "ClassicUO.exe", "cuoapi.dll")) {
+        if (Test-Path (Join-Path $Path $marker)) { return $Path }
+    }
+
+    $nested = Join-Path $Path "ClassicUO"
+    if (Test-Path $nested) {
+        $resolved = Resolve-OfficialCuoRoot $nested
+        if ($resolved) { return $resolved }
+    }
+
+    $sub = Get-ChildItem $Path -Directory -Filter "ClassicUO" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($sub) {
+        $resolved = Resolve-OfficialCuoRoot $sub.FullName
+        if ($resolved) { return $resolved }
+    }
+
+    $cuoExe = Get-ChildItem $Path -Recurse -Filter "cuo.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($cuoExe) { return $cuoExe.Directory.FullName }
+
+    return $null
+}
+
+function Resolve-RazorEnhancedZip([string]$RepoRoot, [string]$ExplicitPath) {
+    if (-not [string]::IsNullOrWhiteSpace($ExplicitPath)) {
+        return $ExplicitPath
+    }
+
+    $vendorRazor = Join-Path $RepoRoot "vendor\RazorEnhanced-Custom.zip"
+    if (Test-Path $vendorRazor) {
+        return $vendorRazor
+    }
+
+    $desktopRazor = Join-Path $env:USERPROFILE "Desktop\RazorEnhanced-Custom.zip"
+    if (Test-Path $desktopRazor) {
+        return $desktopRazor
+    }
+
+    return $vendorRazor
+}
+
 function Copy-ClientBundleData([string]$ClientDir, [string]$BundleRoot) {
     $dataRoot = Join-Path $BundleRoot "data"
     if (-not (Test-Path $dataRoot)) {
@@ -204,6 +247,12 @@ function Copy-ClientBundleData([string]$ClientDir, [string]$BundleRoot) {
     }
 }
 
+$RazorEnhancedZip = Resolve-RazorEnhancedZip $RepoRoot $RazorEnhancedZip
+$resolvedOfficialCuo = Resolve-OfficialCuoRoot $OfficialCuo
+if ($resolvedOfficialCuo) {
+    $OfficialCuo = $resolvedOfficialCuo
+}
+
 $editionLabel = if ($Edition -eq "pvp") { "PVP" } else { "Classic" }
 $releaseTag = "$Edition-v$Version"
 
@@ -225,9 +274,9 @@ if (-not (Test-Path $OfficialCuo)) {
     throw @"
 Official ClassicUO folder not found: $OfficialCuo
 
-Download ClassicUO official launcher and extract it, then pass -OfficialCuo:
-  winget download --id ClassicUO.ClassicUO --accept-source-agreements
-  or get: https://www.classicuo.eu/launcher/win-x64/ClassicUOLauncher-win-x64-release.zip
+Download the official ClassicUO release zip, extract it, then pass -OfficialCuo
+pointing at the extracted folder (flat layout or ClassicUO/ subfolder both work):
+  https://github.com/ClassicUO/ClassicUO/releases/download/ClassicUO-main-release/ClassicUO-win-x64-release.zip
 "@
 }
 
