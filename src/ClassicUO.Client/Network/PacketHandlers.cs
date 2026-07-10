@@ -91,6 +91,11 @@ namespace ClassicUO.Network
             return ParsePackets(world, _buffer, true) + ParsePackets(world, _pluginsBuffer, false);
         }
 
+        public int ParseAll(World world)
+        {
+            return ParsePackets(world, _buffer, true) + ParsePackets(world, _pluginsBuffer, false);
+        }
+
         private int ParsePackets(World world, CircularBuffer stream, bool allowPlugins)
         {
             var packetsCount = 0;
@@ -341,6 +346,23 @@ namespace ClassicUO.Network
         {
             if (world.ClientFeatures.TooltipsEnabled && Handler._clilocRequests.Count != 0)
             {
+                for (int i = Handler._clilocRequests.Count - 1; i >= 0; i--)
+                {
+                    uint stoneSerial = Handler._clilocRequests[i];
+                    Item stoneItem = world.Items.Get(stoneSerial);
+
+                    if (UoDreamsNetworkOptimizer.IsStoneRoofProblemItem(world, stoneItem))
+                    {
+                        UoDreamsNetworkOptimizer.EnsureStubOpl(world, stoneSerial, stoneItem);
+                        Handler._clilocRequests.RemoveAt(i);
+                    }
+                }
+
+                if (Handler._clilocRequests.Count == 0)
+                {
+                    return;
+                }
+
                 if (Client.Game.UO.Version >= Utility.ClientVersion.CV_5090)
                 {
                     if (Handler._clilocRequests.Count != 0)
@@ -4953,6 +4975,18 @@ namespace ClassicUO.Network
                 }
 
                 entity = world.Items.Get(serial);
+            }
+
+            if (entity is Item uoDreamsItem && UoDreamsNetworkOptimizer.IsStoneRoofProblemItem(world, uoDreamsItem))
+            {
+                UoDreamsNetworkOptimizer.EnsureStubOpl(world, serial, uoDreamsItem, revision);
+
+                if (p.Position < p.Length)
+                {
+                    p.Seek(p.Length);
+                }
+
+                return;
             }
 
             List<(int, string, int)> list = new List<(int, string, int)>();

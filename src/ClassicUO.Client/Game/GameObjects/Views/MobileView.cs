@@ -165,6 +165,11 @@ namespace ClassicUO.Game.GameObjects
                             overridedHue = ProfileManager.CurrentProfile.InvulnerableHue;
                         }
                     }
+
+                    if (ProfileManager.CurrentProfile.HighlightMirrorImageClones && IsMirrorClone)
+                    {
+                        overridedHue = ProfileManager.CurrentProfile.MirrorImageCloneHue;
+                    }
                 }
             }
 

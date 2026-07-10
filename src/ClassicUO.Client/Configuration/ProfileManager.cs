@@ -30,6 +30,7 @@
 
 #endregion
 
+using System;
 using System.IO;
 using ClassicUO.Utility;
 using Microsoft.Xna.Framework;
@@ -99,6 +100,8 @@ namespace ClassicUO.Configuration
             {
                 profile.WindowClientBounds = new Point(profile.WindowClientBounds.X, 480);
             }
+
+            profile.LTHighlightRangeOutlinePixels = Math.Clamp(profile.LTHighlightRangeOutlinePixels, 1, 10);
         }
 
         public static void UnLoadProfile()

@@ -239,8 +239,18 @@ namespace ClassicUO.Configuration
         public bool LTHighlightRangeOnCast { get; set; } = true;
         public int LTHighlightRangeOnCastRange { get; set; } = 10;
         public ushort LTHighlightRangeOnCastHue { get; set; } = 0x0017;
-        // Width of the highlighted range ring in tile units (0.2 = thin, 1 = one tile band).
-        public float LTHighlightRangeLineThickness { get; set; } = 1f;
+        // Range ring diamond outline width in screen pixels (drawn in GameScene, not land tiles).
+        public int LTHighlightRangeOutlinePixels { get; set; } = 2;
+
+        // Mirror Image helper: ghost-detect Ninjitsu clones (first-seen heuristic).
+        public bool HighlightMirrorImageClones { get; set; } = true;
+        public ushort MirrorImageCloneHue { get; set; } = 0x038E;
+
+        // UODreams: stub stone-roof tooltip spam instead of requesting OPL from server.
+        public bool EnableUoDreamsNetworkOptimizer { get; set; } = true;
+
+        // Drain all pending socket data each frame instead of one ~4KB read.
+        public bool EnableFullSocketDrain { get; set; } = true;
         public bool AutoOpenCorpses { get; set; } = true;
         public int AutoOpenCorpseRange { get; set; } = 2;
         public int CorpseOpenOptions { get; set; } = 3;

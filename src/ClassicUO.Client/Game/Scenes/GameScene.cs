@@ -101,6 +101,11 @@ namespace ClassicUO.Game.Scenes
 
         private readonly World _world;
 
+        private readonly Dictionary<uint, uint> _mirrorFirstSeen = new Dictionary<uint, uint>();
+        private readonly Dictionary<(string, ushort), Mobile> _mirrorOldest = new Dictionary<(string, ushort), Mobile>();
+        private uint _mirrorSeq;
+        private long _nextMirrorScan;
+
         public GameScene(World world)
         {
             _world = world;
@@ -750,6 +755,59 @@ namespace ClassicUO.Game.Scenes
             }
         }
 
+        private void DetectMirrorClones()
+        {
+            if (Time.Ticks < _nextMirrorScan)
+            {
+                return;
+            }
+
+            _nextMirrorScan = (long)Time.Ticks + 500;
+
+            if (ProfileManager.CurrentProfile == null || !ProfileManager.CurrentProfile.HighlightMirrorImageClones)
+            {
+                return;
+            }
+
+            _mirrorOldest.Clear();
+
+            foreach (Mobile mobile in _world.Mobiles.Values)
+            {
+                mobile.IsMirrorClone = false;
+
+                if (!mobile.IsHuman || string.IsNullOrEmpty(mobile.Name))
+                {
+                    continue;
+                }
+
+                if (!_mirrorFirstSeen.TryGetValue(mobile.Serial, out uint seen))
+                {
+                    seen = _mirrorSeq++;
+                    _mirrorFirstSeen[mobile.Serial] = seen;
+                }
+
+                var key = (mobile.Name, mobile.Graphic);
+
+                if (!_mirrorOldest.TryGetValue(key, out Mobile oldest) || _mirrorFirstSeen[oldest.Serial] > seen)
+                {
+                    _mirrorOldest[key] = mobile;
+                }
+            }
+
+            foreach (Mobile mobile in _world.Mobiles.Values)
+            {
+                if (!mobile.IsHuman || string.IsNullOrEmpty(mobile.Name) || mobile == _world.Player)
+                {
+                    continue;
+                }
+
+                if (_mirrorOldest.TryGetValue((mobile.Name, mobile.Graphic), out Mobile oldest) && oldest != mobile)
+                {
+                    mobile.IsMirrorClone = true;
+                }
+            }
+        }
+
         public override void Update()
         {
             Profile currentProfile = ProfileManager.CurrentProfile;
@@ -791,6 +849,7 @@ namespace ClassicUO.Game.Scenes
             _world.BoatMovingManager.Update();
             _world.Player.Pathfinder.ProcessAutoWalk();
             _world.DelayedObjectClickManager.Update();
+            DetectMirrorClones();
 
             if (!MoveCharacterByMouseInput() && !currentProfile.DisableArrowBtn)
             {
@@ -1309,6 +1368,7 @@ namespace ClassicUO.Game.Scenes
         public void DrawOverheads(UltimaBatcher2D batcher)
         {
             _healthLinesManager.Draw(batcher);
+            DrawRangeRings(batcher);
 
             if (!UIManager.IsMouseOverWorld)
             {
@@ -1317,6 +1377,60 @@ namespace ClassicUO.Game.Scenes
 
             _world.WorldTextManager.ProcessWorldText(true);
             _world.WorldTextManager.Draw(batcher, Camera.Bounds.X, Camera.Bounds.Y);
+        }
+
+        private void DrawRangeRings(UltimaBatcher2D batcher)
+        {
+            Profile profile = ProfileManager.CurrentProfile;
+
+            if (profile == null || _world.Player == null || !_world.InGame)
+            {
+                return;
+            }
+
+            bool spellRing =
+                profile.LTHighlightRangeOnCast
+                && (GameActions.IsCasting() || _world.TargetManager.IsTargeting);
+
+            if (!spellRing && !profile.LTHighlightRangeOnActivated)
+            {
+                return;
+            }
+
+            Point p = _world.Player.RealScreenPosition;
+            p.X += (int)_world.Player.Offset.X + 22;
+            p.Y += (int)(_world.Player.Offset.Y - _world.Player.Offset.Z) + 22;
+            p = Camera.WorldToScreen(p);
+            Vector2 center = new Vector2(p.X, p.Y);
+
+            if (profile.LTHighlightRangeOnActivated)
+            {
+                DrawRingDiamond(batcher, center, profile.LTHighlightRangeOnActivatedRange, profile.LTHighlightRangeOnActivatedHue, profile.LTHighlightRangeOutlinePixels);
+            }
+
+            if (spellRing)
+            {
+                DrawRingDiamond(batcher, center, profile.LTHighlightRangeOnCastRange, profile.LTHighlightRangeOnCastHue, profile.LTHighlightRangeOutlinePixels);
+            }
+        }
+
+        private static void DrawRingDiamond(UltimaBatcher2D batcher, Vector2 center, int range, ushort hue, int outlinePixels)
+        {
+            float stroke = Math.Clamp(outlinePixels, 1, 10);
+            float ext = range * 44f;
+
+            Vector2 n = new Vector2(center.X, center.Y - ext);
+            Vector2 e = new Vector2(center.X + ext, center.Y);
+            Vector2 s = new Vector2(center.X, center.Y + ext);
+            Vector2 w = new Vector2(center.X - ext, center.Y);
+
+            Vector3 hueVec = ShaderHueTranslator.GetHueVector(hue, false, 0.55f);
+            Texture2D white = SolidColorTextureCache.GetTexture(Color.White);
+
+            batcher.DrawLine(white, n, e, hueVec, stroke);
+            batcher.DrawLine(white, e, s, hueVec, stroke);
+            batcher.DrawLine(white, s, w, hueVec, stroke);
+            batcher.DrawLine(white, w, n, hueVec, stroke);
         }
 
         public void DrawSelection(UltimaBatcher2D batcher)

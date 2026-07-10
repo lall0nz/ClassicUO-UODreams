@@ -57,7 +57,7 @@ function Get-RazorPluginRoots([string]$PluginsDir) {
 }
 
 function Remove-RazorUserData([string]$RazorRoot) {
-    foreach ($folder in @("Profiles", "Backup")) {
+    foreach ($folder in @("Profiles", "Scripts", "Backup")) {
         $path = Join-Path $RazorRoot $folder
         if (Test-Path $path) {
             Write-Host "Stripping Razor user data from bundle: $path" -ForegroundColor DarkYellow

@@ -10,7 +10,7 @@ namespace ClassicUO.Launcher.Custom
 {
     internal static class ClientRuntimeDownloader
     {
-        private static readonly string[] RazorUserDataFolders = { "Profiles", "Backup" };
+        private static readonly string[] RazorUserDataFolders = { "Profiles", "Scripts", "Backup" };
         public static string ClientDir =>
             Path.Combine(AppContext.BaseDirectory, "Client");
 

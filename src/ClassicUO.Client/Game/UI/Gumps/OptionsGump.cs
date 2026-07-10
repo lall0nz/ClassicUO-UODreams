@@ -141,8 +141,10 @@ namespace ClassicUO.Game.UI.Gumps
 
         // Visual Helpers (Dust765) - Highlight tiles on range
         private Checkbox _ltHighlightRangeOnActivated, _ltHighlightRangeOnCast;
-        private HSliderBar _ltHighlightRangeOnActivatedRange, _ltHighlightRangeOnCastRange, _ltHighlightRangeLineThickness;
+        private HSliderBar _ltHighlightRangeOnActivatedRange, _ltHighlightRangeOnCastRange, _ltHighlightRangeOutlinePixels;
         private ClickableColorBox _ltHighlightRangeOnActivatedHue, _ltHighlightRangeOnCastHue;
+        private Checkbox _highlightMirrorClones, _enableUoDreamsNetworkOptimizer, _enableFullSocketDrain;
+        private ClickableColorBox _mirrorCloneHue;
         private Checkbox _showEquipmentDurabilityButton, _useModernJournal, _hideJournalTimestamp, _invisibleHousesEnabled, _autoOpenUiOnLogin;
         private HSliderBar _invisibleHousesZ;
 
@@ -820,11 +822,18 @@ namespace ClassicUO.Game.UI.Gumps
             combat.AddRight(_ltHighlightRangeOnCastRange = AddHSlider(null, 1, 18, _currentProfile.LTHighlightRangeOnCastRange, startX, startY, 150));
             combat.Add(AddLabel(null, "Tile color", startX, startY));
             combat.AddRight(_ltHighlightRangeOnCastHue = AddColorBox(null, startX, startY, _currentProfile.LTHighlightRangeOnCastHue, string.Empty), 2);
-            combat.Add(AddLabel(null, "Line thickness (tiles)", startX, startY));
-            combat.AddRight(_ltHighlightRangeLineThickness = AddHSlider(null, 2, 10, ThicknessToSlider(_currentProfile.LTHighlightRangeLineThickness), startX, startY, 150));
+            combat.Add(AddLabel(null, "Outline width (pixels)", startX, startY));
+            combat.AddRight(_ltHighlightRangeOutlinePixels = AddHSlider(null, 1, 10, _currentProfile.LTHighlightRangeOutlinePixels, startX, startY, 150));
+            combat.Add(_highlightMirrorClones = AddCheckBox(null, "Ghost mirror image clones", _currentProfile.HighlightMirrorImageClones, startX, startY));
+            combat.AddRight(_mirrorCloneHue = AddColorBox(null, startX, startY, _currentProfile.MirrorImageCloneHue, string.Empty), 2);
+
+            SettingsSection network = AddSettingsSection(box, "Network");
+            network.Y = combat.Bounds.Bottom + 40;
+            network.Add(_enableUoDreamsNetworkOptimizer = AddCheckBox(null, "UODreams network optimizer (stone-roof tooltips)", _currentProfile.EnableUoDreamsNetworkOptimizer, startX, startY));
+            network.Add(_enableFullSocketDrain = AddCheckBox(null, "Full socket drain each frame", _currentProfile.EnableFullSocketDrain, startX, startY));
 
             SettingsSection ui = AddSettingsSection(box, "UI");
-            ui.Y = combat.Bounds.Bottom + 40;
+            ui.Y = network.Bounds.Bottom + 40;
             ui.Add(_showEquipmentDurabilityButton = AddCheckBox(null, "Paperdoll durability button", _currentProfile.ShowEquipmentDurabilityButton, startX, startY));
             ui.Add(_useModernJournal = AddCheckBox(null, "Modern journal (tabs)", _currentProfile.UseModernJournal, startX, startY));
             ui.Add(_hideJournalTimestamp = AddCheckBox(null, "Hide journal timestamps", _currentProfile.HideJournalTimestamp, startX, startY));
@@ -4207,7 +4216,11 @@ namespace ClassicUO.Game.UI.Gumps
             _currentProfile.LTHighlightRangeOnCast = _ltHighlightRangeOnCast.IsChecked;
             _currentProfile.LTHighlightRangeOnCastRange = _ltHighlightRangeOnCastRange.Value;
             _currentProfile.LTHighlightRangeOnCastHue = _ltHighlightRangeOnCastHue.Hue;
-            _currentProfile.LTHighlightRangeLineThickness = SliderToThickness(_ltHighlightRangeLineThickness.Value);
+            _currentProfile.LTHighlightRangeOutlinePixels = _ltHighlightRangeOutlinePixels.Value;
+            _currentProfile.HighlightMirrorImageClones = _highlightMirrorClones.IsChecked;
+            _currentProfile.MirrorImageCloneHue = _mirrorCloneHue.Hue;
+            _currentProfile.EnableUoDreamsNetworkOptimizer = _enableUoDreamsNetworkOptimizer.IsChecked;
+            _currentProfile.EnableFullSocketDrain = _enableFullSocketDrain.IsChecked;
             _currentProfile.HidePersistentNPCNames = _hidePersistentNPCNames.IsChecked;
             _currentProfile.ShowAllLayersPaperdoll = _showAllLayersPaperdoll.IsChecked;
             _currentProfile.AutoOpenUiOnLogin = _autoOpenUiOnLogin.IsChecked;
@@ -4930,12 +4943,6 @@ namespace ClassicUO.Game.UI.Gumps
 
             return combobox;
         }
-
-        private static int ThicknessToSlider(float thickness) =>
-            (int)Math.Clamp(Math.Round(thickness * 10f), 2, 10);
-
-        private static float SliderToThickness(int sliderValue) =>
-            Math.Clamp(sliderValue, 2, 10) / 10f;
 
         private HSliderBar AddHSlider
         (

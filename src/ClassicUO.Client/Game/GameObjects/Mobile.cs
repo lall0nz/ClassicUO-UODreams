@@ -153,6 +153,8 @@ namespace ClassicUO.Game.GameObjects
                 : (Flags & Flags.Poisoned) != 0;
         public bool IgnoreCharacters => (Flags & Flags.IgnoreMobiles) != 0;
 
+        public bool IsMirrorClone;
+
         public bool IsDead
         {
             get =>

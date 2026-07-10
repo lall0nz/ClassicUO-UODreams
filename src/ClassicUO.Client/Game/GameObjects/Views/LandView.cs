@@ -67,12 +67,6 @@ namespace ClassicUO.Game.GameObjects
             {
                 hue = Constants.DEAD_RANGE_COLOR;
             }
-            else if (TryGetRangeHighlightHue(out ushort rangeHue))
-            {
-                // Dust765 VISUAL HELPERS: highlight the ring of ground tiles at a fixed
-                // range around the player (optionally only while casting a spell).
-                hue = rangeHue;
-            }
 
             Vector3 hueVec;
             if (hue != 0)
@@ -170,61 +164,6 @@ namespace ClassicUO.Game.GameObjects
             }
 
             return true;
-        }
-
-        // Dust765 VISUAL HELPERS - "Highlight tiles on range". Returns the configured
-        // hue when this land tile sits exactly on the highlighted range ring around the
-        // player. Two independent toggles: always-on, and the spell/target ring which is
-        // shown during a cast wind-up AND whenever a target cursor is active on the mouse
-        // (spells like Remove Curse, item/potion targets like an Explosion potion, etc.).
-        private bool TryGetRangeHighlightHue(out ushort hue)
-        {
-            hue = 0;
-
-            Profile profile = ProfileManager.CurrentProfile;
-
-            if (profile == null || World.Player == null)
-            {
-                return false;
-            }
-
-            bool spellRingActive =
-                profile.LTHighlightRangeOnCast
-                && (GameActions.IsCasting() || World.TargetManager.IsTargeting);
-
-            if (!profile.LTHighlightRangeOnActivated && !spellRingActive)
-            {
-                return false;
-            }
-
-            int distance = Math.Max(
-                Math.Abs(X - World.Player.X),
-                Math.Abs(Y - World.Player.Y)
-            );
-
-            if (spellRingActive && IsOnRangeRing(distance, profile.LTHighlightRangeOnCastRange, profile.LTHighlightRangeLineThickness))
-            {
-                hue = profile.LTHighlightRangeOnCastHue;
-
-                return true;
-            }
-
-            if (profile.LTHighlightRangeOnActivated &&
-                IsOnRangeRing(distance, profile.LTHighlightRangeOnActivatedRange, profile.LTHighlightRangeLineThickness))
-            {
-                hue = profile.LTHighlightRangeOnActivatedHue;
-
-                return true;
-            }
-
-            return false;
-        }
-
-        private static bool IsOnRangeRing(int distance, int targetRange, float thickness)
-        {
-            float band = Math.Max(0.2f, Math.Min(1f, thickness));
-
-            return Math.Abs(distance - targetRange) < band;
         }
 
         public override bool CheckMouseSelection()

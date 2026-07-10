@@ -364,8 +364,33 @@ namespace ClassicUO
 
             Mouse.Update();
 
-            var data = NetClient.Socket.CollectAvailableData();
-            var packetsCount = PacketHandlers.Handler.ParsePackets(UO.World, data);
+            var handler = PacketHandlers.Handler;
+            Profile profile = ProfileManager.CurrentProfile;
+            int packetsCount;
+
+            if (profile != null && profile.EnableFullSocketDrain)
+            {
+                packetsCount = 0;
+
+                while (true)
+                {
+                    var data = NetClient.Socket.CollectAvailableData();
+
+                    if (data.Count == 0)
+                    {
+                        break;
+                    }
+
+                    handler.Append(data, false);
+                }
+
+                packetsCount = handler.ParseAll(UO.World);
+            }
+            else
+            {
+                var data = NetClient.Socket.CollectAvailableData();
+                packetsCount = handler.ParsePackets(UO.World, data);
+            }
 
             NetClient.Socket.Statistics.TotalPacketsReceived += (uint)packetsCount;
             NetClient.Socket.Flush();
