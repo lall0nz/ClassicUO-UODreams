@@ -21,7 +21,7 @@ Packaging scripts (`scripts/package-release.ps1`, `scripts/package-uodreams.ps1`
 
 Razor Enhanced user data is stripped separately:
 
-- `Data/Plugins/Profiles`, `Scripts`, `Backup` (and under `RazorEnhanced*` subfolders)
+- `Data/Plugins/Profiles`, `Scripts`, `Backup`, `_deploy_pending` (and under `RazorEnhanced*` subfolders)
 
 ## Kept in releases
 

@@ -6,7 +6,7 @@
 # On client update, ClientRuntimeDownloader backs up and restores the same paths.
 # See RELEASE.md for the full policy.
 param(
-    [string]$Version = "1.1.6",
+    [string]$Version = "1.1.7",
     [ValidateSet("pvp", "classic")]
     [string]$Edition = "pvp",
     [string]$OfficialCuo = "$env:USERPROFILE\Downloads\ClassicUOLauncher-win-x64-release\ClassicUO",
@@ -62,8 +62,23 @@ function Get-RazorPluginRoots([string]$PluginsDir) {
     return $roots
 }
 
+function Ensure-Mp3SharpNativeAotCompat([string]$RepoRoot) {
+    $proj = Join-Path $RepoRoot "external\MP3Sharp\MP3Sharp\MP3Sharp.csproj"
+    if (-not (Test-Path $proj)) { return }
+
+    $content = Get-Content $proj -Raw
+    if ($content -notmatch 'netstandard2\.0') { return }
+
+    Write-Host "Patching MP3Sharp for NativeAOT (net8.0 + IsAotCompatible)" -ForegroundColor Yellow
+    $content = $content -replace '<TargetFramework>netstandard2\.0</TargetFramework>', '<TargetFramework>net8.0</TargetFramework>'
+    if ($content -notmatch 'IsAotCompatible') {
+        $content = $content -replace '(<AssemblyName>MP3Sharp</AssemblyName>)', "`$1`r`n    <IsAotCompatible>true</IsAotCompatible>"
+    }
+    Set-Content -Path $proj -Value $content -NoNewline
+}
+
 function Remove-RazorUserData([string]$RazorRoot) {
-    foreach ($folder in @("Profiles", "Scripts", "Backup")) {
+    foreach ($folder in @("Profiles", "Scripts", "Backup", "_deploy_pending")) {
         $path = Join-Path $RazorRoot $folder
         if (Test-Path $path) {
             Write-Host "Stripping Razor user data from bundle: $path" -ForegroundColor DarkYellow
@@ -117,22 +132,18 @@ function Expand-RazorPluginsZip([string]$ZipPath, [string]$TargetPluginsDir) {
 }
 
 function Test-BundledRazorPlugins([string]$ClientRoot) {
-    $pluginsRoots = @(
-        (Join-Path $ClientRoot "Data\Plugins"),
-        (Join-Path $ClientRoot "Bootstrap\Data\Plugins")
-    )
+    $pluginsDir = Join-Path $ClientRoot "Data\Plugins"
+    if (-not (Test-Path $pluginsDir)) { return $null }
 
-    foreach ($pluginsDir in $pluginsRoots) {
-        if (-not (Test-Path $pluginsDir)) { continue }
-        if (Test-Path (Join-Path $pluginsDir "RazorEnhanced.exe")) {
-            return $pluginsDir
-        }
-        $match = Get-ChildItem $pluginsDir -Directory -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -like "RazorEnhanced*" } |
-            Select-Object -First 1
-        if ($match) {
-            return $match.FullName
-        }
+    if (Test-Path (Join-Path $pluginsDir "RazorEnhanced.exe")) {
+        return $pluginsDir
+    }
+
+    $match = Get-ChildItem $pluginsDir -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -like "RazorEnhanced*" } |
+        Select-Object -First 1
+    if ($match) {
+        return $match.FullName
     }
 
     return $null
@@ -148,36 +159,20 @@ function Remove-PrebundledRazorPlugins([string]$ClientRoot) {
 }
 
 function Clear-ClientPluginsDirectory([string]$ClientRoot) {
-    $pluginsRoots = @(
-        (Join-Path $ClientRoot "Data\Plugins"),
-        (Join-Path $ClientRoot "Bootstrap\Data\Plugins")
-    )
+    $pluginsDir = Join-Path $ClientRoot "Data\Plugins"
+    if (-not (Test-Path $pluginsDir)) { return }
 
-    foreach ($pluginsDir in $pluginsRoots) {
-        if (-not (Test-Path $pluginsDir)) { continue }
-
-        Get-ChildItem $pluginsDir -Force -ErrorAction SilentlyContinue | ForEach-Object {
-            Write-Host "Removing plugin artifact: $($_.FullName)" -ForegroundColor DarkYellow
-            Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
-        }
+    Get-ChildItem $pluginsDir -Force -ErrorAction SilentlyContinue | ForEach-Object {
+        Write-Host "Removing plugin artifact: $($_.FullName)" -ForegroundColor DarkYellow
+        Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
 
 function Test-ClientPluginsEmpty([string]$ClientRoot) {
-    $pluginsRoots = @(
-        (Join-Path $ClientRoot "Data\Plugins"),
-        (Join-Path $ClientRoot "Bootstrap\Data\Plugins")
-    )
+    $pluginsDir = Join-Path $ClientRoot "Data\Plugins"
+    if (-not (Test-Path $pluginsDir)) { return $null }
 
-    foreach ($pluginsDir in $pluginsRoots) {
-        if (-not (Test-Path $pluginsDir)) { continue }
-        $leftover = Get-ChildItem $pluginsDir -Force -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($leftover) {
-            return $leftover.FullName
-        }
-    }
-
-    return $null
+    return Get-ChildItem $pluginsDir -Force -ErrorAction SilentlyContinue | Select-Object -First 1
 }
 
 function Remove-BuildArtifacts([string]$ClientRoot) {
@@ -217,6 +212,39 @@ function Clear-UserClientData([string]$ClientRoot) {
             Write-Host "Stripping user map markers from bundle: $($_.FullName)" -ForegroundColor DarkYellow
             Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue
         }
+    }
+}
+
+function Test-UnifiedPvpClientLayout([string]$ClientRoot) {
+    $errors = @()
+
+    if (Test-Path (Join-Path $ClientRoot "Bootstrap")) {
+        $errors += "Bootstrap folder must not exist in unified PVP layout"
+    }
+    if (Test-Path (Join-Path $ClientRoot "cuo-modded.exe")) {
+        $errors += "cuo-modded.exe must not exist in unified PVP layout"
+    }
+
+    $cuoDll = Join-Path $ClientRoot "cuo.dll"
+    if (-not (Test-Path $cuoDll)) {
+        $errors += "cuo.dll missing"
+    } elseif (-not (Test-NativeCuoDll $cuoDll)) {
+        $errors += "cuo.dll is not native AOT"
+    } elseif ((Get-Item $cuoDll).Length -lt 10MB) {
+        $errors += "cuo.dll too small for native modded build"
+    }
+
+    if (-not (Test-Path (Join-Path $ClientRoot "ClassicUO.exe"))) {
+        $errors += "ClassicUO.exe bootstrap host missing"
+    }
+
+    $razorExe = Join-Path $ClientRoot "Data\Plugins\RazorEnhanced.exe"
+    if (-not (Test-Path $razorExe)) {
+        $errors += "RazorEnhanced.exe missing from Client\Data\Plugins"
+    }
+
+    if ($errors.Count -gt 0) {
+        throw "PVP client layout validation failed: $($errors -join '; ')"
     }
 }
 
@@ -327,7 +355,7 @@ $launcherZip = Join-Path $OutputDir "UODreams-$editionLabel-Launcher-v$Version.z
 $clientZip = Join-Path $OutputDir "UODreams-$editionLabel-Client-v$Version.zip"
 $launcherExe = Join-Path $OutputDir "UODreams Launcher.exe"
 
-if (-not (Test-Path $OfficialCuo)) {
+if ($Edition -eq "classic" -and -not (Test-Path $OfficialCuo)) {
     throw @"
 Official ClassicUO folder not found: $OfficialCuo
 
@@ -335,6 +363,10 @@ Download the official ClassicUO release zip, extract it, then pass -OfficialCuo
 pointing at the extracted folder (flat layout or ClassicUO/ subfolder both work):
   https://github.com/ClassicUO/ClassicUO/releases/download/ClassicUO-main-release/ClassicUO-win-x64-release.zip
 "@
+}
+
+if ($Edition -eq "pvp" -and -not (Test-Path $OfficialCuo)) {
+    Write-Host "Official ClassicUO not provided; unified PVP build uses modded NativeAOT output only." -ForegroundColor DarkYellow
 }
 
 Write-Step "Preparing $editionLabel edition output: $OutputDir"
@@ -354,71 +386,63 @@ if ($Edition -eq "classic") {
     }
     Write-Host "Classic plugins folder: empty" -ForegroundColor Green
 } else {
-    $useUnifiedNative = $false
-    if (-not $ForceManagedClient) {
-        Write-Step "Publishing modded PVP client (NativeAOT / Dust765-style)"
-        if (Test-Path $clientOut) { Remove-Item $clientOut -Recurse -Force }
-        $aotLog = Join-Path $RepoRoot "bin\aot-publish.log"
-        $aotOk = $true
-        try {
-            dotnet publish (Join-Path $RepoRoot "src\ClassicUO.Client\ClassicUO.Client.csproj") `
-                -c Release -r win-x64 --self-contained true -p:PublishAot=true -o $clientOut 2>&1 | Tee-Object -FilePath $aotLog
-        } catch {
-            $aotOk = $false
-        }
-        if ($LASTEXITCODE -ne 0) {
-            $aotOk = $false
-        }
-        $nativeDll = Join-Path $clientOut "cuo.dll"
-        if ($aotOk -and (Test-Path $nativeDll) -and (Test-NativeCuoDll $nativeDll) -and ((Get-Item $nativeDll).Length -gt 1MB)) {
-            $useUnifiedNative = $true
-            Write-Host "NativeAOT modded cuo.dll ready ($([math]::Round((Get-Item $nativeDll).Length/1MB,1)) MB)" -ForegroundColor Green
-        } else {
-            Write-Host "NativeAOT build unavailable (install VS 'Desktop development with C++'). Falling back to managed client." -ForegroundColor Yellow
-            if (Test-Path $clientOut) { Remove-Item $clientOut -Recurse -Force }
-        }
+    if ($ForceManagedClient) {
+        throw "PVP releases require NativeAOT modded cuo.dll. -ForceManagedClient is for local debugging only."
     }
 
-    if (-not $useUnifiedNative) {
-        Write-Step "Publishing modded PVP client (managed cuo-modded.exe)"
-        dotnet publish (Join-Path $RepoRoot "src\ClassicUO.Client\ClassicUO.Client.csproj") `
-            -c Release -r win-x64 --self-contained true -p:PublishAot=false -o $clientOut | Out-Null
+    Ensure-Mp3SharpNativeAotCompat $RepoRoot
+
+    Write-Step "Publishing modded PVP client (NativeAOT / Dust765-style)"
+    if (Test-Path $clientOut) { Remove-Item $clientOut -Recurse -Force }
+    $aotLog = Join-Path $RepoRoot "bin\aot-publish.log"
+    dotnet publish (Join-Path $RepoRoot "src\ClassicUO.Client\ClassicUO.Client.csproj") `
+        -c Release -r win-x64 --self-contained true -p:PublishAot=true -o $clientOut 2>&1 | Tee-Object -FilePath $aotLog
+    if ($LASTEXITCODE -ne 0) {
+        throw "NativeAOT publish failed (exit $LASTEXITCODE). Install VS 'Desktop development with C++' and see $aotLog"
     }
+
+    $nativeDll = Join-Path $clientOut "cuo.dll"
+    if (-not (Test-Path $nativeDll)) {
+        throw "NativeAOT publish did not produce cuo.dll. See $aotLog"
+    }
+    if (-not (Test-NativeCuoDll $nativeDll)) {
+        throw "cuo.dll is managed, not NativeAOT output. PVP releases require native modded cuo.dll (~14-15 MB). See $aotLog"
+    }
+    $nativeMb = [math]::Round((Get-Item $nativeDll).Length / 1MB, 1)
+    if ($nativeMb -lt 10) {
+        throw "cuo.dll is only ${nativeMb} MB; expected native modded build (~14-15 MB). See $aotLog"
+    }
+    Write-Host "NativeAOT modded cuo.dll ready ($nativeMb MB)" -ForegroundColor Green
+    $useUnifiedNative = $true
 
     Write-Step "Publishing bootstrap host"
     dotnet publish (Join-Path $RepoRoot "src\ClassicUO.Bootstrap\src\ClassicUO.Bootstrap.csproj") `
         -c Release -o $bootstrapOut | Out-Null
 
-    Write-Step "Assembling PVP Client package"
+    Write-Step "Assembling unified PVP client (mods + custom Razor)"
     robocopy $clientOut $clientDir /E /XD Bootstrap /XF "ClassicUO.exe" /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
     Remove-BuildArtifacts $clientDir
-
     Remove-PrebundledRazorPlugins $clientDir
+    Clear-ClientPluginsDirectory $clientDir
 
-    $nativeSources = @($clientOut, $OfficialCuo, (Join-Path $RepoRoot "external\x64"))
-
-    if ($useUnifiedNative) {
-        Write-Step "Assembling unified Dust765-style client (mods + custom Razor)"
-        Copy-BootstrapHostFiles $bootstrapOut $clientDir
-        Copy-NativeRuntimeFiles $nativeSources $clientDir
-        Expand-RazorPluginsZip $RazorEnhancedZip (Join-Path $clientDir "Data\Plugins") | Out-Null
-        if (Test-Path "$clientDir\cuo.exe") { Remove-Item "$clientDir\cuo.exe" -Force -ErrorAction SilentlyContinue }
-    } else {
-        Write-Step "Assembling legacy dual-client layout (managed mods + Razor bootstrap)"
-        New-Item -ItemType Directory -Force -Path $bootstrapDir | Out-Null
-        if (Test-Path "$clientDir\cuo.exe") {
-            Move-Item -Force "$clientDir\cuo.exe" "$clientDir\cuo-modded.exe"
-        }
-        Copy-NativeRuntimeFiles $nativeSources $clientDir
-        robocopy $OfficialCuo $bootstrapDir /E /XD "Data\Plugins" /XF settings.json /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
-        Copy-BootstrapHostFiles $bootstrapOut $bootstrapDir
-        Copy-NativeRuntimeFiles @($OfficialCuo, (Join-Path $RepoRoot "external\x64")) $bootstrapDir
-        Expand-RazorPluginsZip $RazorEnhancedZip (Join-Path $bootstrapDir "Data\Plugins") | Out-Null
+    Copy-BootstrapHostFiles $bootstrapOut $clientDir
+    Copy-NativeRuntimeFiles @($clientOut, (Join-Path $RepoRoot "external\x64")) $clientDir
+    if (-not (Expand-RazorPluginsZip $RazorEnhancedZip (Join-Path $clientDir "Data\Plugins"))) {
+        throw "Failed to bundle custom RazorEnhanced from $RazorEnhancedZip into Client\Data\Plugins"
+    }
+    if (Test-Path "$clientDir\cuo.exe") { Remove-Item "$clientDir\cuo.exe" -Force -ErrorAction SilentlyContinue }
+    if (Test-Path "$clientDir\cuo-modded.exe") { Remove-Item "$clientDir\cuo-modded.exe" -Force -ErrorAction SilentlyContinue }
+    if (Test-Path $bootstrapDir) {
+        Write-Host "Removing stray Bootstrap folder from unified PVP layout" -ForegroundColor DarkYellow
+        Remove-Item $bootstrapDir -Recurse -Force -ErrorAction SilentlyContinue
     }
 
     $bundledRazor = Test-BundledRazorPlugins $clientDir
     if (-not $bundledRazor) {
-        throw "PVP edition requires bundled custom RazorEnhanced. Expected RazorEnhanced.exe in plugins folder from $RazorEnhancedZip."
+        throw "PVP edition requires bundled custom RazorEnhanced in Client\Data\Plugins from $RazorEnhancedZip."
+    }
+    if ($bundledRazor -notlike "*\Client\Data\Plugins*") {
+        throw "Razor must be in Client\Data\Plugins only, not $bundledRazor"
     }
     Write-Host "Bundled Razor: $bundledRazor" -ForegroundColor Green
 
@@ -440,6 +464,9 @@ dotnet publish (Join-Path $RepoRoot "src\ClassicUO.Launcher.Custom\ClassicUO.Lau
 Write-Step "Stripping user runtime data from client package"
 Clear-UserClientData $clientDir
 Test-ClientPackageVirgin $clientDir
+if ($Edition -eq "pvp") {
+    Test-UnifiedPvpClientLayout $clientDir
+}
 
 Write-Step "Creating $([IO.Path]::GetFileName($clientZip))"
 if (Test-Path $clientZip) { Remove-Item $clientZip -Force }
@@ -456,7 +483,7 @@ Compress-Archive -Path $launcherExe -DestinationPath $launcherZip -CompressionLe
 
 $launcherMb = [math]::Round((Get-Item $launcherZip).Length / 1MB, 1)
 $clientMb = [math]::Round((Get-Item $clientZip).Length / 1MB, 1)
-$layout = if ($Edition -eq "classic") { "classic (official unmodded, no Razor)" } elseif ($useUnifiedNative) { "pvp unified (mods + bundled Razor)" } else { "pvp dual (managed + Razor bootstrap)" }
+$layout = if ($Edition -eq "classic") { "classic (official unmodded, no Razor)" } else { "pvp unified (NativeAOT mods + Razor in Client/Data/Plugins)" }
 $releaseTitle = if ($Edition -eq "pvp") { "UODreams PVP Launcher v$Version" } else { "UODreams Launcher v$Version" }
 
 Write-Host ""
