@@ -1,6 +1,12 @@
 # Builds GitHub Release assets for UODreams Launcher (PVP or Classic edition).
+#
+# RELEASE PACKAGES MUST BE "VIRGIN": no personal account or runtime user data.
+# Stripped before zipping (Clear-UserClientData): Data/Profiles, Data/Client/JournalLogs,
+# settings.json, Logs, user map markers (*.usr). Razor Profiles/Scripts/Backup are stripped separately.
+# On client update, ClientRuntimeDownloader backs up and restores the same paths.
+# See RELEASE.md for the full policy.
 param(
-    [string]$Version = "1.1.5",
+    [string]$Version = "1.1.6",
     [ValidateSet("pvp", "classic")]
     [string]$Edition = "pvp",
     [string]$OfficialCuo = "$env:USERPROFILE\Downloads\ClassicUOLauncher-win-x64-release\ClassicUO",
@@ -178,6 +184,57 @@ function Remove-BuildArtifacts([string]$ClientRoot) {
     Get-ChildItem $ClientRoot -Filter "*.pdb" -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
     Get-ChildItem $ClientRoot -Filter "createdump.exe" -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
     if (Test-Path "$ClientRoot\Logs") { Remove-Item "$ClientRoot\Logs" -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+function Clear-UserClientData([string]$ClientRoot) {
+    foreach ($rel in @(
+        "Data\Profiles",
+        "Data\Client\JournalLogs",
+        "Logs",
+        "Bootstrap\Data\Profiles",
+        "Bootstrap\Data\Client\JournalLogs",
+        "Bootstrap\Logs"
+    )) {
+        $path = Join-Path $ClientRoot $rel
+        if (Test-Path $path) {
+            Write-Host "Stripping user client data from bundle: $path" -ForegroundColor DarkYellow
+            Remove-Item $path -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    foreach ($rel in @("settings.json", "Bootstrap\settings.json")) {
+        $path = Join-Path $ClientRoot $rel
+        if (Test-Path $path) {
+            Write-Host "Stripping user client settings from bundle: $path" -ForegroundColor DarkYellow
+            Remove-Item $path -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    foreach ($rel in @("Data\Client", "Bootstrap\Data\Client")) {
+        $clientData = Join-Path $ClientRoot $rel
+        if (-not (Test-Path $clientData)) { continue }
+        Get-ChildItem $clientData -Filter "*.usr" -File -ErrorAction SilentlyContinue | ForEach-Object {
+            Write-Host "Stripping user map markers from bundle: $($_.FullName)" -ForegroundColor DarkYellow
+            Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+function Test-ClientPackageVirgin([string]$ClientRoot) {
+    $errors = @()
+
+    foreach ($rel in @("Data\Profiles", "Data\Client\JournalLogs", "Bootstrap\Data\Profiles", "Bootstrap\Data\Client\JournalLogs")) {
+        $path = Join-Path $ClientRoot $rel
+        if (-not (Test-Path $path)) { continue }
+        $count = @(Get-ChildItem $path -Recurse -File -ErrorAction SilentlyContinue).Count
+        if ($count -gt 0) {
+            $errors += "$rel ($count file(s))"
+        }
+    }
+
+    if ($errors.Count -gt 0) {
+        throw "Client package still contains user data: $($errors -join '; ')"
+    }
 }
 
 function Resolve-OfficialCuoRoot([string]$Path) {
@@ -379,6 +436,10 @@ dotnet publish (Join-Path $RepoRoot "src\ClassicUO.Launcher.Custom\ClassicUO.Lau
     -p:LauncherEdition=$Edition `
     -p:Version=$Version `
     -o $launcherOut | Out-Null
+
+Write-Step "Stripping user runtime data from client package"
+Clear-UserClientData $clientDir
+Test-ClientPackageVirgin $clientDir
 
 Write-Step "Creating $([IO.Path]::GetFileName($clientZip))"
 if (Test-Path $clientZip) { Remove-Item $clientZip -Force }

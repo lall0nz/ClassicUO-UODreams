@@ -14,8 +14,8 @@ namespace ClassicUO.Launcher.Custom
         public const string AssetPrefix = "UODreams-Classic";
 #endif
 
-        public const string LauncherVersion = "1.1.5";
-        public const string ClientRuntimeVersion = "1.1.5";
+        public const string LauncherVersion = "1.1.6";
+        public const string ClientRuntimeVersion = "1.1.6";
         public const string GitHubRepo = "lall0nz/ClassicUO-UODreams";
 
         public static bool IsPvpEdition => Edition == "pvp";

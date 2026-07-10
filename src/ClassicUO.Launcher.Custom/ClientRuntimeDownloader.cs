@@ -11,6 +11,31 @@ namespace ClassicUO.Launcher.Custom
     internal static class ClientRuntimeDownloader
     {
         private static readonly string[] RazorUserDataFolders = { "Profiles", "Scripts", "Backup" };
+
+        /// <summary>
+        /// Relative to install root (zip root). Must match Clear-UserClientData in package-release.ps1.
+        /// </summary>
+        private static readonly string[] PreservedClientDirectoryPaths =
+        {
+            "Client/Data/Profiles",
+            "Client/Data/Client/JournalLogs",
+            "Client/Logs",
+            "Client/Bootstrap/Data/Profiles",
+            "Client/Bootstrap/Data/Client/JournalLogs",
+            "Client/Bootstrap/Logs",
+        };
+
+        private static readonly string[] PreservedClientFilePaths =
+        {
+            "Client/settings.json",
+            "Client/Bootstrap/settings.json",
+        };
+
+        private static readonly string[] PreservedClientUserMarkerPrefixes =
+        {
+            "Client/Data/Client/",
+            "Client/Bootstrap/Data/Client/",
+        };
         public static string ClientDir =>
             Path.Combine(AppContext.BaseDirectory, "Client");
 
@@ -143,7 +168,7 @@ namespace ClassicUO.Launcher.Custom
                     );
                 }
 
-                ExtractClientPackagePreservingRazorProfiles(archivePath, installRoot);
+                ExtractClientPackagePreservingUserData(archivePath, installRoot);
 
                 if (!IsInstalled())
                 {
@@ -273,9 +298,9 @@ namespace ClassicUO.Launcher.Custom
             return header[0] == 0x50 && header[1] == 0x4B;
         }
 
-        private static void ExtractClientPackagePreservingRazorProfiles(string archivePath, string installRoot)
+        private static void ExtractClientPackagePreservingUserData(string archivePath, string installRoot)
         {
-            List<(string Target, string Backup)> preserved = BackupRazorUserData(installRoot);
+            List<(string Target, string Backup)> preserved = BackupUserData(installRoot);
 
             try
             {
@@ -283,7 +308,7 @@ namespace ClassicUO.Launcher.Custom
 
                 foreach (ZipArchiveEntry entry in archive.Entries)
                 {
-                    if (IsRazorUserDataZipEntry(entry.FullName))
+                    if (ShouldSkipZipEntry(entry.FullName))
                     {
                         continue;
                     }
@@ -313,13 +338,70 @@ namespace ClassicUO.Launcher.Custom
             }
             finally
             {
-                RestoreRazorUserData(preserved);
+                RestoreUserData(preserved);
             }
+        }
+
+        private static bool ShouldSkipZipEntry(string entryPath)
+        {
+            return IsRazorUserDataZipEntry(entryPath) || IsClientUserDataZipEntry(entryPath);
+        }
+
+        private static bool IsClientUserDataZipEntry(string entryPath)
+        {
+            string normalized = NormalizeZipEntryPath(entryPath);
+
+            foreach (string preservedDir in PreservedClientDirectoryPaths)
+            {
+                if (IsZipEntryUnderPath(normalized, preservedDir))
+                {
+                    return true;
+                }
+            }
+
+            foreach (string preservedFile in PreservedClientFilePaths)
+            {
+                if (normalized.Equals(preservedFile, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            if (normalized.EndsWith(".usr", StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (string prefix in PreservedClientUserMarkerPrefixes)
+                {
+                    if (normalized.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private static string NormalizeZipEntryPath(string entryPath)
+        {
+            return entryPath.Replace('\\', '/').TrimStart('/');
+        }
+
+        private static bool IsZipEntryUnderPath(string normalizedEntryPath, string normalizedPrefix)
+        {
+            if (normalizedEntryPath.Equals(normalizedPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return normalizedEntryPath.StartsWith(
+                normalizedPrefix + "/",
+                StringComparison.OrdinalIgnoreCase
+            );
         }
 
         private static bool IsRazorUserDataZipEntry(string entryPath)
         {
-            string normalized = entryPath.Replace('\\', '/');
+            string normalized = NormalizeZipEntryPath(entryPath);
             const string marker = "/Data/Plugins/";
             int pluginsIdx = normalized.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
 
@@ -364,13 +446,13 @@ namespace ClassicUO.Launcher.Custom
             return false;
         }
 
-        private static List<(string Target, string Backup)> BackupRazorUserData(string installRoot)
+        private static List<(string Target, string Backup)> BackupUserData(string installRoot)
         {
             var preserved = new List<(string Target, string Backup)>();
             string tempRoot = Path.Combine(
                 Path.GetTempPath(),
                 "UODreamsLauncher",
-                "razor-preserve",
+                "client-preserve",
                 Guid.NewGuid().ToString("N")
             );
             Directory.CreateDirectory(tempRoot);
@@ -381,33 +463,120 @@ namespace ClassicUO.Launcher.Custom
             {
                 foreach (string folder in RazorUserDataFolders)
                 {
-                    string source = Path.Combine(razorRoot, folder);
+                    BackupDirectory(
+                        Path.Combine(razorRoot, folder),
+                        tempRoot,
+                        ref backupIndex,
+                        preserved
+                    );
+                }
+            }
 
-                    if (!Directory.Exists(source))
-                    {
-                        continue;
-                    }
+            foreach (string relativeDir in PreservedClientDirectoryPaths)
+            {
+                BackupDirectory(
+                    Path.Combine(installRoot, relativeDir.Replace('/', Path.DirectorySeparatorChar)),
+                    tempRoot,
+                    ref backupIndex,
+                    preserved
+                );
+            }
 
-                    string backup = Path.Combine(tempRoot, $"{backupIndex:D3}_{folder}");
-                    CopyDirectory(source, backup);
-                    preserved.Add((source, backup));
-                    backupIndex++;
+            foreach (string relativeFile in PreservedClientFilePaths)
+            {
+                BackupFile(
+                    Path.Combine(installRoot, relativeFile.Replace('/', Path.DirectorySeparatorChar)),
+                    tempRoot,
+                    ref backupIndex,
+                    preserved
+                );
+            }
+
+            foreach (string markerPrefix in PreservedClientUserMarkerPrefixes)
+            {
+                string markerDir = Path.Combine(
+                    installRoot,
+                    markerPrefix.TrimEnd('/').Replace('/', Path.DirectorySeparatorChar)
+                );
+
+                if (!Directory.Exists(markerDir))
+                {
+                    continue;
+                }
+
+                foreach (string file in Directory.EnumerateFiles(markerDir, "*.usr"))
+                {
+                    BackupFile(file, tempRoot, ref backupIndex, preserved);
                 }
             }
 
             return preserved;
         }
 
-        private static void RestoreRazorUserData(List<(string Target, string Backup)> preserved)
+        private static void BackupDirectory(
+            string source,
+            string tempRoot,
+            ref int backupIndex,
+            List<(string Target, string Backup)> preserved)
+        {
+            if (!Directory.Exists(source))
+            {
+                return;
+            }
+
+            string backup = Path.Combine(tempRoot, $"{backupIndex:D3}_dir");
+            CopyDirectory(source, backup);
+            preserved.Add((source, backup));
+            backupIndex++;
+        }
+
+        private static void BackupFile(
+            string source,
+            string tempRoot,
+            ref int backupIndex,
+            List<(string Target, string Backup)> preserved)
+        {
+            if (!File.Exists(source))
+            {
+                return;
+            }
+
+            string backup = Path.Combine(tempRoot, $"{backupIndex:D3}_file_{Path.GetFileName(source)}");
+            string? parent = Path.GetDirectoryName(backup);
+
+            if (!string.IsNullOrEmpty(parent))
+            {
+                Directory.CreateDirectory(parent);
+            }
+
+            File.Copy(source, backup, overwrite: true);
+            preserved.Add((source, backup));
+            backupIndex++;
+        }
+
+        private static void RestoreUserData(List<(string Target, string Backup)> preserved)
         {
             foreach ((string target, string backup) in preserved)
             {
-                if (!Directory.Exists(backup))
+                if (Directory.Exists(backup))
+                {
+                    CopyDirectory(backup, target, overwrite: true);
+                    continue;
+                }
+
+                if (!File.Exists(backup))
                 {
                     continue;
                 }
 
-                CopyDirectory(backup, target, overwrite: true);
+                string? parent = Path.GetDirectoryName(target);
+
+                if (!string.IsNullOrEmpty(parent))
+                {
+                    Directory.CreateDirectory(parent);
+                }
+
+                File.Copy(backup, target, overwrite: true);
             }
         }
 

@@ -1,4 +1,5 @@
 # Packages a clean UODreams Launcher distribution folder + zip backup.
+# Strips user runtime data before packaging — see RELEASE.md and Clear-UserClientData.
 param(
     [ValidateSet("pvp", "classic")]
     [string]$Edition = "pvp",
@@ -178,6 +179,40 @@ function Remove-BuildArtifacts([string]$ClientRoot) {
     Get-ChildItem $ClientRoot -Filter "*.pdb" -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
     Get-ChildItem $ClientRoot -Filter "createdump.exe" -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
     if (Test-Path "$ClientRoot\Logs") { Remove-Item "$ClientRoot\Logs" -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+function Clear-UserClientData([string]$ClientRoot) {
+    foreach ($rel in @(
+        "Data\Profiles",
+        "Data\Client\JournalLogs",
+        "Logs",
+        "Bootstrap\Data\Profiles",
+        "Bootstrap\Data\Client\JournalLogs",
+        "Bootstrap\Logs"
+    )) {
+        $path = Join-Path $ClientRoot $rel
+        if (Test-Path $path) {
+            Write-Host "Stripping user client data from bundle: $path" -ForegroundColor DarkYellow
+            Remove-Item $path -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    foreach ($rel in @("settings.json", "Bootstrap\settings.json")) {
+        $path = Join-Path $ClientRoot $rel
+        if (Test-Path $path) {
+            Write-Host "Stripping user client settings from bundle: $path" -ForegroundColor DarkYellow
+            Remove-Item $path -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    foreach ($rel in @("Data\Client", "Bootstrap\Data\Client")) {
+        $clientData = Join-Path $ClientRoot $rel
+        if (-not (Test-Path $clientData)) { continue }
+        Get-ChildItem $clientData -Filter "*.usr" -File -ErrorAction SilentlyContinue | ForEach-Object {
+            Write-Host "Stripping user map markers from bundle: $($_.FullName)" -ForegroundColor DarkYellow
+            Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue
+        }
+    }
 }
 
 function Resolve-OfficialCuoRoot([string]$Path) {
@@ -366,6 +401,9 @@ if ($Edition -eq "classic") {
     Write-Step "Bundling XmlGumps and ExternalImages"
     Copy-ClientBundleData $clientDir $RepoRoot
 }
+
+Write-Step "Stripping user runtime data from client folder"
+Clear-UserClientData $clientDir
 
 Write-Step "Writing launcher settings template"
 @{
