@@ -102,21 +102,19 @@ jobs:
       - name: Build release assets
         shell: pwsh
         run: |
-          $args = @(
-            '-Version', $env:RELEASE_VERSION,
-            '-Edition', $env:RELEASE_EDITION,
-            '-OfficialCuo', $env:OFFICIAL_CUO
-          )
+          $version = $env:RELEASE_VERSION
+          $edition = $env:RELEASE_EDITION
+          $officialCuo = $env:OFFICIAL_CUO
 
-          if ($env:RELEASE_EDITION -eq 'pvp') {
+          if ($edition -eq 'pvp') {
             $razor = Join-Path (Get-Location) 'vendor\RazorEnhanced-Custom.zip'
             if (-not (Test-Path $razor)) {
               throw "Vendor Razor zip not found: $razor"
             }
-            $args += @('-RazorEnhancedZip', $razor)
+            ./scripts/package-release.ps1 -Version $version -Edition $edition -OfficialCuo $officialCuo -RazorEnhancedZip $razor
+          } else {
+            ./scripts/package-release.ps1 -Version $version -Edition $edition -OfficialCuo $officialCuo
           }
-
-          & ./scripts/package-release.ps1 @args
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
