@@ -60,6 +60,8 @@ namespace ClassicUO.Game.UI.Gumps
         private const int TEXTBOX_HEIGHT = 25;
         private const int OptionsSearchRowHeight = 26;
         private const int OptionsSearchToContentGap = 20;
+        private const int OptionsSectionGap = 40;
+        private const int OptionsSectionGapLarge = 60;
         private const int OptionsScrollContentPadding = 12;
         private const int OptionsTabStartY = 10;
         private const int OptionsScrollY = OptionsTabStartY + OptionsSearchRowHeight + OptionsSearchToContentGap;
@@ -145,6 +147,13 @@ namespace ClassicUO.Game.UI.Gumps
         private ClickableColorBox _ltHighlightRangeOnActivatedHue, _ltHighlightRangeOnCastHue;
         private Checkbox _highlightMirrorClones, _enableUoDreamsNetworkOptimizer, _enableFullSocketDrain;
         private ClickableColorBox _mirrorCloneHue;
+        private static readonly string[] VisualHighlightModes = { "Off", "White", "Pink", "Ice", "Fire", "Custom" };
+        private static readonly string[] VisualHighlightStateModes = { "Off", "White", "Pink", "Ice", "Fire", "Special", "Custom" };
+        private Combobox _glowingWeaponsType, _highlightLastTargetType, _highlighFriendsGuildType;
+        private Combobox _highlightLastTargetTypePoison, _highlightLastTargetTypePara, _highlightLastTargetTypeStunned, _highlightLastTargetTypeMortalled;
+        private ClickableColorBox _highlightGlowingWeaponsTypeHue, _highlightLastTargetTypeHue, _highlighFriendsGuildTypeHue;
+        private ClickableColorBox _highlightLastTargetTypePoisonHue, _highlightLastTargetTypeParaHue, _highlightLastTargetTypeStunnedHue, _highlightLastTargetTypeMortalledHue;
+        private InputField _movementTurnDelay, _movementTurnDelayFast, _movementWalkingDelay, _movementPlayerWalkingDelay;
         private Checkbox _showEquipmentDurabilityButton, _useModernJournal, _hideJournalTimestamp, _invisibleHousesEnabled, _autoOpenUiOnLogin;
         private HSliderBar _invisibleHousesZ;
 
@@ -155,7 +164,7 @@ namespace ClassicUO.Game.UI.Gumps
         private string _optionsSearchAppliedTerm = string.Empty;
         private readonly List<Control> _optionsSearchMatches = new List<Control>();
         private readonly HashSet<int> _optionsSearchPagesWithHits = new HashSet<int>();
-        private Checkbox _hidePersistentNPCNames;
+        private Checkbox _hidePersistentNPCNames, _nameOverheadAlwaysOn;
         private Checkbox _showAllLayersPaperdoll;
 
         // infobar
@@ -809,7 +818,7 @@ namespace ClassicUO.Game.UI.Gumps
             movement.Add(_forceGargoyleWalk = AddCheckBox(null, ResGumps.ForceGargoyleWalk, _currentProfile.ForceGargoyleWalk, startX, startY));
 
             SettingsSection combat = AddSettingsSection(box, "Combat & Visual");
-            combat.Y = movement.Bounds.Bottom + 40;
+            combat.Y = movement.Bounds.Bottom + OptionsSectionGap;
             combat.Add(_useOldHealthBars = AddCheckBox(null, "Old style bars (HP/Mana/Stam)", _currentProfile.UseOldHealthBars, startX, startY));
             combat.Add(_showTargetRangeIndicator = AddCheckBox(null, ResGumps.ShowTarRangeIndic, _currentProfile.ShowTargetRangeIndicator, startX, startY));
             combat.Add(_ltHighlightRangeOnActivated = AddCheckBox(null, "Highlight tiles on range", _currentProfile.LTHighlightRangeOnActivated, startX, startY));
@@ -827,8 +836,147 @@ namespace ClassicUO.Game.UI.Gumps
             combat.Add(_highlightMirrorClones = AddCheckBox(null, "Ghost mirror image clones", _currentProfile.HighlightMirrorImageClones, startX, startY));
             combat.AddRight(_mirrorCloneHue = AddColorBox(null, startX, startY, _currentProfile.MirrorImageCloneHue, string.Empty), 2);
 
+            SettingsSection visualHelpers = AddSettingsSection(box, "Visual Helpers");
+            visualHelpers.Y = combat.Bounds.Bottom + OptionsSectionGap;
+
+            visualHelpers.Add(_nameOverheadAlwaysOn = AddCheckBox(null, "Always show name overheads", _currentProfile.NameOverheadToggled, startX, startY));
+
+            visualHelpers.Add(AddLabel(null, "Glowing Weapons", startX, startY));
+            visualHelpers.AddRight(_glowingWeaponsType = AddCombobox(null, VisualHighlightModes, _currentProfile.GlowingWeaponsType, startX, startY, 100), 2);
+            visualHelpers.Add(AddLabel(null, "Custom color", startX, startY));
+            visualHelpers.AddRight(_highlightGlowingWeaponsTypeHue = AddColorBox(null, startX, startY, _currentProfile.HighlightGlowingWeaponsTypeHue, string.Empty), 2);
+
+            visualHelpers.Add(AddLabel(null, "Highlight lasttarget", startX, startY));
+            visualHelpers.AddRight(_highlightLastTargetType = AddCombobox(null, VisualHighlightModes, _currentProfile.HighlightLastTargetType, startX, startY, 100), 2);
+            visualHelpers.Add(AddLabel(null, "Custom color", startX, startY));
+            visualHelpers.AddRight(_highlightLastTargetTypeHue = AddColorBox(null, startX, startY, _currentProfile.HighlightLastTargetTypeHue, string.Empty), 2);
+
+            visualHelpers.Add(AddLabel(null, "Highlight Friends Guild Mobiles", startX, startY));
+            visualHelpers.AddRight(_highlighFriendsGuildType = AddCombobox(null, VisualHighlightModes, _currentProfile.HighlighFriendsGuildType, startX, startY, 100), 2);
+            visualHelpers.Add(AddLabel(null, "Custom color", startX, startY));
+            visualHelpers.AddRight(_highlighFriendsGuildTypeHue = AddColorBox(null, startX, startY, _currentProfile.HighlighFriendsGuildTypeHue, string.Empty), 2);
+
+            visualHelpers.Add(AddLabel(null, "Highlight lasttarget poisoned", startX, startY));
+            visualHelpers.AddRight(_highlightLastTargetTypePoison = AddCombobox(null, VisualHighlightStateModes, _currentProfile.HighlightLastTargetTypePoison, startX, startY, 100), 2);
+            visualHelpers.Add(AddLabel(null, "Custom color", startX, startY));
+            visualHelpers.AddRight(_highlightLastTargetTypePoisonHue = AddColorBox(null, startX, startY, _currentProfile.HighlightLastTargetTypePoisonHue, string.Empty), 2);
+
+            visualHelpers.Add(AddLabel(null, "Highlight lasttarget paralyzed", startX, startY));
+            visualHelpers.AddRight(_highlightLastTargetTypePara = AddCombobox(null, VisualHighlightStateModes, _currentProfile.HighlightLastTargetTypePara, startX, startY, 100), 2);
+            visualHelpers.Add(AddLabel(null, "Custom color", startX, startY));
+            visualHelpers.AddRight(_highlightLastTargetTypeParaHue = AddColorBox(null, startX, startY, _currentProfile.HighlightLastTargetTypeParaHue, string.Empty), 2);
+
+            visualHelpers.Add(AddLabel(null, "Highlight lasttarget stunned", startX, startY));
+            visualHelpers.AddRight(_highlightLastTargetTypeStunned = AddCombobox(null, VisualHighlightStateModes, _currentProfile.HighlightLastTargetTypeStunned, startX, startY, 100), 2);
+            visualHelpers.Add(AddLabel(null, "Custom color", startX, startY));
+            visualHelpers.AddRight(_highlightLastTargetTypeStunnedHue = AddColorBox(null, startX, startY, _currentProfile.HighlightLastTargetTypeStunnedHue, string.Empty), 2);
+
+            visualHelpers.Add(AddLabel(null, "Highlight lasttarget mortalled (yellow hits)", startX, startY));
+            visualHelpers.AddRight(_highlightLastTargetTypeMortalled = AddCombobox(null, VisualHighlightStateModes, _currentProfile.HighlightLastTargetTypeMortalled, startX, startY, 100), 2);
+            visualHelpers.Add(AddLabel(null, "Custom color", startX, startY));
+            visualHelpers.AddRight(_highlightLastTargetTypeMortalledHue = AddColorBox(null, startX, startY, _currentProfile.HighlightLastTargetTypeMortalledHue, string.Empty), 2);
+            visualHelpers.SyncContentHeight();
+
+            SettingsSection connections = AddSettingsSection(box, "Connections");
+            connections.Y = visualHelpers.Bounds.Bottom + OptionsSectionGapLarge;
+            connections.Add(AddLabel(null, "Movement turn delay (ms)", startX, startY));
+            connections.AddRight
+            (
+                _movementTurnDelay = AddInputField
+                (
+                    null,
+                    startX,
+                    startY,
+                    60,
+                    TEXTBOX_HEIGHT,
+                    numbersOnly: true,
+                    maxCharCount: 4
+                ),
+                2
+            );
+            _movementTurnDelay.SetText(Math.Clamp(_currentProfile.MovementTurnDelay, 20, 1000).ToString());
+
+            connections.Add(AddLabel(null, "Movement fast turn delay (ms)", startX, startY));
+            connections.AddRight
+            (
+                _movementTurnDelayFast = AddInputField
+                (
+                    null,
+                    startX,
+                    startY,
+                    60,
+                    TEXTBOX_HEIGHT,
+                    numbersOnly: true,
+                    maxCharCount: 4
+                ),
+                2
+            );
+            _movementTurnDelayFast.SetText(Math.Clamp(_currentProfile.MovementTurnDelayFast, 20, 1000).ToString());
+
+            connections.Add(AddLabel(null, "Movement walking delay (ms)", startX, startY));
+            connections.AddRight
+            (
+                _movementWalkingDelay = AddInputField
+                (
+                    null,
+                    startX,
+                    startY,
+                    60,
+                    TEXTBOX_HEIGHT,
+                    numbersOnly: true,
+                    maxCharCount: 4
+                ),
+                2
+            );
+            _movementWalkingDelay.SetText(Math.Clamp(_currentProfile.MovementWalkingDelay, 20, 1000).ToString());
+
+            connections.Add(AddLabel(null, "Movement player walking delay (ms)", startX, startY));
+            connections.AddRight
+            (
+                _movementPlayerWalkingDelay = AddInputField
+                (
+                    null,
+                    startX,
+                    startY,
+                    60,
+                    TEXTBOX_HEIGHT,
+                    numbersOnly: true,
+                    maxCharCount: 4
+                ),
+                2
+            );
+            _movementPlayerWalkingDelay.SetText(Math.Clamp(_currentProfile.MovementPlayerWalkingDelay, 20, 1000).ToString());
+
+            NiceButton lowPingPresetButton = new NiceButton(startX, startY, 90, 22, ButtonAction.Activate, "Low Ping")
+            {
+                IsSelectable = false
+            };
+            lowPingPresetButton.MouseUp += (_, _) => SetMovementDelayInputs(70, 35, 120, 120);
+            connections.Add(lowPingPresetButton);
+
+            NiceButton balancedPresetButton = new NiceButton(0, 0, 90, 22, ButtonAction.Activate, "Balanced")
+            {
+                IsSelectable = false
+            };
+            balancedPresetButton.MouseUp += (_, _) => SetMovementDelayInputs(100, 45, 150, 150);
+            connections.Add(balancedPresetButton);
+
+            NiceButton highJitterPresetButton = new NiceButton(0, 0, 100, 22, ButtonAction.Activate, "High Jitter")
+            {
+                IsSelectable = false
+            };
+            highJitterPresetButton.MouseUp += (_, _) => SetMovementDelayInputs(140, 70, 220, 220);
+            connections.Add(highJitterPresetButton);
+
+            NiceButton resetPresetButton = new NiceButton(0, 0, 70, 22, ButtonAction.Activate, "Reset")
+            {
+                IsSelectable = false
+            };
+            resetPresetButton.MouseUp += (_, _) => SetMovementDelayInputs(100, 45, 150, 150);
+            connections.Add(resetPresetButton);
+
             SettingsSection network = AddSettingsSection(box, "Network");
-            network.Y = combat.Bounds.Bottom + 40;
+            network.Y = connections.Bounds.Bottom + 40;
             network.Add(_enableUoDreamsNetworkOptimizer = AddCheckBox(null, "UODreams network optimizer (stone-roof tooltips)", _currentProfile.EnableUoDreamsNetworkOptimizer, startX, startY));
             network.Add(_enableFullSocketDrain = AddCheckBox(null, "Full socket drain each frame", _currentProfile.EnableFullSocketDrain, startX, startY));
 
@@ -4219,8 +4367,44 @@ namespace ClassicUO.Game.UI.Gumps
             _currentProfile.LTHighlightRangeOutlinePixels = _ltHighlightRangeOutlinePixels.Value;
             _currentProfile.HighlightMirrorImageClones = _highlightMirrorClones.IsChecked;
             _currentProfile.MirrorImageCloneHue = _mirrorCloneHue.Hue;
+            _currentProfile.GlowingWeaponsType = _glowingWeaponsType.SelectedIndex;
+            _currentProfile.HighlightGlowingWeaponsTypeHue = _highlightGlowingWeaponsTypeHue.Hue;
+            _currentProfile.HighlightLastTargetType = _highlightLastTargetType.SelectedIndex;
+            _currentProfile.HighlighFriendsGuildType = _highlighFriendsGuildType.SelectedIndex;
+            _currentProfile.HighlightLastTargetTypePoison = _highlightLastTargetTypePoison.SelectedIndex;
+            _currentProfile.HighlightLastTargetTypePara = _highlightLastTargetTypePara.SelectedIndex;
+            _currentProfile.HighlightLastTargetTypeStunned = _highlightLastTargetTypeStunned.SelectedIndex;
+            _currentProfile.HighlightLastTargetTypeMortalled = _highlightLastTargetTypeMortalled.SelectedIndex;
+            _currentProfile.HighlightLastTargetTypeHue = _highlightLastTargetTypeHue.Hue;
+            _currentProfile.HighlighFriendsGuildTypeHue = _highlighFriendsGuildTypeHue.Hue;
+            _currentProfile.HighlightLastTargetTypePoisonHue = _highlightLastTargetTypePoisonHue.Hue;
+            _currentProfile.HighlightLastTargetTypeParaHue = _highlightLastTargetTypeParaHue.Hue;
+            _currentProfile.HighlightLastTargetTypeStunnedHue = _highlightLastTargetTypeStunnedHue.Hue;
+            _currentProfile.HighlightLastTargetTypeMortalledHue = _highlightLastTargetTypeMortalledHue.Hue;
+            _currentProfile.NameOverheadToggled = _nameOverheadAlwaysOn.IsChecked;
             _currentProfile.EnableUoDreamsNetworkOptimizer = _enableUoDreamsNetworkOptimizer.IsChecked;
             _currentProfile.EnableFullSocketDrain = _enableFullSocketDrain.IsChecked;
+
+            if (int.TryParse(_movementTurnDelay.Text, out int movementTurnDelay))
+            {
+                _currentProfile.MovementTurnDelay = Math.Clamp(movementTurnDelay, 20, 1000);
+            }
+
+            if (int.TryParse(_movementTurnDelayFast.Text, out int movementTurnDelayFast))
+            {
+                _currentProfile.MovementTurnDelayFast = Math.Clamp(movementTurnDelayFast, 20, 1000);
+            }
+
+            if (int.TryParse(_movementWalkingDelay.Text, out int movementWalkingDelay))
+            {
+                _currentProfile.MovementWalkingDelay = Math.Clamp(movementWalkingDelay, 20, 1000);
+            }
+
+            if (int.TryParse(_movementPlayerWalkingDelay.Text, out int movementPlayerWalkingDelay))
+            {
+                _currentProfile.MovementPlayerWalkingDelay = Math.Clamp(movementPlayerWalkingDelay, 20, 1000);
+            }
+
             _currentProfile.HidePersistentNPCNames = _hidePersistentNPCNames.IsChecked;
             _currentProfile.ShowAllLayersPaperdoll = _showAllLayersPaperdoll.IsChecked;
             _currentProfile.AutoOpenUiOnLogin = _autoOpenUiOnLogin.IsChecked;
@@ -4839,6 +5023,14 @@ namespace ClassicUO.Game.UI.Gumps
             return drawn;
         }
 
+        private void SetMovementDelayInputs(int turnDelay, int fastTurnDelay, int walkingDelay, int playerWalkingDelay)
+        {
+            _movementTurnDelay?.SetText(Math.Clamp(turnDelay, 20, 1000).ToString());
+            _movementTurnDelayFast?.SetText(Math.Clamp(fastTurnDelay, 20, 1000).ToString());
+            _movementWalkingDelay?.SetText(Math.Clamp(walkingDelay, 20, 1000).ToString());
+            _movementPlayerWalkingDelay?.SetText(Math.Clamp(playerWalkingDelay, 20, 1000).ToString());
+        }
+
         private InputField AddInputField
         (
             ScrollArea area,
@@ -5121,6 +5313,26 @@ namespace ClassicUO.Game.UI.Gumps
 
                 _databox.Add(c);
                 _databox.WantUpdateSize = true;
+                SyncContentHeight();
+            }
+
+            public void SyncContentHeight()
+            {
+                const int headerGap = 4;
+                int titleHeight = Children.Count > 0 && Children[0] is Label title ? title.Height + 1 : 0;
+                int maxChildBottom = 0;
+
+                for (int i = 0; i < _databox.Children.Count; i++)
+                {
+                    Control child = _databox.Children[i];
+
+                    if (child.IsVisible)
+                    {
+                        maxChildBottom = Math.Max(maxChildBottom, child.Bounds.Bottom);
+                    }
+                }
+
+                Height = titleHeight + headerGap + maxChildBottom;
             }
 
             public override void Add(Control c, int page = 0)
@@ -5148,8 +5360,7 @@ namespace ClassicUO.Game.UI.Gumps
 
                 _databox.Add(c, page);
                 _databox.WantUpdateSize = true;
-
-                Height += c.Height + 2;
+                SyncContentHeight();
             }
 
             public void ApplySearchFilter(bool filter, string term, HashSet<Control> matches)

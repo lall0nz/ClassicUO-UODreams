@@ -185,6 +185,28 @@ namespace ClassicUO.Game.GameObjects
                 }
             }
 
+            bool isLastTarget = World.Get(World.TargetManager.LastTargetInfo.Serial) == this;
+
+            if (ProfileManager.CurrentProfile.HighlighFriendsGuildType != 0)
+            {
+                overridedHue = VisualHighlightHelper.LastFriendHue(World, this, overridedHue);
+                hueVec.Y = 1;
+            }
+
+            if (isLastTarget || isAttack)
+            {
+                if (ProfileManager.CurrentProfile.HighlightLastTargetType != 0)
+                {
+                    overridedHue = VisualHighlightHelper.LastTargetHue(this, overridedHue);
+                    hueVec.Y = 1;
+                }
+                else
+                {
+                    overridedHue = Notoriety.GetHue(NotorietyFlag);
+                    hueVec.Y = 1;
+                }
+            }
+
             ProcessSteps(out byte dir);
             byte layerDir = dir;
 
@@ -407,6 +429,14 @@ namespace ClassicUO.Game.GameObjects
 
                         if (item.ItemData.AnimID != 0)
                         {
+                            if (ProfileManager.CurrentProfile.GlowingWeaponsType != 0)
+                            {
+                                if (item.ItemData.AnimID >= 0x263 && item.ItemData.AnimID <= 0x28D)
+                                {
+                                    item.Hue = VisualHighlightHelper.WeaponsHue(item.Hue);
+                                }
+                            }
+
                             graphic = item.ItemData.AnimID;
 
                             if (isGargoyle)
@@ -787,6 +817,14 @@ namespace ClassicUO.Game.GameObjects
                         }
 
                         partialHue = false;
+                    }
+                }
+
+                if (ProfileManager.CurrentProfile.GlowingWeaponsType != 0)
+                {
+                    if (id >= 0x263 && id <= 0x28D)
+                    {
+                        hue = VisualHighlightHelper.WeaponsHue(hue);
                     }
                 }
 

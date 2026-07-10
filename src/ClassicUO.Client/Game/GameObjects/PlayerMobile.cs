@@ -69,7 +69,7 @@ namespace ClassicUO.Game.GameObjects
 
         public ref Ability PrimaryAbility => ref Abilities[0];
         public ref Ability SecondaryAbility => ref Abilities[1];
-        protected override bool IsWalking => LastStepTime > Time.Ticks - Constants.PLAYER_WALKING_DELAY;
+        protected override bool IsWalking => LastStepTime > Time.Ticks - MovementTimingManager.PlayerWalkingDelay;
 
         internal WalkerManager Walker { get; }
         public Pathfinder Pathfinder { get; }
@@ -1602,7 +1602,7 @@ namespace ClassicUO.Game.GameObjects
             }
 
             sbyte oldZ = z;
-            ushort walkTime = Constants.TURN_DELAY;
+            ushort walkTime = (ushort)MovementSpeed.TurnDelay;
 
             if ((oldDirection & Direction.Mask) == (direction & Direction.Mask))
             {
@@ -1655,6 +1655,16 @@ namespace ClassicUO.Game.GameObjects
                 }
 
                 direction = newDir;
+            }
+
+            // Adaptive coalescing: suppress direction-only packets when the server
+            // is falling behind (3+ unconfirmed packets).
+            if (walkTime == (ushort)MovementSpeed.TurnDelay && Walker.UnacceptedPacketsCount >= 3)
+            {
+                Direction = direction;
+                Walker.LastStepRequestTime = Time.Ticks + walkTime;
+
+                return true;
             }
 
             CloseBank();

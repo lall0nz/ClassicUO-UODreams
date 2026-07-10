@@ -114,7 +114,8 @@ namespace ClassicUO.Assets
                 SpeechesLoader.Instance.Load(),
                 LightsLoader.Instance.Load(),
                 SoundsLoader.Instance.Load(),
-                MultiMapLoader.Instance.Load()
+                MultiMapLoader.Instance.Load(),
+                PNGLoader.Instance.Load()
             };
 
             if (!Task.WhenAll(tasks).Wait(TimeSpan.FromSeconds(10)))

@@ -1,6 +1,6 @@
 # Builds GitHub Release assets for UODreams Launcher (PVP or Classic edition).
 param(
-    [string]$Version = "1.1.4",
+    [string]$Version = "1.1.5",
     [ValidateSet("pvp", "classic")]
     [string]$Edition = "pvp",
     [string]$OfficialCuo = "$env:USERPROFILE\Downloads\ClassicUOLauncher-win-x64-release\ClassicUO",
@@ -180,6 +180,30 @@ function Remove-BuildArtifacts([string]$ClientRoot) {
     if (Test-Path "$ClientRoot\Logs") { Remove-Item "$ClientRoot\Logs" -Recurse -Force -ErrorAction SilentlyContinue }
 }
 
+function Copy-ClientBundleData([string]$ClientDir, [string]$BundleRoot) {
+    $dataRoot = Join-Path $BundleRoot "data"
+    if (-not (Test-Path $dataRoot)) {
+        Write-Host "No client bundle data at $dataRoot - skipping" -ForegroundColor DarkYellow
+        return
+    }
+
+    $xmlSource = Join-Path $dataRoot "XmlGumps"
+    if (Test-Path $xmlSource) {
+        $xmlTarget = Join-Path $ClientDir "Data\XmlGumps"
+        New-Item -ItemType Directory -Force -Path $xmlTarget | Out-Null
+        robocopy $xmlSource $xmlTarget *.xml /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
+        Write-Host "Bundled XmlGumps -> $xmlTarget" -ForegroundColor Green
+    }
+
+    $extSource = Join-Path $dataRoot "ExternalImages"
+    if (Test-Path $extSource) {
+        $extTarget = Join-Path $ClientDir "ExternalImages"
+        New-Item -ItemType Directory -Force -Path $extTarget | Out-Null
+        robocopy $extSource $extTarget /E /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
+        Write-Host "Bundled ExternalImages -> $extTarget" -ForegroundColor Green
+    }
+}
+
 $editionLabel = if ($Edition -eq "pvp") { "PVP" } else { "Classic" }
 $releaseTag = "$Edition-v$Version"
 
@@ -291,6 +315,9 @@ if ($Edition -eq "classic") {
         throw "PVP edition requires bundled custom RazorEnhanced. Expected RazorEnhanced.exe in plugins folder from $RazorEnhancedZip."
     }
     Write-Host "Bundled Razor: $bundledRazor" -ForegroundColor Green
+
+    Write-Step "Bundling XmlGumps and ExternalImages"
+    Copy-ClientBundleData $clientDir $RepoRoot
 }
 
 Write-Step "Publishing single-file $editionLabel launcher v$Version"

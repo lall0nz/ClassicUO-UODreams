@@ -31,10 +31,12 @@
 #endregion
 
 using System.Collections.Generic;
+using System.IO;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
+using ClassicUO.Game.UI;
 using ClassicUO.Game.UI.Controls;
 using ClassicUO.Input;
 using ClassicUO.Assets;
@@ -49,6 +51,8 @@ namespace ClassicUO.Game.UI.Gumps
 {
     internal class TopBarGump : Gump
     {
+        private RighClickableButton _xmlGumpsButton;
+
         private TopBarGump(World world) : base(world, 0, 0)
         {
             CanMove = true;
@@ -170,6 +174,38 @@ namespace ClassicUO.Game.UI.Gumps
                 background.Width = startX;
             }
 
+            string[] xmls = XmlGumpHandler.GetAllXmlGumps();
+
+            if (xmls.Length > 0)
+            {
+                Add(
+                    _xmlGumpsButton = new RighClickableButton(
+                        998877,
+                        0x098D,
+                        0x098D,
+                        0x098D,
+                        "Xml Gumps",
+                        1,
+                        true,
+                        0,
+                        0x0036
+                    )
+                    {
+                        ButtonAction = ButtonAction.Activate,
+                        X = startX,
+                        Y = 1,
+                        FontCenter = true
+                    },
+                    1
+                );
+
+                _xmlGumpsButton.MouseUp += (s, e) => { _xmlGumpsButton.ContextMenu?.Show(); };
+
+                RefreshXmlGumps();
+
+                startX += largeWidth + 1;
+            }
+
             background.Width = startX + 1;
 
             //layer
@@ -177,6 +213,49 @@ namespace ClassicUO.Game.UI.Gumps
         }
 
         public bool IsMinimized { get; private set; }
+
+        public void RefreshXmlGumps()
+        {
+            if (_xmlGumpsButton == null)
+            {
+                return;
+            }
+
+            _xmlGumpsButton.ContextMenu?.Dispose();
+
+            if (_xmlGumpsButton.ContextMenu == null)
+            {
+                _xmlGumpsButton.ContextMenu = new ContextMenuControl(this);
+            }
+
+            string[] xmls = XmlGumpHandler.GetAllXmlGumps();
+
+            foreach (var xml in xmls)
+            {
+                _xmlGumpsButton.ContextMenu.Add(new ContextMenuItemEntry(xml, () =>
+                {
+                    if (Keyboard.Ctrl)
+                    {
+                        if (ProfileManager.CurrentProfile.AutoOpenXmlGumps.Contains(xml))
+                        {
+                            ProfileManager.CurrentProfile.AutoOpenXmlGumps.Remove(xml);
+                        }
+                        else
+                        {
+                            ProfileManager.CurrentProfile.AutoOpenXmlGumps.Add(xml);
+                        }
+                    }
+                    else
+                    {
+                        UIManager.Add(XmlGumpHandler.CreateGumpFromFile(World, Path.Combine(XmlGumpHandler.XmlGumpPath, xml + ".xml")));
+                    }
+
+                    RefreshXmlGumps();
+                }, false, ProfileManager.CurrentProfile.AutoOpenXmlGumps.Contains(xml)));
+            }
+
+            _xmlGumpsButton.ContextMenu.Add(new ContextMenuItemEntry("Reload", RefreshXmlGumps));
+        }
 
         public static void Create(World world)
         {

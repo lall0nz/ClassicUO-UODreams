@@ -112,6 +112,8 @@ namespace ClassicUO
             game.GraphicsDevice.Textures[1] = hueSamplers[0];
             game.GraphicsDevice.Textures[2] = hueSamplers[1];
 
+            PNGLoader.Instance.GraphicsDevice = game.GraphicsDevice;
+
             Animations = new Renderer.Animations.Animations(game.GraphicsDevice);
             Arts = new Renderer.Arts.Art(game.GraphicsDevice);
             Gumps = new Renderer.Gumps.Gump(game.GraphicsDevice);

@@ -194,6 +194,7 @@ namespace ClassicUO.Configuration
         [JsonConverter(typeof(Point2Converter))] public Point TopbarGumpPosition { get; set; } = new Point(0, 0);
         public bool TopbarGumpIsMinimized { get; set; }
         public bool TopbarGumpIsDisabled { get; set; }
+        public List<string> AutoOpenXmlGumps { get; set; } = new List<string>();
         public bool UseAlternativeLights { get; set; }
         public bool UseCustomLightLevel { get; set; } = true;
         public byte LightLevel { get; set; }
@@ -246,11 +247,34 @@ namespace ClassicUO.Configuration
         public bool HighlightMirrorImageClones { get; set; } = true;
         public ushort MirrorImageCloneHue { get; set; } = 0x038E;
 
+        // Visual Helpers (Dust765): re-hue / highlight modes (0 = off, 1 = white, 2 = pink, 3 = ice, 4 = fire, 5 = custom).
+        // State highlights also support 5 = special preset hue, 6 = custom.
+        public int GlowingWeaponsType { get; set; } = 0;
+        public ushort HighlightGlowingWeaponsTypeHue { get; set; } = 0x0044;
+        public int HighlightLastTargetType { get; set; } = 0;
+        public int HighlighFriendsGuildType { get; set; } = 0;
+        public ushort HighlightLastTargetTypeHue { get; set; } = 0x0044;
+        public ushort HighlighFriendsGuildTypeHue { get; set; } = 0x0044;
+        public int HighlightLastTargetTypePoison { get; set; } = 0;
+        public ushort HighlightLastTargetTypePoisonHue { get; set; } = 0x0044;
+        public int HighlightLastTargetTypePara { get; set; } = 0;
+        public ushort HighlightLastTargetTypeParaHue { get; set; } = 0x0044;
+        public int HighlightLastTargetTypeStunned { get; set; } = 0;
+        public ushort HighlightLastTargetTypeStunnedHue { get; set; } = 0x0044;
+        public int HighlightLastTargetTypeMortalled { get; set; } = 0;
+        public ushort HighlightLastTargetTypeMortalledHue { get; set; } = 0x0044;
+
         // UODreams: stub stone-roof tooltip spam instead of requesting OPL from server.
         public bool EnableUoDreamsNetworkOptimizer { get; set; } = true;
 
         // Drain all pending socket data each frame instead of one ~4KB read.
         public bool EnableFullSocketDrain { get; set; } = true;
+
+        // Movement / ping tuning (Dust765): turn and walking delays in milliseconds.
+        public int MovementTurnDelay { get; set; } = 100;
+        public int MovementTurnDelayFast { get; set; } = 45;
+        public int MovementWalkingDelay { get; set; } = 150;
+        public int MovementPlayerWalkingDelay { get; set; } = 150;
         public bool AutoOpenCorpses { get; set; } = true;
         public int AutoOpenCorpseRange { get; set; } = 2;
         public int CorpseOpenOptions { get; set; } = 3;

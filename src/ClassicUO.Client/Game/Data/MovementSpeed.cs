@@ -30,6 +30,7 @@
 
 #endregion
 
+using ClassicUO.Game.Managers;
 using System;
 
 namespace ClassicUO.Game.Data
@@ -40,6 +41,10 @@ namespace ClassicUO.Game.Data
         public const int STEP_DELAY_MOUNT_WALK = 200;
         public const int STEP_DELAY_RUN = 200;
         public const int STEP_DELAY_WALK = 400;
+
+        public static bool FastRotation;
+
+        public static int TurnDelay => FastRotation ? MovementTimingManager.TurnDelayFast : MovementTimingManager.TurnDelay;
 
         public static int TimeToCompleteMovement(bool run, bool mounted)
         {
