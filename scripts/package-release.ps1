@@ -459,6 +459,8 @@ dotnet publish (Join-Path $RepoRoot "src\ClassicUO.Launcher.Custom\ClassicUO.Lau
     -p:EnableCompressionInSingleFile=true `
     -p:LauncherEdition=$Edition `
     -p:Version=$Version `
+    -p:AssemblyVersion="$Version.0" `
+    -p:FileVersion="$Version.0" `
     -o $launcherOut | Out-Null
 
 Write-Step "Stripping user runtime data from client package"
