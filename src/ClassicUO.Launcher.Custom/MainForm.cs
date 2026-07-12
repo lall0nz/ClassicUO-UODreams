@@ -243,7 +243,7 @@ namespace ClassicUO.Launcher.Custom
 
             var pillDefs = new (string Key, string Label, string IconFile, Color Color)[]
             {
-                ("Razor Enhanced", Loc.S("Razor P.E.", "Razor P.E."), "razor.png", Theme.PillRazor),
+                ("Razor Enhanced", GetRazorPillLabel(), "razor.png", Theme.PillRazor),
                 ("ClassicAssist", "Classic Assist", "classicassist.png", Theme.PillClassicAssist),
                 ("UOSteam", "UOSteam", "uosteam.png", Theme.PillUOSteam),
                 ("Orion", "Orion", "orion.png", Theme.PillOrion)
@@ -626,9 +626,11 @@ namespace ClassicUO.Launcher.Custom
 
         private static string LangButtonText() => Loc.IsEn ? "🌐 EN" : "🌐 IT";
 
+        private static string GetRazorPillLabel() => Loc.S("Razor\nEnhanced", "Razor\nEnhanced");
+
         private static string GetAssistantDownloadButtonText(string assistant) => assistant switch
         {
-            "Razor Enhanced" => Loc.S("Download Razor P.E.", "Download Razor P.E."),
+            "Razor Enhanced" => Loc.S("Download Razor Enhanced", "Download Razor Enhanced"),
             "ClassicAssist" => Loc.S("Download Classic Assist", "Download Classic Assist"),
             "UOSteam" => Loc.S("Download UOSteam", "Download UOSteam"),
             "Orion" => Loc.S("Download Orion", "Download Orion"),
@@ -650,6 +652,11 @@ namespace ClassicUO.Launcher.Custom
         private void ApplyLanguage()
         {
             _langButton.Text = LangButtonText();
+
+            if (_assistantPills.TryGetValue("Razor Enhanced", out OutlineAssistantButton? razorPill))
+            {
+                razorPill.Text = GetRazorPillLabel();
+            }
 
             _assistantSectionLabel.Text = Loc.S("Seleziona l'assistant", "Select assistant").ToUpperInvariant();
             _uoSectionLabel.Text = Loc.S("Client Ultima Online", "Ultima Online client").ToUpperInvariant();
@@ -825,6 +832,11 @@ namespace ClassicUO.Launcher.Custom
                 return saved;
             }
 
+            if (!LauncherManifest.IsPvpEdition)
+            {
+                return "";
+            }
+
             string bundledRazor = GetBundledRazorPath();
             if (!string.IsNullOrEmpty(bundledRazor))
             {
@@ -858,7 +870,9 @@ namespace ClassicUO.Launcher.Custom
         }
 
         private static bool IsBundledRazorAvailable() =>
-            !string.IsNullOrEmpty(GetBundledRazorPath()) && File.Exists(GetBundledRazorPath());
+            LauncherManifest.IsPvpEdition &&
+            !string.IsNullOrEmpty(GetBundledRazorPath()) &&
+            File.Exists(GetBundledRazorPath());
 
         private void LoadFromSettings()
         {
@@ -1217,10 +1231,9 @@ namespace ClassicUO.Launcher.Custom
             _assistantActionPanel.Visible = hasAssistant && showDownload;
             _assistantBrowseButton.Visible = hasAssistant && !isBundledRazor;
             _assistantHintLabel.Visible = hasAssistant;
-            bool isRazor = SelectedAssistant == "Razor Enhanced";
             _assistantTrashButton.Visible = hasAssistant &&
                 !string.IsNullOrWhiteSpace(_assistantPathBox.Text) &&
-                !isRazor;
+                !isBundledRazor;
 
             if (!hasAssistant)
             {
@@ -1234,7 +1247,9 @@ namespace ClassicUO.Launcher.Custom
                 _downloadAssistantButton.Text = GetAssistantDownloadButtonText(SelectedAssistant);
             }
 
-            bool showRazorBundledInfo = isRazor && installed;
+            bool showRazorBundledInfo = LauncherManifest.IsPvpEdition &&
+                SelectedAssistant == "Razor Enhanced" &&
+                installed;
             _assistantRazorInfoLabel.Visible = showRazorBundledInfo;
             _assistantRazorInfoLabel.Text = showRazorBundledInfo ? GetRazorBundledInfoText() : "";
             _assistantRazorInfoLabel.ForeColor = Theme.TextMuted;
@@ -1249,8 +1264,8 @@ namespace ClassicUO.Launcher.Custom
             else if (isBundledRazor)
             {
                 _assistantHintLabel.Text = Loc.S(
-                    "Razor Enhanced P.E. incluso nel Launcher PVP.",
-                    "Razor Enhanced P.E. bundled with the PVP Launcher.");
+                    "Razor Enhanced incluso nel Launcher PVP.",
+                    "Razor Enhanced bundled with the PVP Launcher.");
                 _assistantHintLabel.ForeColor = Theme.TextMuted;
             }
             else if (canDownload)
@@ -2026,7 +2041,7 @@ namespace ClassicUO.Launcher.Custom
             string uoPath = _uoPathBox.Text.Trim().Trim('"');
             string effectiveClient = ResolveClientExecutable(clientPath, SelectedAssistant);
 
-            if (SelectedAssistant == "Razor Enhanced")
+            if (SelectedAssistant == "Razor Enhanced" && LauncherManifest.IsPvpEdition)
             {
                 string clientDir = Path.GetDirectoryName(effectiveClient)!;
                 string nativeCuo = Path.Combine(clientDir, "cuo.dll");

@@ -794,6 +794,22 @@ namespace ClassicUO.Launcher.Custom
         protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
         protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
 
+        private static Size MeasureMultilineText(Graphics g, Font font, string[] lines)
+        {
+            int maxWidth = 0;
+            int totalHeight = 0;
+            int lineHeight = TextRenderer.MeasureText(g, "Ag", font, Size.Empty, TextFormatFlags.NoPadding).Height;
+
+            for (int i = 0; i < lines.Length; i++)
+            {
+                Size lineSize = TextRenderer.MeasureText(g, lines[i], font, Size.Empty, TextFormatFlags.NoPadding);
+                maxWidth = Math.Max(maxWidth, lineSize.Width);
+            }
+
+            totalHeight = Math.Max(lineHeight, lines.Length * lineHeight);
+            return new Size(maxWidth, totalHeight);
+        }
+
         protected override void OnPaint(PaintEventArgs e)
         {
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
@@ -829,7 +845,8 @@ namespace ClassicUO.Launcher.Custom
 
             const int iconGap = 6;
             int iconSize = Theme.OutlineAssistantIconSize;
-            Size textSize = TextRenderer.MeasureText(e.Graphics, Text, Font, Size.Empty, TextFormatFlags.NoPadding);
+            string[] textLines = Text.Split('\n');
+            Size textSize = MeasureMultilineText(e.Graphics, Font, textLines);
             int contentWidth = (_iconImage != null ? iconSize + iconGap : 0) + textSize.Width;
             int startX = rect.Left + Math.Max(Theme.OutlineAssistantHorizontalPadding, (rect.Width - contentWidth) / 2);
             int centerY = rect.Top + rect.Height / 2;
@@ -843,14 +860,20 @@ namespace ClassicUO.Launcher.Custom
                 startX = iconRect.Right + iconGap;
             }
 
-            var textRect = new Rectangle(startX, rect.Top, Math.Max(0, rect.Right - startX - 4), rect.Height);
-            TextRenderer.DrawText(
-                e.Graphics,
-                Text,
-                Font,
-                textRect,
-                contentColor,
-                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+            int lineHeight = TextRenderer.MeasureText(e.Graphics, "Ag", Font, Size.Empty, TextFormatFlags.NoPadding).Height;
+            int textTop = centerY - textSize.Height / 2;
+            int textWidth = Math.Max(0, rect.Right - startX - 4);
+            for (int i = 0; i < textLines.Length; i++)
+            {
+                var lineRect = new Rectangle(startX, textTop + i * lineHeight, textWidth, lineHeight);
+                TextRenderer.DrawText(
+                    e.Graphics,
+                    textLines[i],
+                    Font,
+                    lineRect,
+                    contentColor,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+            }
         }
     }
 

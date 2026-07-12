@@ -124,7 +124,9 @@ namespace ClassicUO.Launcher.Custom
 
             if (!LauncherManifest.IsPvpEdition)
             {
-                return false;
+                string cuoExe = Path.Combine(ClientDir, "cuo.exe");
+                string classicExe = Path.Combine(ClientDir, "ClassicUO.exe");
+                return File.Exists(cuoExe) || File.Exists(classicExe);
             }
 
             string modded = Path.Combine(ClientDir, "cuo-modded.exe");
