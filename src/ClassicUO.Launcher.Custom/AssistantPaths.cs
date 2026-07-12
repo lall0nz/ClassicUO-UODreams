@@ -5,6 +5,108 @@ namespace ClassicUO.Launcher.Custom
 {
     internal static class AssistantPaths
     {
+        /// <summary>
+        /// Fixed assistant install root next to the launcher executable ({LauncherDir}\Assistant\).
+        /// </summary>
+        public static string LauncherAssistantRoot =>
+            Path.Combine(AppContext.BaseDirectory, "Assistant");
+
+        public static void EnsureLauncherAssistantRoot() =>
+            Directory.CreateDirectory(LauncherAssistantRoot);
+
+        public static string GetInstallDirectory(string assistant)
+        {
+            string subfolder = assistant switch
+            {
+                "ClassicAssist" => "ClassicAssist",
+                "Razor Enhanced" => "RazorEnhanced",
+                "Orion" => "Orion",
+                "UOSteam" => "UOSteam",
+                _ => assistant.Replace(" ", "", StringComparison.Ordinal)
+            };
+
+            return Path.Combine(LauncherAssistantRoot, subfolder);
+        }
+
+        /// <summary>
+        /// Default bundled Razor Enhanced P.E. path: {LauncherDir}\Assistant\RazorEnhanced\RazorEnhanced.exe
+        /// </summary>
+        public static string GetDefaultRazorExePath() =>
+            Path.Combine(LauncherAssistantRoot, "RazorEnhanced", "RazorEnhanced.exe");
+
+        /// <summary>
+        /// Saved paths under Client\Data\Plugins are legacy and must not override Assistant defaults.
+        /// </summary>
+        public static bool IsLegacyClientPluginsRazorPath(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return false;
+            }
+
+            string normalized = path.Replace('\\', '/');
+            return normalized.Contains("/Client/Data/Plugins/", StringComparison.OrdinalIgnoreCase) ||
+                   normalized.Contains("/Data/Plugins/RazorEnhanced", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Bundled or downloaded Razor Enhanced P.E. under Assistant\ only (not Client\Data\Plugins).
+        /// </summary>
+        public static string? DetectBundledRazorExe()
+        {
+            string defaultExe = GetDefaultRazorExePath();
+            if (File.Exists(defaultExe))
+            {
+                return defaultExe;
+            }
+
+            return FindRazorExeInDirectory(LauncherAssistantRoot);
+        }
+
+        public static string? DetectRazorInstallDirectory()
+        {
+            string? exe = DetectBundledRazorExe();
+            if (exe == null)
+            {
+                return null;
+            }
+
+            if (File.Exists(exe))
+            {
+                return Path.GetDirectoryName(exe);
+            }
+
+            return Directory.Exists(exe) ? exe : null;
+        }
+
+        private static string? FindRazorExeInDirectory(string root)
+        {
+            if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
+            {
+                return null;
+            }
+
+            string flatExe = Path.Combine(root, "RazorEnhanced.exe");
+            if (File.Exists(flatExe))
+            {
+                return flatExe;
+            }
+
+            foreach (string dir in Directory.EnumerateDirectories(root))
+            {
+                if (dir.Contains("RazorEnhanced", StringComparison.OrdinalIgnoreCase))
+                {
+                    string nestedExe = Path.Combine(dir, "RazorEnhanced.exe");
+                    if (File.Exists(nestedExe))
+                    {
+                        return nestedExe;
+                    }
+                }
+            }
+
+            return null;
+        }
+
         private static readonly string[] OrionLauncherCandidates =
         {
             "OrionLauncher64.exe",

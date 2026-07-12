@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -13,43 +14,48 @@ namespace ClassicUO.Launcher.Custom
     {
         private readonly LauncherSettings _settings = LauncherSettings.Load();
 
-        private ThemedComboBox _assistantCombo = null!;
-        private TextBox _assistantPathBox = null!;
-        private InputPanel _assistantPathPanel = null!;
-        private ThemedButton _assistantBrowseButton = null!;
-        private Label _assistantPathLabel = null!;
+        private string _selectedAssistant = "Nessuno";
+        private readonly Dictionary<string, OutlineAssistantButton> _assistantPills = new(StringComparer.OrdinalIgnoreCase);
+        private Panel _assistantPathPanel = null!;
+        private Panel _assistantActionPanel = null!;
+        private PathEllipsisTextBox _assistantPathBox = null!;
+        private BrowseDotsButton _assistantBrowseButton = null!;
         private TextBox _clientPathBox = null!;
-        private TextBox _uoPathBox = null!;
+        private PathEllipsisTextBox _uoPathBox = null!;
         private TextBox _ipBox = null!;
         private NumericUpDown _portBox = null!;
         private ThemedComboBox _serverCombo = null!;
         private bool _suppressServerComboEvents;
-        private bool _suppressAssistantComboEvents;
         private CheckBox _encryptionCheck = null!;
         private Label _statusLabel = null!;
         private ThemedButton _downloadUoButton = null!;
         private Label _uoHintLabel = null!;
         private ThemedButton _downloadAssistantButton = null!;
+        private Label _assistantRazorInfoLabel = null!;
         private Label _assistantHintLabel = null!;
+        private TrashIconButton _uoTrashButton = null!;
+        private TrashIconButton _assistantTrashButton = null!;
 
         // References kept for language switching.
         private ThemedButton _langButton = null!;
         private ThemedButton _updateButton = null!;
-        private ThemedButton _clearPathsButton = null!;
+        private ThemedButton _buyCoffeeButton = null!;
         private ThemedButton _launchButton = null!;
-        private ThemedButton _uoBrowseButton = null!;
+        private BrowseDotsButton _uoBrowseButton = null!;
+        private ThemedButton _editServerButton = null!;
         private Label _assistantSectionLabel = null!;
         private Label _uoSectionLabel = null!;
         private Label _shardSectionLabel = null!;
-        private Label _serverLabel = null!;
-        private Label _ipLabel = null!;
-        private Label _portLabel = null!;
         private FooterLinkButton _registerBtn = null!;
         private Label _enhancedMapLink = null!;
         private CheckBox _enhancedMapAutoOpenCheck = null!;
         private ThemedContextMenu? _enhancedMapMenu;
         private int _enhancedMapRowY;
         private bool _updateAvailable;
+        private bool _suppressAssistantPathEvents;
+        private CardPanel _assistantCard = null!;
+        private const int UoCardPadH = 18;
+        private const int UoPathRowY = 40;
 
         public MainForm()
         {
@@ -60,7 +66,14 @@ namespace ClassicUO.Launcher.Custom
             _settings.SyncInstalledClientVersionFromRuntime();
             RefreshWindowTitle();
 
-            Shown += (_, _) => _ = CheckForUpdatesOnStartupAsync();
+            Shown += OnMainFormShown;
+        }
+
+        private void OnMainFormShown(object? sender, EventArgs e)
+        {
+            RefreshAssistantSectionLayout();
+            BeginInvoke(RefreshAssistantSectionLayout);
+            _ = CheckForUpdatesOnStartupAsync();
         }
 
         private void LoadWindowIcon()
@@ -102,6 +115,39 @@ namespace ClassicUO.Launcher.Custom
             }
         }
 
+        private static Image? LoadPillIcon(string fileName)
+        {
+            try
+            {
+                using Stream? s = Assembly.GetExecutingAssembly()
+                    .GetManifestResourceStream($"ClassicUO.Launcher.Custom.Resources.{fileName}");
+                return s != null ? Image.FromStream(s) : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static Image? LoadCoffeeIcon()
+        {
+            Image? src = LoadPillIcon("coffee.png");
+            if (src == null)
+            {
+                return null;
+            }
+
+            var bmp = new Bitmap(src.Width, src.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            using (var g = Graphics.FromImage(bmp))
+            {
+                g.Clear(Color.Transparent);
+                Theme.DrawRecoloredImage(g, src, new Rectangle(0, 0, src.Width, src.Height), Color.FromArgb(196, 118, 58));
+            }
+
+            src.Dispose();
+            return bmp;
+        }
+
         private void BuildUi()
         {
             ForeColor = Theme.Text;
@@ -112,8 +158,8 @@ namespace ClassicUO.Launcher.Custom
             DoubleBuffered = true;
 
             const int formWidth = 620;
-            const int bottomMargin = 12;
-            int margin = 24;
+            const int bottomMargin = 10;
+            int margin = 22;
             int width = formWidth - margin * 2;
             int y = 16;
 
@@ -167,70 +213,78 @@ namespace ClassicUO.Launcher.Custom
             y += 50;
 
             // ----- Card 1: assistant -----
-            var assistantCard = new CardPanel { Bounds = new Rectangle(margin, y, width, 190) };
-            Controls.Add(assistantCard);
+            const int pathRowH = 30;
+            const int actionRowH = Theme.PrimaryButtonHeight;
+            const int actionGap = Theme.SectionRowGap;
+            const int cardPadH = 18;
+            const int cardPadTop = 14;
+            const int assistantCardHeight = 204;
+            _assistantCard = new CardPanel { Bounds = new Rectangle(margin, y, width, assistantCardHeight) };
+            Controls.Add(_assistantCard);
+            var assistantCard = _assistantCard;
+            assistantCard.Resize += (_, _) => LayoutAssistantHintLabels();
 
-            int cx = 18, cy = 14, cw = width - 36;
+            int cw = width - cardPadH * 2;
+            int ay = cardPadTop;
 
-            _assistantSectionLabel = SectionLabel(Loc.S("Seleziona l'assistant", "Select assistant"), cx, cy, cw);
+            _assistantSectionLabel = SectionLabel(Loc.S("Seleziona l'assistant", "Select assistant"), cardPadH, ay, cw);
             assistantCard.Controls.Add(_assistantSectionLabel);
-            cy += 28;
+            ay += 20 + actionGap;
 
-            _assistantCombo = new ThemedComboBox
+            const int pillGap = 6;
+            int pillW = (cw - pillGap * 3) / 4;
+
+            var pillRow = new Panel
             {
-                PlaceholderFirstItem = true,
-                Bounds = new Rectangle(cx, cy, cw, 30)
+                Bounds = new Rectangle(cardPadH, ay, cw, Theme.OutlineAssistantHeight),
+                BackColor = Color.Transparent
             };
-            _assistantCombo.Items.Add(Loc.S("Seleziona un assistant", "Select an assistant"));
-            _assistantCombo.Items.Add("ClassicAssist");
-            _assistantCombo.Items.Add("Razor Enhanced");
-            _assistantCombo.Items.Add("Orion");
-            _assistantCombo.Items.Add("UOSteam");
-            _assistantCombo.SelectedIndexChanged += (_, _) =>
+            assistantCard.Controls.Add(pillRow);
+
+            var pillDefs = new (string Key, string Label, string IconFile, Color Color)[]
             {
-                if (_suppressAssistantComboEvents)
-                {
-                    return;
-                }
-
-                if (SelectedAssistant == "UOSteam")
-                {
-                    ShowUOSteamNotice();
-                }
-
-                UpdateAssistantUi();
-                UpdateAssistantDownloadUi();
+                ("Razor Enhanced", Loc.S("Razor P.E.", "Razor P.E."), "razor.png", Theme.PillRazor),
+                ("ClassicAssist", "Classic Assist", "classicassist.png", Theme.PillClassicAssist),
+                ("UOSteam", "UOSteam", "uosteam.png", Theme.PillUOSteam),
+                ("Orion", "Orion", "orion.png", Theme.PillOrion)
             };
-            assistantCard.Controls.Add(_assistantCombo);
-            cy += 38;
 
-            _assistantPathLabel = new Label
+            for (int i = 0; i < pillDefs.Length; i++)
             {
-                Text = Loc.S("Percorso assistente", "Assistant path"),
+                var def = pillDefs[i];
+                var pill = new OutlineAssistantButton
+                {
+                    Text = def.Label,
+                    IconImage = LoadPillIcon(def.IconFile),
+                    AccentColor = def.Color,
+                    Bounds = new Rectangle(i * (pillW + pillGap), 0, pillW, Theme.OutlineAssistantHeight),
+                    Tag = def.Key
+                };
+                pill.Click += (_, _) => SelectAssistant((string)pill.Tag!);
+                _assistantPills[def.Key] = pill;
+                pillRow.Controls.Add(pill);
+            }
+            ay += Theme.OutlineAssistantHeight + actionGap;
+
+            (_assistantPathPanel, _assistantPathBox, _assistantBrowseButton, _assistantTrashButton) =
+                CreatePathRow(BrowseAssistant, ClearAssistantPath);
+            _assistantPathPanel.Visible = false;
+            _assistantPathPanel.Bounds = new Rectangle(cardPadH, ay, cw, pathRowH);
+            _assistantPathPanel.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
+            assistantCard.Controls.Add(_assistantPathPanel);
+            ay += pathRowH + 6;
+
+            _assistantRazorInfoLabel = new Label
+            {
+                Text = "",
                 ForeColor = Theme.TextMuted,
                 BackColor = Color.Transparent,
-                AutoSize = false,
-                Bounds = new Rectangle(cx, cy, cw, 18)
+                AutoSize = true,
+                MaximumSize = new Size(cw, 0),
+                Location = new Point(cardPadH, ay),
+                Visible = false
             };
-            assistantCard.Controls.Add(_assistantPathLabel);
-            cy += 20;
-
-            (_assistantPathPanel, _assistantPathBox, _assistantBrowseButton) =
-                PathRow(assistantCard, cx, cy, cw - 168, BrowseAssistant);
-            _assistantPathBox.TextChanged += (_, _) => UpdateAssistantDownloadUi();
-
-            _downloadAssistantButton = new ThemedButton
-            {
-                Text = Loc.S("⬇ Scarica", "⬇ Download"),
-                UseGradient = true,
-                CornerRadius = 8,
-                ForeColor = Color.White,
-                Font = new Font("Segoe UI Semibold", 8.5f, FontStyle.Bold),
-                Bounds = new Rectangle(cx + cw - 158, cy, 158, 32)
-            };
-            _downloadAssistantButton.Click += (_, _) => DownloadAssistant();
-            assistantCard.Controls.Add(_downloadAssistantButton);
-            cy += 38;
+            assistantCard.Controls.Add(_assistantRazorInfoLabel);
 
             _assistantHintLabel = new Label
             {
@@ -239,34 +293,62 @@ namespace ClassicUO.Launcher.Custom
                 BackColor = Color.Transparent,
                 AutoSize = true,
                 MaximumSize = new Size(cw, 0),
-                Location = new Point(cx, cy)
+                Location = new Point(cardPadH, ay),
+                Visible = false
             };
             assistantCard.Controls.Add(_assistantHintLabel);
-            y += assistantCard.Height + 14;
+
+            _assistantActionPanel = new Panel
+            {
+                Bounds = new Rectangle(cardPadH, ay, cw, actionRowH),
+                BackColor = Color.Transparent,
+                Visible = false
+            };
+            _assistantActionPanel.Resize += (_, _) => LayoutAssistantDownloadButton();
+            assistantCard.Controls.Add(_assistantActionPanel);
+
+            _downloadAssistantButton = new ThemedButton
+            {
+                Text = GetAssistantDownloadButtonText("Razor Enhanced"),
+                AutoSize = true
+            };
+            Theme.ApplyPrimaryStyle(_downloadAssistantButton);
+            _downloadAssistantButton.Click += (_, _) => DownloadAssistant();
+            _assistantActionPanel.Controls.Add(_downloadAssistantButton);
+
+            _assistantPathBox.TextChanged += (_, _) =>
+            {
+                if (!_suppressAssistantPathEvents)
+                {
+                    UpdateAssistantDownloadUi();
+                }
+            };
+            y += assistantCard.Height + 10;
 
             // ----- Card 2: Ultima Online -----
-            var pathsCard = new CardPanel { Bounds = new Rectangle(margin, y, width, 150) };
+            int cx = 18;
+            var pathsCard = new CardPanel { Bounds = new Rectangle(margin, y, width, 132) };
             Controls.Add(pathsCard);
-            cy = 14;
+            int cy = 14;
 
             _uoSectionLabel = SectionLabel(Loc.S("Client Ultima Online", "Ultima Online client"), cx, cy, cw);
             pathsCard.Controls.Add(_uoSectionLabel);
             cy += 26;
-            (_, _uoPathBox, _uoBrowseButton) = PathRow(pathsCard, cx, cy, cw - 168, BrowseUoFolder);
+
+            (_, _uoPathBox, _uoBrowseButton, _uoTrashButton) = PathRow(pathsCard, cx, cy, cw, BrowseUoFolder, ClearUoPath);
             _uoPathBox.TextChanged += (_, _) => UpdateUoDownloadUi();
+            cy += pathRowH + actionGap;
 
             _downloadUoButton = new ThemedButton
             {
                 Text = Loc.S("⬇ Scarica UODreams", "⬇ Download UODreams"),
-                UseGradient = true,
-                CornerRadius = 8,
-                ForeColor = Color.White,
-                Font = new Font("Segoe UI Semibold", 8.5f, FontStyle.Bold),
-                Bounds = new Rectangle(cx + cw - 158, cy, 158, 32)
+                AutoSize = true,
+                Visible = false
             };
+            Theme.ApplyPrimaryStyle(_downloadUoButton);
             _downloadUoButton.Click += (_, _) => DownloadUoClient();
             pathsCard.Controls.Add(_downloadUoButton);
-            cy += 38;
+            cy += actionRowH + 6;
 
             _uoHintLabel = new Label
             {
@@ -281,10 +363,10 @@ namespace ClassicUO.Launcher.Custom
 
             _clientPathBox = new TextBox { Visible = false };
             Controls.Add(_clientPathBox);
-            y += pathsCard.Height + 14;
+            y += pathsCard.Height + 10;
 
             // ----- Card 3: shard -----
-            var shardCard = new CardPanel { Bounds = new Rectangle(margin, y, width, 174) };
+            var shardCard = new CardPanel { Bounds = new Rectangle(margin, y, width, 82) };
             Controls.Add(shardCard);
             cy = 14;
 
@@ -292,22 +374,22 @@ namespace ClassicUO.Launcher.Custom
             shardCard.Controls.Add(_shardSectionLabel);
             cy += 28;
 
-            _serverLabel = new Label
-            {
-                Text = "Server",
-                ForeColor = Theme.TextMuted,
-                BackColor = Color.Transparent,
-                Bounds = new Rectangle(cx, cy, 200, 16)
-            };
-            shardCard.Controls.Add(_serverLabel);
-            cy += 18;
-
             _serverCombo = new ThemedComboBox
             {
-                Bounds = new Rectangle(cx, cy, cw - 42, 30)
+                Bounds = new Rectangle(cx, cy, cw - 84, 30)
             };
             _serverCombo.SelectedIndexChanged += (_, _) => OnServerComboChanged();
             shardCard.Controls.Add(_serverCombo);
+
+            _editServerButton = new ThemedButton
+            {
+                Text = "✎",
+                CornerRadius = 8,
+                Font = new Font("Segoe UI Semibold", 11f, FontStyle.Bold),
+                Bounds = new Rectangle(cx + cw - 76, cy, 38, 30)
+            };
+            _editServerButton.Click += (_, _) => EditServer();
+            shardCard.Controls.Add(_editServerButton);
 
             var addServerButton = new ThemedButton
             {
@@ -318,59 +400,14 @@ namespace ClassicUO.Launcher.Custom
             };
             addServerButton.Click += (_, _) => AddServer();
             shardCard.Controls.Add(addServerButton);
-            cy += 40;
 
-            _ipLabel = new Label
-            {
-                Text = Loc.S("Indirizzo", "Address"),
-                ForeColor = Theme.TextMuted,
-                BackColor = Color.Transparent,
-                Bounds = new Rectangle(cx, cy, 200, 16)
-            };
-            _portLabel = new Label
-            {
-                Text = Loc.S("Porta", "Port"),
-                ForeColor = Theme.TextMuted,
-                BackColor = Color.Transparent,
-                Bounds = new Rectangle(cx + 320, cy, 80, 16)
-            };
-            shardCard.Controls.Add(_ipLabel);
-            shardCard.Controls.Add(_portLabel);
-            cy += 18;
-
-            var ipPanel = new InputPanel { Bounds = new Rectangle(cx, cy, 300, 32) };
-            _ipBox = new TextBox
-            {
-                BorderStyle = BorderStyle.None,
-                BackColor = Theme.Input,
-                ForeColor = Theme.Text,
-                Dock = DockStyle.Fill
-            };
-            ipPanel.Controls.Add(_ipBox);
-            shardCard.Controls.Add(ipPanel);
-
-            var portPanel = new InputPanel { Bounds = new Rectangle(cx + 320, cy, 90, 32) };
-            _portBox = new NumericUpDown
-            {
-                Minimum = 1,
-                Maximum = 65535,
-                BorderStyle = BorderStyle.None,
-                BackColor = Theme.Input,
-                ForeColor = Theme.Text,
-                Dock = DockStyle.Fill
-            };
-            portPanel.Controls.Add(_portBox);
-            shardCard.Controls.Add(portPanel);
-
-            _encryptionCheck = new CheckBox
-            {
-                Text = Loc.S("Crittografia", "Encryption"),
-                ForeColor = Theme.Text,
-                BackColor = Color.Transparent,
-                Bounds = new Rectangle(cx + 430, cy + 4, cw - 430, 24)
-            };
-            shardCard.Controls.Add(_encryptionCheck);
-            y += shardCard.Height + 18;
+            _ipBox = new TextBox { Visible = false };
+            _portBox = new NumericUpDown { Minimum = 1, Maximum = 65535, Visible = false };
+            _encryptionCheck = new CheckBox { Visible = false };
+            Controls.Add(_ipBox);
+            Controls.Add(_portBox);
+            Controls.Add(_encryptionCheck);
+            y += shardCard.Height + 14;
 
             // ----- Launch button -----
             _launchButton = new ThemedButton
@@ -384,7 +421,7 @@ namespace ClassicUO.Launcher.Custom
             };
             _launchButton.Click += (_, _) => Launch();
             Controls.Add(_launchButton);
-            y += 56;
+            y += 52;
 
             _statusLabel = new Label
             {
@@ -396,7 +433,7 @@ namespace ClassicUO.Launcher.Custom
                 TextAlign = ContentAlignment.TopCenter
             };
             Controls.Add(_statusLabel);
-            y += 30;
+            y += 26;
 
             // ----- Footer links -----
             const int footerGap = 6;
@@ -429,16 +466,20 @@ namespace ClassicUO.Launcher.Custom
             Controls.Add(_registerBtn);
 
             // ----- Toolbar (top) -----
-            _clearPathsButton = new ThemedButton
+            const int toolbarBtnH = Theme.ToolbarButtonHeight;
+            _buyCoffeeButton = new ThemedButton
             {
-                Text = Loc.S("🗑 Pulisci Campi", "🗑 Clear Fields"),
-                CornerRadius = 8,
-                Font = new Font("Segoe UI Semibold", 8f, FontStyle.Bold),
-                ForeColor = Theme.Text,
-                Bounds = new Rectangle(margin, 12, 112, 26)
+                Text = Loc.S("Buy me a coffee", "Buy me a coffee"),
+                IconImage = LoadCoffeeIcon(),
+                IconSize = 14,
+                AutoSize = true,
+                MinimumSize = new Size(0, toolbarBtnH)
             };
-            _clearPathsButton.Click += (_, _) => ClearAllPaths();
-            Controls.Add(_clearPathsButton);
+            Theme.ApplyToolbarPrimaryStyle(_buyCoffeeButton);
+            int coffeeBtnW = _buyCoffeeButton.PreferredSize.Width;
+            _buyCoffeeButton.Bounds = new Rectangle(margin, 12, coffeeBtnW, toolbarBtnH);
+            _buyCoffeeButton.Click += (_, _) => OpenUrl("https://www.paypal.com/donate/?hosted_button_id=ZUGYHHC2L7ZXC");
+            Controls.Add(_buyCoffeeButton);
 
             _updateButton = new ThemedButton
             {
@@ -446,7 +487,7 @@ namespace ClassicUO.Launcher.Custom
                 CornerRadius = 8,
                 Font = new Font("Segoe UI Semibold", 8.5f, FontStyle.Bold),
                 ForeColor = Theme.Text,
-                Bounds = new Rectangle(formWidth - margin - 148, 12, 76, 26)
+                Bounds = new Rectangle(formWidth - margin - 148, 12, 76, toolbarBtnH)
             };
             _updateButton.Click += (_, _) => CheckForUpdates();
             Controls.Add(_updateButton);
@@ -458,11 +499,11 @@ namespace ClassicUO.Launcher.Custom
                 CornerRadius = 8,
                 Font = new Font("Segoe UI Semibold", 8.5f, FontStyle.Bold),
                 ForeColor = Theme.Text,
-                Bounds = new Rectangle(formWidth - margin - 66, 12, 66, 26)
+                Bounds = new Rectangle(formWidth - margin - 66, 12, 66, toolbarBtnH)
             };
             _langButton.Click += (_, _) => ToggleLanguage();
             Controls.Add(_langButton);
-            _clearPathsButton.BringToFront();
+            _buyCoffeeButton.BringToFront();
             _updateButton.BringToFront();
             _langButton.BringToFront();
 
@@ -545,26 +586,58 @@ namespace ClassicUO.Launcher.Custom
             RefreshWindowTitle();
         }
 
-        private void ClearAllPaths()
+        private void ClearAssistantPath()
         {
-            _settings.ResetUserPaths();
+            string current = SelectedAssistant;
+            if (string.Equals(current, "Nessuno", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            _settings.ClearAssistantPath(current);
             _settings.Save();
-
-            _assistantCombo.SelectedIndex = 0;
-            _uoPathBox.Text = "";
             _assistantPathBox.Text = "";
-            _clientPathBox.Text = "";
-            _enhancedMapAutoOpenCheck.Checked = false;
+            UpdateAssistantDownloadUi();
+        }
 
+        private void ClearAssistantSelection()
+        {
+            string previous = SelectedAssistant;
+            if (!string.Equals(previous, "Nessuno", StringComparison.OrdinalIgnoreCase))
+            {
+                _settings.ClearAssistantPath(previous);
+            }
+
+            _settings.Assistant = "Nessuno";
+            _settings.Save();
+            SetSelectedAssistant("Nessuno");
+            _assistantPathBox.Text = "";
             UpdateAssistantUi();
             UpdateAssistantDownloadUi();
-            UpdateUoDownloadUi();
+        }
 
-            _statusLabel.ForeColor = Theme.SectionGreen;
-            _statusLabel.Text = Loc.S("Path resettati.", "Paths cleared.");
+        private void ClearUoPath()
+        {
+            _uoPathBox.Text = "";
+            _settings.UoDirectory = "";
+            _settings.Save();
+            UpdateUoDownloadUi();
         }
 
         private static string LangButtonText() => Loc.IsEn ? "🌐 EN" : "🌐 IT";
+
+        private static string GetAssistantDownloadButtonText(string assistant) => assistant switch
+        {
+            "Razor Enhanced" => Loc.S("Download Razor P.E.", "Download Razor P.E."),
+            "ClassicAssist" => Loc.S("Download Classic Assist", "Download Classic Assist"),
+            "UOSteam" => Loc.S("Download UOSteam", "Download UOSteam"),
+            "Orion" => Loc.S("Download Orion", "Download Orion"),
+            _ => Loc.S("Download", "Download")
+        };
+
+        private static string GetRazorBundledInfoText() => Loc.S(
+            "La versione di Razor Enhanced modded è inclusa nel launcher.",
+            "The modded Razor Enhanced version is included in the launcher.");
 
         private void ToggleLanguage()
         {
@@ -582,16 +655,10 @@ namespace ClassicUO.Launcher.Custom
             _uoSectionLabel.Text = Loc.S("Client Ultima Online", "Ultima Online client").ToUpperInvariant();
             _shardSectionLabel.Text = "SHARD - SERVER";
 
-            if (_assistantCombo.Items.Count > 0)
-            {
-                _assistantCombo.Items[0] = Loc.S("Seleziona un assistant", "Select an assistant");
-            }
-
-            _assistantBrowseButton.Text = Loc.S("Sfoglia…", "Browse…");
-            _uoBrowseButton.Text = Loc.S("Sfoglia…", "Browse…");
-            _downloadAssistantButton.Text = Loc.S("⬇ Scarica", "⬇ Download");
+            _downloadAssistantButton.Text = GetAssistantDownloadButtonText(SelectedAssistant);
             _downloadUoButton.Text = Loc.S("⬇ Scarica UODreams", "⬇ Download UODreams");
-            _clearPathsButton.Text = Loc.S("🗑 Pulisci Campi", "🗑 Clear Fields");
+            _editServerButton.Text = "✎";
+            _buyCoffeeButton.Text = Loc.S("Buy me a coffee", "Buy me a coffee");
             _updateButton.Text = _updateAvailable
                 ? Loc.S("★ Aggiorna", "★ Update")
                 : Loc.S("⬇ Aggiorna", "⬇ Update");
@@ -600,14 +667,6 @@ namespace ClassicUO.Launcher.Custom
             _enhancedMapLink.Text = Loc.S("🌍 ENHANCED MAP", "🌍 ENHANCED MAP");
             _enhancedMapAutoOpenCheck.Text = Loc.S("apri mappa automaticamente", "autoopen map");
             LayoutEnhancedMapControls(24, 620 - 48, _enhancedMapRowY);
-
-            _serverLabel.Text = "Server";
-            _ipLabel.Text = Loc.S("Indirizzo", "Address");
-            _portLabel.Text = Loc.S("Porta", "Port");
-            _encryptionCheck.Text = Loc.S("Crittografia", "Encryption");
-
-            // Owner-drawn combo: repaint after language switch.
-            _assistantCombo.Invalidate();
 
             // Refresh dynamic/contextual texts.
             UpdateAssistantUi();
@@ -664,56 +723,161 @@ namespace ClassicUO.Launcher.Custom
             };
         }
 
-        private static (InputPanel, TextBox, ThemedButton) PathRow(Control parent, int x, int y, int width, Action browse)
+        private static (Panel RowPanel, PathEllipsisTextBox Box, BrowseDotsButton Browse, TrashIconButton Trash) CreatePathRow(
+            Action browse, Action clear)
         {
-            var panel = new InputPanel { Bounds = new Rectangle(x, y, width - 104, 32) };
-            var box = new TextBox
+            const int iconW = 24;
+            const int gap = 4;
+            const int rowH = 30;
+
+            var row = new Panel
             {
-                BorderStyle = BorderStyle.None,
-                BackColor = Theme.Input,
-                ForeColor = Theme.Text,
-                Dock = DockStyle.Fill
+                Height = rowH,
+                BackColor = Color.Transparent,
+                Margin = Padding.Empty
             };
+
+            var panel = new InputPanel { BackColor = Color.Transparent };
+            var box = new PathEllipsisTextBox { Dock = DockStyle.Fill };
+
+            var browseButton = new BrowseDotsButton();
+            browseButton.Click += (_, _) => browse();
+
+            var trashButton = new TrashIconButton();
+            trashButton.Click += (_, _) => clear();
+
             panel.Controls.Add(box);
+            row.Controls.Add(panel);
+            row.Controls.Add(browseButton);
+            row.Controls.Add(trashButton);
 
-            var button = new ThemedButton
+            void layoutRow()
             {
-                Text = Loc.S("Sfoglia…", "Browse…"),
-                Bounds = new Rectangle(x + width - 94, y, 94, 32)
-            };
-            button.Click += (_, _) => browse();
+                int h = row.ClientSize.Height;
+                int w = row.ClientSize.Width;
+                trashButton.SetBounds(w - iconW, 0, iconW, h);
+                browseButton.SetBounds(w - iconW * 2 - gap, 0, iconW, h);
+                panel.SetBounds(0, 0, Math.Max(0, w - iconW * 2 - gap * 2), h);
+            }
 
-            parent.Controls.Add(panel);
-            parent.Controls.Add(button);
-            return (panel, box, button);
+            row.Resize += (_, _) => layoutRow();
+            row.HandleCreated += (_, _) => layoutRow();
+
+            return (row, box, browseButton, trashButton);
         }
+
+        private static (Panel RowPanel, PathEllipsisTextBox Box, BrowseDotsButton Browse, TrashIconButton Trash) PathRow(
+            Control parent, int x, int y, int width, Action browse, Action clear)
+        {
+            var created = CreatePathRow(browse, clear);
+            created.RowPanel.Bounds = new Rectangle(x, y, width, 30);
+            created.RowPanel.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
+            parent.Controls.Add(created.RowPanel);
+            return created;
+        }
+
+        private void SelectAssistant(string assistantKey)
+        {
+            if (string.Equals(_selectedAssistant, assistantKey, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            if (assistantKey == "UOSteam")
+            {
+                ShowUOSteamNotice();
+            }
+
+            SetSelectedAssistant(assistantKey);
+            UpdateAssistantUi();
+            UpdateAssistantDownloadUi();
+        }
+
+        private void SetSelectedAssistant(string assistantKey)
+        {
+            _selectedAssistant = assistantKey;
+            foreach (var pair in _assistantPills)
+            {
+                pair.Value.IsSelected = string.Equals(pair.Key, assistantKey, StringComparison.OrdinalIgnoreCase);
+                pair.Value.Invalidate();
+            }
+
+            bool hasAssistant = assistantKey != "Nessuno";
+            _assistantPathPanel.Visible = hasAssistant;
+        }
+
+        private static string GetBundledRazorPath()
+        {
+            string? bundled = AssistantPaths.DetectBundledRazorExe();
+            if (!string.IsNullOrEmpty(bundled))
+            {
+                return bundled;
+            }
+
+            return "";
+        }
+
+        private string ResolveRazorPathForUi(bool canAutoDetect)
+        {
+            string saved = _settings.RazorPath.Trim();
+            if (!string.IsNullOrEmpty(saved) && !AssistantPaths.IsLegacyClientPluginsRazorPath(saved))
+            {
+                return saved;
+            }
+
+            string bundledRazor = GetBundledRazorPath();
+            if (!string.IsNullOrEmpty(bundledRazor))
+            {
+                return bundledRazor;
+            }
+
+            if (canAutoDetect ||
+                string.IsNullOrEmpty(saved) ||
+                AssistantPaths.IsLegacyClientPluginsRazorPath(saved))
+            {
+                string defaultPath = AssistantPaths.GetDefaultRazorExePath();
+                if (File.Exists(defaultPath))
+                {
+                    return defaultPath;
+                }
+
+                string? legacyRoot = ClientRuntimeDownloader.DetectRazorEnhancedPathInPlugins();
+                if (legacyRoot != null)
+                {
+                    string legacyExe = Path.Combine(legacyRoot, "RazorEnhanced.exe");
+                    if (File.Exists(legacyExe))
+                    {
+                        return legacyExe;
+                    }
+                }
+
+                return defaultPath;
+            }
+
+            return "";
+        }
+
+        private static bool IsBundledRazorAvailable() =>
+            !string.IsNullOrEmpty(GetBundledRazorPath()) && File.Exists(GetBundledRazorPath());
 
         private void LoadFromSettings()
         {
-            _suppressAssistantComboEvents = true;
-            try
+            string savedAssistant = _settings.Assistant;
+            if (savedAssistant == "Nessuno" || string.IsNullOrEmpty(savedAssistant))
             {
-                string savedAssistant = _settings.Assistant;
-                if (savedAssistant == "Nessuno" || string.IsNullOrEmpty(savedAssistant))
-                {
-                    _assistantCombo.SelectedIndex = 0;
-                }
-                else if (savedAssistant == "Razor")
-                {
-                    _assistantCombo.SelectedItem = "Razor Enhanced";
-                }
-                else if (_assistantCombo.Items.Contains(savedAssistant))
-                {
-                    _assistantCombo.SelectedItem = savedAssistant;
-                }
-                else
-                {
-                    _assistantCombo.SelectedIndex = 0;
-                }
+                SetSelectedAssistant("Nessuno");
             }
-            finally
+            else if (savedAssistant == "Razor")
             {
-                _suppressAssistantComboEvents = false;
+                SetSelectedAssistant("Razor Enhanced");
+            }
+            else if (_assistantPills.ContainsKey(savedAssistant))
+            {
+                SetSelectedAssistant(savedAssistant);
+            }
+            else
+            {
+                SetSelectedAssistant("Nessuno");
             }
 
             _uoPathBox.Text = _settings.UoDirectory;
@@ -728,7 +892,6 @@ namespace ClassicUO.Launcher.Custom
                 : DetectDefaultClient();
 
             UpdateAssistantUi();
-            UpdateAssistantDownloadUi();
             UpdateUoDownloadUi();
         }
 
@@ -793,28 +956,64 @@ namespace ClassicUO.Launcher.Custom
             _portBox.Value = Math.Min(Math.Max(server.Port, 1), 65535);
         }
 
+        private void EditServer()
+        {
+            if (_serverCombo.SelectedItem is not string name)
+            {
+                return;
+            }
+
+            ShardServer? server = _settings.Servers.Find(s => s.Name == name);
+            if (server == null)
+            {
+                return;
+            }
+
+            var edited = ShardServerDialog.Edit(this, server, _settings.Encryption);
+            if (edited == null)
+            {
+                return;
+            }
+
+            ShardServer updated = edited.Value.Server!;
+            server.Name = updated.Name;
+            server.Ip = updated.Ip;
+            server.Port = updated.Port;
+            _settings.Encryption = edited.Value.Encryption;
+            _settings.SelectedServer = server.Name;
+            _settings.Save();
+
+            _ipBox.Text = server.Ip;
+            _portBox.Value = Math.Min(Math.Max(server.Port, 1), 65535);
+            _encryptionCheck.Checked = _settings.Encryption != 0;
+            RefreshServerCombo();
+        }
+
         private void AddServer()
         {
-            ShardServer? added = ShardServerDialog.Prompt(this);
+            var added = ShardServerDialog.PromptAdd(this);
             if (added == null)
             {
                 return;
             }
 
+            ShardServer server = added.Value.Server!;
             ShardServer? existing = _settings.Servers.Find(s =>
-                string.Equals(s.Name, added.Name, StringComparison.OrdinalIgnoreCase));
+                string.Equals(s.Name, server.Name, StringComparison.OrdinalIgnoreCase));
 
             if (existing != null)
             {
-                existing.Ip = added.Ip;
-                existing.Port = added.Port;
+                existing.Ip = server.Ip;
+                existing.Port = server.Port;
             }
             else
             {
-                _settings.Servers.Add(added);
+                _settings.Servers.Add(server);
             }
 
-            _settings.SelectedServer = added.Name;
+            _settings.SelectedServer = server.Name;
+            _settings.Encryption = added.Value.Encryption;
+            _encryptionCheck.Checked = _settings.Encryption != 0;
             _settings.Save();
 
             RefreshServerCombo();
@@ -828,13 +1027,37 @@ namespace ClassicUO.Launcher.Custom
                 Directory.Exists(uoPath) &&
                 File.Exists(Path.Combine(uoPath, "tiledata.mul"));
 
-            _downloadUoButton.Visible = !valid;
-            _uoHintLabel.Text = valid
-                ? Loc.S("Client Ultima Online pronto.", "Ultima Online client ready.")
-                : Loc.S(
-                    "Client non trovato — scarica il pacchetto UODreams o seleziona la cartella del gioco con il client.",
-                    "Client not found — download the UODreams package or select the game folder containing the client.");
-            _uoHintLabel.ForeColor = valid ? Theme.SectionGreen : Theme.TextMuted;
+            _uoBrowseButton.Visible = true;
+            LayoutUoClientSection(valid);
+        }
+
+        private void LayoutUoClientSection(bool clientReady)
+        {
+            Control? card = _uoSectionLabel.Parent;
+            int contentW = card?.ClientSize.Width > 0
+                ? card.ClientSize.Width - UoCardPadH * 2
+                : 576;
+
+            if (clientReady)
+            {
+                _downloadUoButton.Visible = false;
+                _uoHintLabel.Visible = true;
+                _uoHintLabel.Text = Loc.S("✓ Client Ultima Online pronto.", "✓ Ultima Online client ready.");
+                _uoHintLabel.ForeColor = Theme.SectionGreen;
+                _uoHintLabel.Location = new Point(UoCardPadH, UoPathRowY + 30 + 4);
+            }
+            else
+            {
+                _uoHintLabel.Visible = false;
+                _uoHintLabel.Text = "";
+                _downloadUoButton.Visible = true;
+                _downloadUoButton.Text = Loc.S("⬇ Scarica UODreams", "⬇ Download UODreams");
+                int buttonW = _downloadUoButton.PreferredSize.Width;
+                int buttonH = Theme.PrimaryButtonHeight;
+                int buttonX = UoCardPadH + Math.Max(0, (contentW - buttonW) / 2);
+                int buttonY = UoPathRowY + 30 + Theme.SectionRowGap;
+                _downloadUoButton.Bounds = new Rectangle(buttonX, buttonY, buttonW, buttonH);
+            }
         }
 
         private static string GetClientDir() => ClientRuntimeDownloader.ClientDir;
@@ -905,84 +1128,130 @@ namespace ClassicUO.Launcher.Custom
             return clientPath;
         }
 
-        private string SelectedAssistant
-        {
-            get
-            {
-                if (_assistantCombo.SelectedIndex <= 0)
-                {
-                    return "Nessuno";
-                }
+        private string SelectedAssistant => _selectedAssistant;
 
-                return _assistantCombo.SelectedItem as string ?? "Nessuno";
-            }
-        }
-
-        private void UpdateAssistantUi()
+        private void UpdateAssistantUi(bool allowAutoDetect = true)
         {
             bool hasAssistant = SelectedAssistant != "Nessuno";
-            _assistantPathLabel.Visible = hasAssistant;
             _assistantPathPanel.Visible = hasAssistant;
-            _assistantBrowseButton.Visible = hasAssistant;
+            _assistantActionPanel.Visible = hasAssistant;
 
-            bool allowAutoDetect = _settings.FirstRunCompleted;
-
-            switch (SelectedAssistant)
+            if (!hasAssistant)
             {
-                case "ClassicAssist":
-                    _assistantPathLabel.Text = Loc.S(
-                        "Percorso di ClassicAssist.dll (o della sua cartella)",
-                        "Path to ClassicAssist.dll (or its folder)");
-                    _assistantPathBox.Text = _settings.ClassicAssistPath;
-                    break;
-                case "Razor Enhanced":
-                    _assistantPathLabel.Text = Loc.S(
-                        "Percorso di RazorEnhanced (cartella o RazorEnhanced.exe)",
-                        "Path to RazorEnhanced (folder or RazorEnhanced.exe)");
-                    _assistantPathBox.Text = string.IsNullOrWhiteSpace(_settings.RazorPath) && allowAutoDetect
-                        ? ClientRuntimeDownloader.DetectRazorEnhancedPath() ?? ""
-                        : _settings.RazorPath;
-                    break;
-                case "Orion":
-                    _assistantPathLabel.Text = Loc.S(
-                        "Percorso di Orion Launcher (cartella o OrionLauncher64.exe)",
-                        "Path to Orion Launcher (folder or OrionLauncher64.exe)");
-                    _assistantPathBox.Text = string.IsNullOrWhiteSpace(_settings.OrionPath) && allowAutoDetect
-                        ? ClientRuntimeDownloader.DetectOrionInstallRoot() ?? ""
-                        : _settings.OrionPath;
-                    break;
-                case "UOSteam":
-                    _assistantPathLabel.Text = Loc.S(
-                        "Percorso di UOSteam (cartella o UOS.exe)",
-                        "Path to UOSteam (folder or UOS.exe)");
-                    _assistantPathBox.Text = string.IsNullOrWhiteSpace(_settings.UOSteamPath) && allowAutoDetect
-                        ? ClientRuntimeDownloader.DetectUOSteamExe() ?? ""
-                        : _settings.UOSteamPath;
-                    break;
+                UpdateAssistantDownloadUi();
+                return;
             }
 
+            bool canAutoDetect = allowAutoDetect &&
+                !_settings.IsAssistantPathClearedByUser(SelectedAssistant) &&
+                _settings.FirstRunCompleted;
+
+            _suppressAssistantPathEvents = true;
+            try
+            {
+                switch (SelectedAssistant)
+                {
+                    case "ClassicAssist":
+                        _assistantPathBox.Text = _settings.ClassicAssistPath;
+                        break;
+                    case "Razor Enhanced":
+                        _assistantPathBox.Text = ResolveRazorPathForUi(canAutoDetect);
+                        if (!string.IsNullOrWhiteSpace(_assistantPathBox.Text) &&
+                            File.Exists(_assistantPathBox.Text))
+                        {
+                            _settings.ClearAssistantPathClearedFlag("Razor Enhanced");
+                        }
+                        break;
+                    case "Orion":
+                        _assistantPathBox.Text = !string.IsNullOrWhiteSpace(_settings.OrionPath)
+                            ? _settings.OrionPath
+                            : canAutoDetect
+                                ? ClientRuntimeDownloader.DetectOrionInstallRoot() ?? ""
+                                : "";
+                        break;
+                    case "UOSteam":
+                        _assistantPathBox.Text = !string.IsNullOrWhiteSpace(_settings.UOSteamPath)
+                            ? _settings.UOSteamPath
+                            : canAutoDetect
+                                ? ClientRuntimeDownloader.DetectUOSteamExe() ?? ""
+                                : "";
+                        break;
+                }
+            }
+            finally
+            {
+                _suppressAssistantPathEvents = false;
+            }
+
+            UpdateAssistantDownloadUi();
+        }
+
+        private void RefreshAssistantSectionLayout()
+        {
             UpdateAssistantDownloadUi();
         }
 
         private void UpdateAssistantDownloadUi()
         {
             bool hasAssistant = SelectedAssistant != "Nessuno";
-            bool canDownload = hasAssistant && AssistantDownloader.SupportsDownload(SelectedAssistant);
+
+            if (SelectedAssistant == "Razor Enhanced" &&
+                string.IsNullOrWhiteSpace(_assistantPathBox.Text) &&
+                IsBundledRazorAvailable())
+            {
+                _assistantPathBox.Text = GetBundledRazorPath();
+                _settings.ClearAssistantPathClearedFlag("Razor Enhanced");
+            }
+
+            bool isBundledRazor = SelectedAssistant == "Razor Enhanced" && IsBundledRazorAvailable();
+            bool canDownload = hasAssistant &&
+                AssistantDownloader.SupportsDownload(SelectedAssistant) &&
+                !isBundledRazor;
             bool installed = hasAssistant &&
                 AssistantDownloader.IsPluginValidAtPath(SelectedAssistant, _assistantPathBox.Text);
 
-            _downloadAssistantButton.Visible = canDownload && !installed;
+            bool showDownload = canDownload && !installed;
+
+            _assistantPathPanel.Visible = hasAssistant;
+            _downloadAssistantButton.Visible = showDownload;
+            _assistantActionPanel.Visible = hasAssistant && showDownload;
+            _assistantBrowseButton.Visible = hasAssistant && !isBundledRazor;
             _assistantHintLabel.Visible = hasAssistant;
+            bool isRazor = SelectedAssistant == "Razor Enhanced";
+            _assistantTrashButton.Visible = hasAssistant &&
+                !string.IsNullOrWhiteSpace(_assistantPathBox.Text) &&
+                !isRazor;
 
             if (!hasAssistant)
             {
+                _assistantRazorInfoLabel.Visible = false;
+                _assistantRazorInfoLabel.Text = "";
                 return;
             }
 
+            if (showDownload)
+            {
+                _downloadAssistantButton.Text = GetAssistantDownloadButtonText(SelectedAssistant);
+            }
+
+            bool showRazorBundledInfo = isRazor && installed;
+            _assistantRazorInfoLabel.Visible = showRazorBundledInfo;
+            _assistantRazorInfoLabel.Text = showRazorBundledInfo ? GetRazorBundledInfoText() : "";
+            _assistantRazorInfoLabel.ForeColor = Theme.TextMuted;
+
             if (installed)
             {
-                _assistantHintLabel.Text = Loc.S($"{SelectedAssistant} pronto.", $"{SelectedAssistant} ready.");
+                _assistantHintLabel.Text = Loc.S(
+                    "✓ Assistant caricato correttamente.",
+                    "✓ Assistant loaded successfully.");
                 _assistantHintLabel.ForeColor = Theme.SectionGreen;
+            }
+            else if (isBundledRazor)
+            {
+                _assistantHintLabel.Text = Loc.S(
+                    "Razor Enhanced P.E. incluso nel Launcher PVP.",
+                    "Razor Enhanced P.E. bundled with the PVP Launcher.");
+                _assistantHintLabel.ForeColor = Theme.TextMuted;
             }
             else if (canDownload)
             {
@@ -1007,6 +1276,73 @@ namespace ClassicUO.Launcher.Custom
                     "Select the assistant path.");
                 _assistantHintLabel.ForeColor = Theme.TextMuted;
             }
+
+            LayoutAssistantHintLabels();
+            LayoutAssistantDownloadButton();
+        }
+
+        private void LayoutAssistantHintLabels()
+        {
+            if (_assistantPathPanel.Parent is not Control card)
+            {
+                return;
+            }
+
+            const int cardPadH = 18;
+            int cw = Math.Max(0, card.ClientSize.Width - cardPadH * 2);
+            if (cw <= 0)
+            {
+                return;
+            }
+
+            int y = _assistantPathPanel.Bottom + 6;
+
+            if (_assistantRazorInfoLabel.Visible)
+            {
+                y = PlaceAutoSizeLabel(_assistantRazorInfoLabel, cardPadH, y, cw) + 4;
+            }
+
+            if (_assistantHintLabel.Visible)
+            {
+                y = PlaceAutoSizeLabel(_assistantHintLabel, cardPadH, y, cw);
+            }
+
+            if (_assistantActionPanel.Visible)
+            {
+                int buttonH = Theme.PrimaryButtonHeight;
+                int innerBottom = card.ClientSize.Height - Theme.AssistantCardBottomPadding;
+                int available = innerBottom - y;
+                int actionY = y + Math.Max(Theme.SectionRowGap, (available - buttonH) / 2);
+                _assistantActionPanel.Location = new Point(cardPadH, actionY);
+                _assistantActionPanel.Height = buttonH;
+            }
+        }
+
+        private static int PlaceAutoSizeLabel(Label label, int x, int y, int maxWidth)
+        {
+            label.MaximumSize = new Size(maxWidth, 0);
+            label.Location = new Point(x, y);
+            int height = label.GetPreferredSize(new Size(maxWidth, 0)).Height;
+            return y + Math.Max(height, label.Height);
+        }
+
+        private void LayoutAssistantDownloadButton()
+        {
+            if (!_downloadAssistantButton.Visible || !_assistantActionPanel.Visible)
+            {
+                return;
+            }
+
+            int panelW = _assistantActionPanel.ClientSize.Width;
+            if (panelW <= 0)
+            {
+                return;
+            }
+
+            int buttonW = _downloadAssistantButton.PreferredSize.Width;
+            int buttonH = Theme.PrimaryButtonHeight;
+            int buttonX = Math.Max(0, (panelW - buttonW) / 2);
+            _downloadAssistantButton.Bounds = new Rectangle(buttonX, 0, buttonW, buttonH);
         }
 
         private void BrowseAssistant()
@@ -1079,6 +1415,8 @@ namespace ClassicUO.Launcher.Custom
             }
 
             _assistantPathBox.Text = dialog.FileName;
+            _settings.ClearAssistantPathClearedFlag(assistant);
+            SaveSettings();
             UpdateAssistantDownloadUi();
         }
 
@@ -1296,41 +1634,8 @@ namespace ClassicUO.Launcher.Custom
                 "Orion Assistant: una volta terminato il download, si aprirà in automatico e bisognerà aggiornarlo e configurarlo.",
                 "Orion Assistant: once the download is finished, it will open automatically and you will need to update and configure it.");
 
-            using var folderDialog = new FolderBrowserDialog
-            {
-                Description = Loc.S(
-                    $"Scegli dove installare {SelectedAssistant}",
-                    $"Choose where to install {SelectedAssistant}"),
-                UseDescriptionForTitle = true
-            };
-
-            string defaultDir = AssistantDownloader.GetDefaultInstallDirectory(SelectedAssistant);
-            if (Directory.Exists(_assistantPathBox.Text))
-            {
-                folderDialog.SelectedPath = _assistantPathBox.Text;
-            }
-            else if (Directory.Exists(defaultDir))
-            {
-                folderDialog.SelectedPath = defaultDir;
-            }
-            else if (Directory.Exists(Path.GetDirectoryName(defaultDir) ?? ""))
-            {
-                folderDialog.SelectedPath = Path.GetDirectoryName(defaultDir)!;
-            }
-
-            if (folderDialog.ShowDialog(this) != DialogResult.OK)
-            {
-                return;
-            }
-
-            string installDir = Path.Combine(folderDialog.SelectedPath, SelectedAssistant switch
-            {
-                "ClassicAssist" => "ClassicAssist",
-                "Razor Enhanced" => "RazorEnhanced",
-                "Orion" => "Orion",
-                "UOSteam" => "UOSteam",
-                _ => SelectedAssistant
-            });
+            AssistantPaths.EnsureLauncherAssistantRoot();
+            string installDir = AssistantDownloader.GetDefaultInstallDirectory(SelectedAssistant);
 
             _statusLabel.ForeColor = Theme.TextMuted;
             _statusLabel.Text = Loc.S($"Download {SelectedAssistant} in corso…", $"Downloading {SelectedAssistant}…");
@@ -1347,10 +1652,13 @@ namespace ClassicUO.Launcher.Custom
             if (result == DialogResult.OK && !string.IsNullOrWhiteSpace(progressForm.ResultPath))
             {
                 _assistantPathBox.Text = progressForm.ResultPath;
+                _settings.ClearAssistantPathClearedFlag(SelectedAssistant);
                 SaveSettings();
                 UpdateAssistantDownloadUi();
                 _statusLabel.ForeColor = Theme.SectionGreen;
-                _statusLabel.Text = Loc.S($"{SelectedAssistant} installato correttamente.", $"{SelectedAssistant} installed successfully.");
+                _statusLabel.Text = Loc.S(
+                    "✓ Assistant caricato correttamente.",
+                    "✓ Assistant loaded successfully.");
             }
             else if (result == DialogResult.Abort)
             {
@@ -1397,10 +1705,14 @@ namespace ClassicUO.Launcher.Custom
             if (result == DialogResult.OK && !string.IsNullOrWhiteSpace(progressForm.ResultPath))
             {
                 _uoPathBox.Text = progressForm.ResultPath;
+                _clientPathBox.Text = DetectDefaultClient();
                 SaveSettings();
                 UpdateUoDownloadUi();
+                UpdateAssistantUi();
                 _statusLabel.ForeColor = Theme.SectionGreen;
-                _statusLabel.Text = Loc.S("Client UODreams installato correttamente.", "UODreams client installed successfully.");
+                _statusLabel.Text = Loc.S(
+                    "✓ Client UODreams installato correttamente.",
+                    "✓ UODreams client installed successfully.");
             }
             else if (result == DialogResult.Abort)
             {
@@ -1499,10 +1811,10 @@ namespace ClassicUO.Launcher.Custom
                 this,
                 Loc.S("UOSteam", "UOSteam"),
                 Loc.S(
-                    "UOSteam è un assistant che non supporta ClassicUO. Se vuoi provare un nuovo assistant simile, " +
-                    "prova ClassicAssist, così potrai usufruire di tutte le feature del Classic Client di UO.",
-                    "UOSteam is an assistant that does not support ClassicUO. If you want to try a similar new " +
-                    "assistant, try ClassicAssist, so you can enjoy all the features of the UO Classic Client."));
+                    "UOSteam non supporta ClassicUO. Prova invece ClassicAssist, Razor Enhanced o Orion " +
+                    "per usare tutte le feature del Classic Client.",
+                    "UOSteam does not support ClassicUO. Instead, try ClassicAssist, Razor Enhanced, or Orion " +
+                    "to use all the features of the Classic Client."));
         }
 
         private void LaunchUOSteam()

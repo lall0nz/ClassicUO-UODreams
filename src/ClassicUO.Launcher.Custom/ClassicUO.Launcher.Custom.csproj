@@ -11,9 +11,9 @@
     <PublishAot>false</PublishAot>
     <ApplicationIcon>Resources\uodreams.ico</ApplicationIcon>
     <LauncherEdition Condition="'$(LauncherEdition)' == ''">pvp</LauncherEdition>
-    <Version>1.1.7.0</Version>
-    <AssemblyVersion>1.1.7.0</AssemblyVersion>
-    <FileVersion>1.1.7.0</FileVersion>
+    <Version>1.1.8.0</Version>
+    <AssemblyVersion>1.1.8.0</AssemblyVersion>
+    <FileVersion>1.1.8.0</FileVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(LauncherEdition)' == 'pvp'">
@@ -23,6 +23,11 @@
   <ItemGroup>
     <EmbeddedResource Include="Resources\uodreams_logo.png" />
     <EmbeddedResource Include="Resources\uodreams.ico" />
+    <EmbeddedResource Include="Resources\razor.png" />
+    <EmbeddedResource Include="Resources\classicassist.png" />
+    <EmbeddedResource Include="Resources\orion.png" />
+    <EmbeddedResource Include="Resources\uosteam.png" />
+    <EmbeddedResource Include="Resources\coffee.png" />
     <Content Include="Resources\uodreams.ico" Link="uodreams.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
@@ -33,4 +38,4 @@
   </ItemGroup>
 
 </Project>
-
+

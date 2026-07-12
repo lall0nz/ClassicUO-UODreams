@@ -6,10 +6,10 @@
 # On client update, ClientRuntimeDownloader backs up and restores the same paths.
 # See RELEASE.md for the full policy.
 param(
-    [string]$Version = "1.1.7",
+    [string]$Version = "1.1.8",
     [ValidateSet("pvp", "classic")]
     [string]$Edition = "pvp",
-    [string]$OfficialCuo = "$env:USERPROFILE\Downloads\ClassicUOLauncher-win-x64-release\ClassicUO",
+    [string]$OfficialCuo = "$env:USERPROFILE\Downloads\ClassicUOLauncher-win-x64-releasee\ClassicUO",
     [string]$RazorEnhancedZip = "",
     [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path,
     [string]$OutputDir = "",
@@ -48,6 +48,63 @@ function Copy-NativeRuntimeFiles([string[]]$SourceDirs, [string]$TargetDir) {
                 break
             }
         }
+    }
+}
+
+function Copy-Sdl3NativeRuntime([string]$TargetDir, [string]$OfficialDir, [string]$RepoRoot) {
+    foreach ($name in @('zlib.dll','SDL3.dll','FAudio.dll','FNA3D.dll','libtheorafile.dll')) {
+        $src = Join-Path $OfficialDir $name
+        if (-not (Test-Path $src)) {
+            $src = Join-Path $RepoRoot "external\x64-sdl3\$name"
+        }
+        if (-not (Test-Path $src)) {
+            throw "Missing SDL3 runtime file: $name (provide -OfficialCuo with SDL3.dll or add external/x64-sdl3/$name)"
+        }
+        Copy-Item -Force $src (Join-Path $TargetDir $name)
+    }
+
+    $sdl2 = Join-Path $TargetDir 'SDL2.dll'
+    if (Test-Path $sdl2) {
+        Remove-Item -Force $sdl2
+    }
+}
+
+function Expand-RazorIntoAssistant([string]$ZipPath, [string]$AssistantRazorDir) {
+    if (-not (Test-Path $ZipPath)) {
+        throw "Custom Razor zip not found: $ZipPath"
+    }
+
+    if (Test-Path $AssistantRazorDir) {
+        Get-ChildItem $AssistantRazorDir -Force -ErrorAction SilentlyContinue | ForEach-Object {
+            Write-Host "Clearing existing assistant Razor artifact: $($_.FullName)" -ForegroundColor DarkYellow
+            Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    } else {
+        New-Item -ItemType Directory -Force -Path $AssistantRazorDir | Out-Null
+    }
+
+    $tempDir = Join-Path ([IO.Path]::GetTempPath()) ("razor-assistant-" + [guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
+    try {
+        Expand-Archive -Path $ZipPath -DestinationPath $tempDir -Force
+
+        if (Test-Path (Join-Path $tempDir "RazorEnhanced.exe")) {
+            Remove-RazorUserData $tempDir
+            Copy-Item -Path (Join-Path $tempDir "*") -Destination $AssistantRazorDir -Recurse -Force
+        } else {
+            $sub = Get-ChildItem $tempDir -Directory -Filter "RazorEnhanced*" | Select-Object -First 1
+            if (-not $sub) { throw "RazorEnhanced.exe not found inside $ZipPath" }
+            Remove-RazorUserData $sub.FullName
+            Copy-Item -Path (Join-Path $sub.FullName "*") -Destination $AssistantRazorDir -Recurse -Force
+        }
+    } finally {
+        if (Test-Path $tempDir) {
+            Remove-Item $tempDir -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    if (-not (Test-Path (Join-Path $AssistantRazorDir "RazorEnhanced.exe"))) {
+        throw "RazorEnhanced.exe missing after extract to $AssistantRazorDir"
     }
 }
 
@@ -238,13 +295,37 @@ function Test-UnifiedPvpClientLayout([string]$ClientRoot) {
         $errors += "ClassicUO.exe bootstrap host missing"
     }
 
-    $razorExe = Join-Path $ClientRoot "Data\Plugins\RazorEnhanced.exe"
-    if (-not (Test-Path $razorExe)) {
-        $errors += "RazorEnhanced.exe missing from Client\Data\Plugins"
+    if (-not (Test-Path (Join-Path $ClientRoot "SDL3.dll"))) {
+        $errors += "SDL3.dll missing (PVP v1.1.8+ requires SDL3 runtime)"
+    }
+    if (Test-Path (Join-Path $ClientRoot "SDL2.dll")) {
+        $errors += "SDL2.dll must not be present in SDL3 PVP layout"
+    }
+
+    $pluginsDir = Join-Path $ClientRoot "Data\Plugins"
+    if (Test-Path $pluginsDir) {
+        $leftover = Get-ChildItem $pluginsDir -Force -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($leftover) {
+            $errors += "Client\Data\Plugins must be empty (Razor lives in Assistant\RazorEnhanced)"
+        }
     }
 
     if ($errors.Count -gt 0) {
         throw "PVP client layout validation failed: $($errors -join '; ')"
+    }
+}
+
+function Test-LauncherAssistantLayout([string]$LauncherRoot) {
+    $razorExe = Join-Path $LauncherRoot "Assistant\RazorEnhanced\RazorEnhanced.exe"
+    if (-not (Test-Path $razorExe)) {
+        throw "Launcher package missing bundled Razor Enhanced at Assistant\RazorEnhanced\RazorEnhanced.exe"
+    }
+
+    foreach ($folder in @("Profiles", "Scripts", "Backup", "_deploy_pending")) {
+        $path = Join-Path $LauncherRoot "Assistant\RazorEnhanced\$folder"
+        if (Test-Path $path) {
+            throw "Launcher package must not ship Razor user data: Assistant\RazorEnhanced\$folder"
+        }
     }
 }
 
@@ -350,6 +431,8 @@ $bootstrapOut = Join-Path $RepoRoot "bin\bootstrap-out"
 $launcherOut = Join-Path $RepoRoot "bin\launcher-single-$Edition"
 $clientPackageRoot = Join-Path $OutputDir "client-package"
 $clientDir = Join-Path $clientPackageRoot "Client"
+$launcherPackageRoot = Join-Path $OutputDir "launcher-package"
+$assistantRazorDir = Join-Path $launcherPackageRoot "Assistant\RazorEnhanced"
 $bootstrapDir = Join-Path $clientDir "Bootstrap"
 $launcherZip = Join-Path $OutputDir "UODreams-$editionLabel-Launcher-v$Version.zip"
 $clientZip = Join-Path $OutputDir "UODreams-$editionLabel-Client-v$Version.zip"
@@ -366,7 +449,13 @@ pointing at the extracted folder (flat layout or ClassicUO/ subfolder both work)
 }
 
 if ($Edition -eq "pvp" -and -not (Test-Path $OfficialCuo)) {
-    Write-Host "Official ClassicUO not provided; unified PVP build uses modded NativeAOT output only." -ForegroundColor DarkYellow
+    throw @"
+Official ClassicUO SDL3 folder not found: $OfficialCuo
+
+PVP v1.1.8 requires SDL3.dll from the official ClassicUO release. Download and extract:
+  https://github.com/ClassicUO/ClassicUO/releases/download/ClassicUO-main-release/ClassicUO-win-x64-release.zip
+Then pass -OfficialCuo pointing at the extracted ClassicUO folder.
+"@
 }
 
 Write-Step "Preparing $editionLabel edition output: $OutputDir"
@@ -384,7 +473,7 @@ if ($Edition -eq "pvp") {
 }
 
 if (Test-Path $OutputDir) { Remove-Item $OutputDir -Recurse -Force }
-New-Item -ItemType Directory -Force -Path $OutputDir, $clientPackageRoot, $clientDir | Out-Null
+New-Item -ItemType Directory -Force -Path $OutputDir, $clientPackageRoot, $clientDir, $launcherPackageRoot | Out-Null
 
 $useUnifiedNative = $false
 
@@ -432,17 +521,15 @@ if ($Edition -eq "classic") {
     dotnet publish (Join-Path $RepoRoot "src\ClassicUO.Bootstrap\src\ClassicUO.Bootstrap.csproj") `
         -c Release -o $bootstrapOut | Out-Null
 
-    Write-Step "Assembling unified PVP client (mods + custom Razor)"
+    Write-Step "Assembling unified PVP client (SDL3 mods, no bundled Razor in Client)"
     robocopy $clientOut $clientDir /E /XD Bootstrap /XF "ClassicUO.exe" /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
     Remove-BuildArtifacts $clientDir
     Remove-PrebundledRazorPlugins $clientDir
     Clear-ClientPluginsDirectory $clientDir
 
     Copy-BootstrapHostFiles $bootstrapOut $clientDir
-    Copy-NativeRuntimeFiles @($clientOut, (Join-Path $RepoRoot "external\x64")) $clientDir
-    if (-not (Expand-RazorPluginsZip $RazorEnhancedZip (Join-Path $clientDir "Data\Plugins"))) {
-        throw "Failed to bundle custom RazorEnhanced from $RazorEnhancedZip into Client\Data\Plugins"
-    }
+    Copy-Sdl3NativeRuntime $clientDir $OfficialCuo $RepoRoot
+    New-Item -ItemType Directory -Force -Path (Join-Path $clientDir "Data\Plugins") | Out-Null
     if (Test-Path "$clientDir\cuo.exe") { Remove-Item "$clientDir\cuo.exe" -Force -ErrorAction SilentlyContinue }
     if (Test-Path "$clientDir\cuo-modded.exe") { Remove-Item "$clientDir\cuo-modded.exe" -Force -ErrorAction SilentlyContinue }
     if (Test-Path $bootstrapDir) {
@@ -450,14 +537,11 @@ if ($Edition -eq "classic") {
         Remove-Item $bootstrapDir -Recurse -Force -ErrorAction SilentlyContinue
     }
 
-    $bundledRazor = Test-BundledRazorPlugins $clientDir
-    if (-not $bundledRazor) {
-        throw "PVP edition requires bundled custom RazorEnhanced in Client\Data\Plugins from $RazorEnhancedZip."
+    $leftoverPlugin = Test-ClientPluginsEmpty $clientDir
+    if ($leftoverPlugin) {
+        throw "PVP client requires an empty Client\Data\Plugins folder. Leftover: $leftoverPlugin"
     }
-    if ($bundledRazor -notlike "*\Client\Data\Plugins*") {
-        throw "Razor must be in Client\Data\Plugins only, not $bundledRazor"
-    }
-    Write-Host "Bundled Razor: $bundledRazor" -ForegroundColor Green
+    Write-Host "Client plugins folder: empty (Razor ships in launcher Assistant\)" -ForegroundColor Green
 
     Write-Step "Bundling XmlGumps and ExternalImages"
     Copy-ClientBundleData $clientDir $RepoRoot
@@ -490,15 +574,23 @@ Compress-Archive -Path $clientPackageRoot\* -DestinationPath $clientZip -Compres
 Write-Step "Creating launcher executable"
 $publishedExe = Get-ChildItem $launcherOut -Filter "UODreams Launcher.exe" | Select-Object -First 1
 if (-not $publishedExe) { throw "Launcher exe not found in $launcherOut" }
+Copy-Item -Force $publishedExe.FullName (Join-Path $launcherPackageRoot "UODreams Launcher.exe")
 Copy-Item -Force $publishedExe.FullName $launcherExe
+
+if ($Edition -eq "pvp") {
+    Write-Step "Bundling Razor Enhanced P.E. in Assistant\RazorEnhanced"
+    Expand-RazorIntoAssistant $RazorEnhancedZip $assistantRazorDir
+    Test-LauncherAssistantLayout $launcherPackageRoot
+    Write-Host "Bundled Razor: $assistantRazorDir" -ForegroundColor Green
+}
 
 Write-Step "Creating $([IO.Path]::GetFileName($launcherZip))"
 if (Test-Path $launcherZip) { Remove-Item $launcherZip -Force }
-Compress-Archive -Path $launcherExe -DestinationPath $launcherZip -CompressionLevel Optimal
+Compress-Archive -Path (Join-Path $launcherPackageRoot "*") -DestinationPath $launcherZip -CompressionLevel Optimal
 
 $launcherMb = [math]::Round((Get-Item $launcherZip).Length / 1MB, 1)
 $clientMb = [math]::Round((Get-Item $clientZip).Length / 1MB, 1)
-$layout = if ($Edition -eq "classic") { "classic (official unmodded, no Razor)" } else { "pvp unified (NativeAOT mods + Razor in Client/Data/Plugins)" }
+$layout = if ($Edition -eq "classic") { "classic (official unmodded, no Razor)" } else { "pvp unified SDL3 (NativeAOT mods + Razor in Assistant\RazorEnhanced)" }
 $releaseTitle = if ($Edition -eq "pvp") { "UODreams PVP Launcher v$Version" } else { "UODreams Launcher v$Version" }
 
 Write-Host ""

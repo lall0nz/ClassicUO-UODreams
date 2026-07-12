@@ -51,6 +51,7 @@ namespace ClassicUO
         public static bool IsOutlands;
         public static bool NoServerPing;
 
+        public static readonly bool IsWindows = OperatingSystem.IsWindows();
         public static readonly bool IsUnix = Environment.OSVersion.Platform != PlatformID.Win32NT && Environment.OSVersion.Platform != PlatformID.Win32Windows && Environment.OSVersion.Platform != PlatformID.Win32S && Environment.OSVersion.Platform != PlatformID.WinCE;
 
         public static readonly string Version = Assembly.GetExecutingAssembly()?.GetName()?.Version?.ToString() ?? "0.0.0.0";

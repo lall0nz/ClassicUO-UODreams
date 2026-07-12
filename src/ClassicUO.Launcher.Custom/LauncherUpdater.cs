@@ -193,6 +193,13 @@ namespace ClassicUO.Launcher.Custom
                         "Invalid launcher package (UODreams Launcher.exe missing)."));
                 }
 
+                string installRoot = AppContext.BaseDirectory;
+                string sourceAssistant = Path.Combine(extractDir, "Assistant");
+                if (Directory.Exists(sourceAssistant))
+                {
+                    MergeAssistantFolder(sourceAssistant, Path.Combine(installRoot, "Assistant"));
+                }
+
                 string currentExe = Environment.ProcessPath
                     ?? Path.Combine(AppContext.BaseDirectory, "UODreams Launcher.exe");
                 string stagingExe = currentExe + ".new";
@@ -409,6 +416,54 @@ namespace ClassicUO.Launcher.Custom
             }
 
             return null;
+        }
+
+        private static void MergeAssistantFolder(string sourceRoot, string targetRoot)
+        {
+            if (!Directory.Exists(sourceRoot))
+            {
+                return;
+            }
+
+            Directory.CreateDirectory(targetRoot);
+
+            foreach (string file in Directory.EnumerateFiles(sourceRoot, "*", SearchOption.AllDirectories))
+            {
+                string relative = Path.GetRelativePath(sourceRoot, file);
+                string normalized = relative.Replace('\\', '/');
+                if (IsAssistantUserDataRelativePath(normalized))
+                {
+                    continue;
+                }
+
+                string destination = Path.Combine(targetRoot, relative);
+                if (File.Exists(destination))
+                {
+                    continue;
+                }
+
+                string? parent = Path.GetDirectoryName(destination);
+                if (!string.IsNullOrEmpty(parent))
+                {
+                    Directory.CreateDirectory(parent);
+                }
+
+                File.Copy(file, destination, overwrite: false);
+            }
+        }
+
+        private static bool IsAssistantUserDataRelativePath(string normalizedRelativePath)
+        {
+            foreach (string folder in new[] { "Profiles", "Scripts", "Backup", "_deploy_pending" })
+            {
+                if (normalizedRelativePath.StartsWith($"RazorEnhanced/{folder}/", StringComparison.OrdinalIgnoreCase) ||
+                    normalizedRelativePath.Equals($"RazorEnhanced/{folder}", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         internal static int CompareVersions(string? left, string? right)

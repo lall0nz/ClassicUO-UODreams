@@ -1658,8 +1658,10 @@ namespace ClassicUO.Game.GameObjects
             }
 
             // Adaptive coalescing: suppress direction-only packets when the server
-            // is falling behind (3+ unconfirmed packets).
-            if (walkTime == (ushort)MovementSpeed.TurnDelay && Walker.UnacceptedPacketsCount >= 3)
+            // is falling behind. Aggressive turn delays need a tighter threshold.
+            int coalesceThreshold = MovementSpeed.TurnDelay < 90 ? 2 : 3;
+
+            if (walkTime == (ushort)MovementSpeed.TurnDelay && Walker.UnacceptedPacketsCount >= coalesceThreshold)
             {
                 Direction = direction;
                 Walker.LastStepRequestTime = Time.Ticks + walkTime;

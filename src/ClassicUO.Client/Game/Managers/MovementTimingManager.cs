@@ -5,7 +5,7 @@ namespace ClassicUO.Game.Managers
 {
     internal static class MovementTimingManager
     {
-        private const int MinDelay = 20;
+        private const int MinDelay = 40;
         private const int MaxDelay = 1000;
 
         public static int TurnDelay => Clamp(ProfileManager.CurrentProfile?.MovementTurnDelay ?? Constants.TURN_DELAY);

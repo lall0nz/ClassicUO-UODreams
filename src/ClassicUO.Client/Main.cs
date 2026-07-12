@@ -1,4 +1,4 @@
-﻿#region license
+#region license
 
 // Copyright (c) 2024, andreakarasho
 // All rights reserved.
@@ -39,7 +39,7 @@ using ClassicUO.Resources;
 using ClassicUO.Utility;
 using ClassicUO.Utility.Logging;
 using ClassicUO.Utility.Platforms;
-using SDL2;
+using SDL3;
 using System;
 using System.Globalization;
 using System.IO;
@@ -81,9 +81,6 @@ namespace ClassicUO
             // Legacy code-page encodings (e.g. 850) are not available by default on
             // modern .NET; managed assistants like ClassicAssist/IronPython need them.
             System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
-
-            // FNA 26.x defaults to SDL3; our native libs ship SDL2 (external/x64).
-            Environment.SetEnvironmentVariable("FNA_PLATFORM_BACKEND", "SDL2");
 
             Log.Start(LogTypes.All);
 

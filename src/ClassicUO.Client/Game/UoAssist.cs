@@ -1,4 +1,4 @@
-﻿#region license
+#region license
 
 // Copyright (c) 2024, andreakarasho
 // All rights reserved.
@@ -41,7 +41,7 @@ using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
 using ClassicUO.Game.Scenes;
 using ClassicUO.Utility.Logging;
-using SDL2;
+using SDL3;
 
 namespace ClassicUO.Utility.Platforms
 {
@@ -119,15 +119,14 @@ namespace ClassicUO.Utility.Platforms
             {
                 _world = world;
 
-                SDL.SDL_SysWMinfo info = new SDL.SDL_SysWMinfo();
-                SDL.SDL_VERSION(out info.version);
-                SDL.SDL_GetWindowWMInfo(Client.Game.Window.Handle, ref info);
-
                 IntPtr hwnd = IntPtr.Zero;
-
-                if (info.subsystem == SDL.SDL_SYSWM_TYPE.SDL_SYSWM_WINDOWS)
+                if (CUOEnviroment.IsWindows)
                 {
-                    hwnd = info.info.win.window;
+                    hwnd = SDL.SDL_GetPointerProperty(
+                        SDL.SDL_GetWindowProperties(Client.Game.Window.Handle),
+                        SDL.SDL_PROP_WINDOW_WIN32_HWND_POINTER,
+                        IntPtr.Zero
+                    );
                 }
 
                 if (class_name == null)
@@ -395,18 +394,17 @@ namespace ClassicUO.Utility.Platforms
                     case UOAMessage.ADD_USER_2_PARTY: break;
 
                     case UOAMessage.GET_UO_HWND:
-                        SDL.SDL_SysWMinfo info = new SDL.SDL_SysWMinfo();
-                        SDL.SDL_VERSION(out info.version);
-                        SDL.SDL_GetWindowWMInfo(SDL.SDL_GL_GetCurrentWindow(), ref info);
-
                         IntPtr hwnd = IntPtr.Zero;
-
-                        if (info.subsystem == SDL.SDL_SYSWM_TYPE.SDL_SYSWM_WINDOWS)
+                        if (CUOEnviroment.IsWindows)
                         {
-                            hwnd = info.info.win.window;
+                            hwnd = SDL.SDL_GetPointerProperty(
+                                SDL.SDL_GetWindowProperties(SDL.SDL_GL_GetCurrentWindow()),
+                                SDL.SDL_PROP_WINDOW_WIN32_HWND_POINTER,
+                                IntPtr.Zero
+                            );
                         }
 
-                        return (int) hwnd;
+                        return (int)hwnd;
 
                     case UOAMessage.GET_POISON: return _world.Player != null && _world.Player.IsPoisoned ? 1 : 0;
 

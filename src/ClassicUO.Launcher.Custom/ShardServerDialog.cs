@@ -4,23 +4,30 @@ using System.Windows.Forms;
 
 namespace ClassicUO.Launcher.Custom
 {
-    // Small themed dialog to add a custom shard server (name / ip / port).
+    // Themed dialog to add or edit a custom shard server (name / ip / port / encryption).
     internal sealed class ShardServerDialog : Form
     {
         private readonly TextBox _nameBox;
         private readonly TextBox _ipBox;
         private readonly NumericUpDown _portBox;
+        private readonly CheckBox _encryptionCheck;
+        private readonly ThemedButton _okButton;
+        private readonly bool _editMode;
 
         public ShardServer? Result { get; private set; }
+        public int Encryption { get; private set; }
 
-        private ShardServerDialog()
+        private ShardServerDialog(bool editMode)
         {
-            Text = Loc.S("Aggiungi server", "Add server");
+            _editMode = editMode;
+            Text = editMode
+                ? Loc.S("Modifica server", "Edit server")
+                : Loc.S("Aggiungi server", "Add server");
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new Size(360, 286);
+            ClientSize = new Size(360, 318);
             BackColor = Theme.WindowBottom;
             ForeColor = Theme.Text;
             Font = new Font("Segoe UI", 9.5f);
@@ -56,6 +63,17 @@ namespace ClassicUO.Launcher.Custom
             };
             portPanel.Controls.Add(_portBox);
             Controls.Add(portPanel);
+            y += 42;
+
+            _encryptionCheck = new CheckBox
+            {
+                Text = Loc.S("Crittografia", "Encryption"),
+                ForeColor = Theme.Text,
+                BackColor = Color.Transparent,
+                AutoSize = true,
+                Location = new Point(x, y)
+            };
+            Controls.Add(_encryptionCheck);
 
             const int buttonHeight = 34;
             const int bottomPadding = 24;
@@ -69,18 +87,18 @@ namespace ClassicUO.Launcher.Custom
             cancelButton.Click += (_, _) => { DialogResult = DialogResult.Cancel; Close(); };
             Controls.Add(cancelButton);
 
-            var okButton = new ThemedButton
+            _okButton = new ThemedButton
             {
-                Text = Loc.S("Aggiungi", "Add"),
+                Text = editMode ? Loc.S("Salva", "Save") : Loc.S("Aggiungi", "Add"),
                 UseGradient = true,
                 ForeColor = Color.White,
                 Font = new Font("Segoe UI Semibold", 9.5f, FontStyle.Bold),
                 Bounds = new Rectangle(x + w - 96, buttonY, 96, buttonHeight)
             };
-            okButton.Click += OnConfirm;
-            Controls.Add(okButton);
+            _okButton.Click += OnConfirm;
+            Controls.Add(_okButton);
 
-            AcceptButton = okButton;
+            AcceptButton = _okButton;
             CancelButton = cancelButton;
         }
 
@@ -94,7 +112,7 @@ namespace ClassicUO.Launcher.Custom
                 MessageBox.Show(
                     this,
                     Loc.S("Inserisci un nome e un indirizzo validi.", "Enter a valid name and address."),
-                    Loc.S("Aggiungi server", "Add server"),
+                    Text,
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Warning
                 );
@@ -107,6 +125,7 @@ namespace ClassicUO.Launcher.Custom
                 Ip = ip,
                 Port = (int)_portBox.Value
             };
+            Encryption = _encryptionCheck.Checked ? 1 : 0;
 
             DialogResult = DialogResult.OK;
             Close();
@@ -135,10 +154,36 @@ namespace ClassicUO.Launcher.Custom
             return (panel, box);
         }
 
+        public static (ShardServer Server, int Encryption)? PromptAdd(IWin32Window owner)
+        {
+            using var dialog = new ShardServerDialog(editMode: false);
+            if (dialog.ShowDialog(owner) != DialogResult.OK || dialog.Result == null)
+            {
+                return null;
+            }
+
+            return (dialog.Result, dialog.Encryption);
+        }
+
         public static ShardServer? Prompt(IWin32Window owner)
         {
-            using var dialog = new ShardServerDialog();
-            return dialog.ShowDialog(owner) == DialogResult.OK ? dialog.Result : null;
+            return PromptAdd(owner)?.Server;
+        }
+
+        public static (ShardServer? Server, int Encryption)? Edit(IWin32Window owner, ShardServer existing, int encryption)
+        {
+            using var dialog = new ShardServerDialog(editMode: true);
+            dialog._nameBox.Text = existing.Name;
+            dialog._ipBox.Text = existing.Ip;
+            dialog._portBox.Value = Math.Min(Math.Max(existing.Port, 1), 65535);
+            dialog._encryptionCheck.Checked = encryption != 0;
+
+            if (dialog.ShowDialog(owner) != DialogResult.OK)
+            {
+                return null;
+            }
+
+            return (dialog.Result, dialog.Encryption);
         }
     }
 }

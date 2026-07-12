@@ -12,6 +12,7 @@ namespace ClassicUO.Launcher.Custom
         private readonly Func<IProgress<DownloadProgressReport>, CancellationToken, Task<string?>> _downloadWork;
         private readonly CancellationTokenSource _cts = new();
         private readonly Label _titleLabel;
+        private readonly Label _targetPathLabel;
         private readonly Label _detailLabel;
         private readonly Label _speedLabel;
         private readonly GreenProgressBar _progressBar;
@@ -87,26 +88,30 @@ namespace ClassicUO.Launcher.Custom
                         .ConfigureAwait(true),
                 Loc.S($"UODreams Launcher — Download {assistant}", $"UODreams Launcher — Download {assistant}"),
                 Loc.S($"Scaricamento {assistant}…", $"Downloading {assistant}…"),
-                infoMessage
+                infoMessage,
+                Loc.S($"Salvataggio in: {installDirectory}", $"Saving to: {installDirectory}")
             );
 
         private DownloadProgressForm(
             Func<IProgress<DownloadProgressReport>, CancellationToken, Task<string?>> downloadWork,
             string windowTitle,
             string title,
-            string? infoMessage = null)
+            string? infoMessage = null,
+            string? targetPathMessage = null)
         {
             _downloadWork = downloadWork;
 
             bool hasInfo = !string.IsNullOrWhiteSpace(infoMessage);
+            bool hasTargetPath = !string.IsNullOrWhiteSpace(targetPathMessage);
             int infoHeight = hasInfo ? 62 : 0;
+            int targetPathHeight = hasTargetPath ? 36 : 0;
 
             Text = windowTitle;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new Size(520, 210 + infoHeight);
+            ClientSize = new Size(520, 210 + infoHeight + targetPathHeight);
             BackColor = Theme.WindowBottom;
             ForeColor = Theme.Text;
             Font = new Font("Segoe UI", 9.5f);
@@ -122,14 +127,34 @@ namespace ClassicUO.Launcher.Custom
                 Font = new Font("Segoe UI Semibold", 11f, FontStyle.Bold)
             };
 
+            int contentY = 52;
+
+            _targetPathLabel = new Label
+            {
+                Text = targetPathMessage ?? "",
+                ForeColor = Theme.TextMuted,
+                BackColor = Color.Transparent,
+                AutoSize = false,
+                Visible = hasTargetPath,
+                Bounds = new Rectangle(24, contentY, 472, targetPathHeight),
+                Font = new Font("Segoe UI", 8.75f)
+            };
+
+            if (hasTargetPath)
+            {
+                contentY += targetPathHeight;
+            }
+
             _detailLabel = new Label
             {
                 Text = "Preparazione…",
                 ForeColor = Theme.TextMuted,
                 BackColor = Color.Transparent,
                 AutoSize = false,
-                Bounds = new Rectangle(24, 52, 472, 20)
+                Bounds = new Rectangle(24, contentY, 472, 20)
             };
+
+            contentY += 24;
 
             _speedLabel = new Label
             {
@@ -137,22 +162,30 @@ namespace ClassicUO.Launcher.Custom
                 ForeColor = Theme.SectionGreen,
                 BackColor = Color.Transparent,
                 AutoSize = false,
-                Bounds = new Rectangle(24, 76, 472, 20)
+                Bounds = new Rectangle(24, contentY, 472, 20)
             };
+
+            contentY += 32;
 
             _progressBar = new GreenProgressBar
             {
-                Bounds = new Rectangle(24, 108, 472, 22)
+                Bounds = new Rectangle(24, contentY, 472, 22)
             };
+
+            int buttonY = contentY + 40 + infoHeight;
 
             _cancelButton = new ThemedButton
             {
                 Text = Loc.S("Annulla", "Cancel"),
-                Bounds = new Rectangle(402, 148 + infoHeight, 94, 34)
+                Bounds = new Rectangle(402, buttonY, 94, 34)
             };
             _cancelButton.Click += OnCancelClick;
 
             Controls.Add(_titleLabel);
+            if (hasTargetPath)
+            {
+                Controls.Add(_targetPathLabel);
+            }
             Controls.Add(_detailLabel);
             Controls.Add(_speedLabel);
             Controls.Add(_progressBar);
@@ -161,7 +194,7 @@ namespace ClassicUO.Launcher.Custom
             {
                 var infoPanel = new InputPanel
                 {
-                    Bounds = new Rectangle(24, 138, 472, infoHeight - 6)
+                    Bounds = new Rectangle(24, contentY + 30, 472, infoHeight - 6)
                 };
                 var infoLabel = new Label
                 {

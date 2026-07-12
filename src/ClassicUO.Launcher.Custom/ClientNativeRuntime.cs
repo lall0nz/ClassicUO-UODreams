@@ -11,7 +11,6 @@ namespace ClassicUO.Launcher.Custom
         private static readonly string[] RequiredNativeLibraries =
         {
             "zlib.dll",
-            "SDL2.dll",
             "FAudio.dll",
             "FNA3D.dll",
             "libtheorafile.dll"
@@ -24,6 +23,12 @@ namespace ClassicUO.Launcher.Custom
                 return Loc.S(
                     "Cartella Client non trovata.",
                     "Client folder not found.");
+            }
+
+            string? sdlError = ValidateSdlLibrary(clientDir);
+            if (sdlError != null)
+            {
+                return sdlError;
             }
 
             foreach (string lib in RequiredNativeLibraries)
@@ -58,6 +63,38 @@ namespace ClassicUO.Launcher.Custom
             return null;
         }
 
+        private static string? ValidateSdlLibrary(string clientDir)
+        {
+            bool hasSdl2 = File.Exists(Path.Combine(clientDir, "SDL2.dll"));
+            bool hasSdl3 = File.Exists(Path.Combine(clientDir, "SDL3.dll"));
+
+            if (hasSdl2 || hasSdl3)
+            {
+                return null;
+            }
+
+            return Loc.S(
+                "Manca SDL2.dll o SDL3.dll nella cartella Client.\n" +
+                "Reinstalla il client dal launcher (Aggiorna) o ripristina la cartella Client.",
+                "Missing SDL2.dll or SDL3.dll in the Client folder.\n" +
+                "Reinstall the client from the launcher (Update) or restore the Client folder.");
+        }
+
+        private static string? ResolveSdlLibrary(string clientDir)
+        {
+            if (File.Exists(Path.Combine(clientDir, "SDL3.dll")))
+            {
+                return "SDL3.dll";
+            }
+
+            if (File.Exists(Path.Combine(clientDir, "SDL2.dll")))
+            {
+                return "SDL2.dll";
+            }
+
+            return null;
+        }
+
         private static bool IsVcRuntimeInstalled()
         {
             string systemDir = Environment.GetFolderPath(Environment.SpecialFolder.System);
@@ -66,7 +103,13 @@ namespace ClassicUO.Launcher.Custom
 
         private static string? ProbeNativeLibraries(string clientDir)
         {
-            foreach (string lib in new[] { "zlib.dll", "SDL2.dll", "FAudio.dll", "FNA3D.dll" })
+            string? sdlLib = ResolveSdlLibrary(clientDir);
+            if (sdlLib == null)
+            {
+                return null;
+            }
+
+            foreach (string lib in new[] { "zlib.dll", sdlLib, "FAudio.dll", "FNA3D.dll" })
             {
                 string path = Path.Combine(clientDir, lib);
                 if (!File.Exists(path))

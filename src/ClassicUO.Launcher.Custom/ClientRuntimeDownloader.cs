@@ -36,6 +36,14 @@ namespace ClassicUO.Launcher.Custom
             "Client/Data/Client/",
             "Client/Bootstrap/Data/Client/",
         };
+
+        private static readonly string[] PreservedAssistantDirectoryPaths =
+        {
+            "Assistant/RazorEnhanced/Profiles",
+            "Assistant/RazorEnhanced/Scripts",
+            "Assistant/RazorEnhanced/Backup",
+        };
+
         public static string ClientDir =>
             Path.Combine(AppContext.BaseDirectory, "Client");
 
@@ -203,11 +211,28 @@ namespace ClassicUO.Launcher.Custom
 
         public static string? DetectRazorEnhancedPath()
         {
+            string? fromAssistant = AssistantPaths.DetectRazorInstallDirectory();
+            if (fromAssistant != null)
+            {
+                return fromAssistant;
+            }
+
+            return DetectRazorEnhancedPathInPlugins();
+        }
+
+        internal static string? DetectRazorEnhancedPathInPlugins()
+        {
             string pluginsDir = PluginsDir;
 
             if (!Directory.Exists(pluginsDir))
             {
                 return null;
+            }
+
+            string flatExe = Path.Combine(pluginsDir, "RazorEnhanced.exe");
+            if (File.Exists(flatExe))
+            {
+                return pluginsDir;
             }
 
             foreach (string dir in Directory.EnumerateDirectories(pluginsDir))
@@ -228,6 +253,8 @@ namespace ClassicUO.Launcher.Custom
 
             foreach (string root in CandidatePaths(
                 installRoot,
+                Path.Combine(AssistantPaths.LauncherAssistantRoot, "Orion"),
+                AssistantPaths.LauncherAssistantRoot,
                 @"c:\Orion Launcher",
                 Path.Combine(programFiles, "Orion Launcher"),
                 Path.Combine(programFilesX86, "Orion Launcher")))
@@ -257,7 +284,11 @@ namespace ClassicUO.Launcher.Custom
 
         public static string? DetectUOSteamExe(string? installRoot = null)
         {
-            foreach (string root in CandidatePaths(installRoot, @"c:\Program Files (x86)\UOS"))
+            foreach (string root in CandidatePaths(
+                installRoot,
+                Path.Combine(AssistantPaths.LauncherAssistantRoot, "UOSteam"),
+                AssistantPaths.LauncherAssistantRoot,
+                @"c:\Program Files (x86)\UOS"))
             {
                 string exe = Path.Combine(root, "UOS.exe");
                 if (File.Exists(exe))
@@ -402,6 +433,15 @@ namespace ClassicUO.Launcher.Custom
         private static bool IsRazorUserDataZipEntry(string entryPath)
         {
             string normalized = NormalizeZipEntryPath(entryPath);
+
+            foreach (string preservedDir in PreservedAssistantDirectoryPaths)
+            {
+                if (IsZipEntryUnderPath(normalized, preservedDir))
+                {
+                    return true;
+                }
+            }
+
             const string marker = "/Data/Plugins/";
             int pluginsIdx = normalized.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
 
@@ -470,6 +510,16 @@ namespace ClassicUO.Launcher.Custom
                         preserved
                     );
                 }
+            }
+
+            foreach (string relativeDir in PreservedAssistantDirectoryPaths)
+            {
+                BackupDirectory(
+                    Path.Combine(installRoot, relativeDir.Replace('/', Path.DirectorySeparatorChar)),
+                    tempRoot,
+                    ref backupIndex,
+                    preserved
+                );
             }
 
             foreach (string relativeDir in PreservedClientDirectoryPaths)
@@ -582,6 +632,13 @@ namespace ClassicUO.Launcher.Custom
 
         private static IEnumerable<string> FindRazorRoots(string installRoot)
         {
+            string assistantRazor = Path.Combine(installRoot, "Assistant", "RazorEnhanced");
+            if (Directory.Exists(assistantRazor) &&
+                File.Exists(Path.Combine(assistantRazor, "RazorEnhanced.exe")))
+            {
+                yield return assistantRazor;
+            }
+
             string clientDir = Path.Combine(installRoot, "Client");
             string[] pluginsDirs =
             {

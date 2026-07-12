@@ -21,15 +21,19 @@ Packaging scripts (`scripts/package-release.ps1`, `scripts/package-uodreams.ps1`
 
 Razor Enhanced user data is stripped separately:
 
-- `Data/Plugins/Profiles`, `Scripts`, `Backup`, `_deploy_pending` (and under `RazorEnhanced*` subfolders)
+- `Assistant/RazorEnhanced/Profiles`, `Scripts`, `Backup`, `_deploy_pending`
+- Legacy `Data/Plugins/Profiles`, `Scripts`, `Backup`, `_deploy_pending` (and under `RazorEnhanced*` subfolders)
 
 ## Kept in releases
 
-- Default/bundled assets only: `Data/XmlGumps`, `ExternalImages`, stock `Data/Client` tables, empty plugin folders (Classic) or sanitized Razor bundle (PVP)
-- Launcher zip ships only `UODreams Launcher.exe` (no `launcher.settings.json`)
+- Default/bundled assets only: `Data/XmlGumps`, `ExternalImages`, stock `Data/Client` tables, empty `Data/Plugins` (PVP)
+- PVP launcher zip ships `UODreams Launcher.exe` plus virgin `Assistant/RazorEnhanced/` (modded Razor P.E.)
+- Classic launcher zip ships only `UODreams Launcher.exe` (no `launcher.settings.json`)
 
 ## Preserved on client update
 
 `ClientRuntimeDownloader` backs up the paths above before extracting a new client zip, skips matching zip entries during extract, then restores the backup. User data survives launcher-driven client updates the same way Razor profiles already did.
+
+`Assistant/RazorEnhanced/Profiles`, `Scripts`, and `Backup` are preserved across client updates. Launcher self-updates merge new `Assistant/` files without overwriting existing Razor user data.
 
 Launcher settings (`launcher.settings.json` next to the exe) are never part of the client zip and are not overwritten by client updates.

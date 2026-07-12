@@ -894,7 +894,7 @@ namespace ClassicUO.Game.UI.Gumps
                 ),
                 2
             );
-            _movementTurnDelay.SetText(Math.Clamp(_currentProfile.MovementTurnDelay, 20, 1000).ToString());
+            _movementTurnDelay.SetText(Math.Clamp(_currentProfile.MovementTurnDelay, 40, 1000).ToString());
 
             connections.Add(AddLabel(null, "Movement fast turn delay (ms)", startX, startY));
             connections.AddRight
@@ -911,7 +911,7 @@ namespace ClassicUO.Game.UI.Gumps
                 ),
                 2
             );
-            _movementTurnDelayFast.SetText(Math.Clamp(_currentProfile.MovementTurnDelayFast, 20, 1000).ToString());
+            _movementTurnDelayFast.SetText(Math.Clamp(_currentProfile.MovementTurnDelayFast, 40, 1000).ToString());
 
             connections.Add(AddLabel(null, "Movement walking delay (ms)", startX, startY));
             connections.AddRight
@@ -928,7 +928,7 @@ namespace ClassicUO.Game.UI.Gumps
                 ),
                 2
             );
-            _movementWalkingDelay.SetText(Math.Clamp(_currentProfile.MovementWalkingDelay, 20, 1000).ToString());
+            _movementWalkingDelay.SetText(Math.Clamp(_currentProfile.MovementWalkingDelay, 40, 1000).ToString());
 
             connections.Add(AddLabel(null, "Movement player walking delay (ms)", startX, startY));
             connections.AddRight
@@ -945,13 +945,13 @@ namespace ClassicUO.Game.UI.Gumps
                 ),
                 2
             );
-            _movementPlayerWalkingDelay.SetText(Math.Clamp(_currentProfile.MovementPlayerWalkingDelay, 20, 1000).ToString());
+            _movementPlayerWalkingDelay.SetText(Math.Clamp(_currentProfile.MovementPlayerWalkingDelay, 40, 1000).ToString());
 
             NiceButton lowPingPresetButton = new NiceButton(startX, startY, 90, 22, ButtonAction.Activate, "Low Ping")
             {
                 IsSelectable = false
             };
-            lowPingPresetButton.MouseUp += (_, _) => SetMovementDelayInputs(70, 35, 120, 120);
+            lowPingPresetButton.MouseUp += (_, _) => SetMovementDelayInputs(93, 44, 138, 138);
             connections.Add(lowPingPresetButton);
 
             NiceButton balancedPresetButton = new NiceButton(0, 0, 90, 22, ButtonAction.Activate, "Balanced")
@@ -4387,22 +4387,22 @@ namespace ClassicUO.Game.UI.Gumps
 
             if (int.TryParse(_movementTurnDelay.Text, out int movementTurnDelay))
             {
-                _currentProfile.MovementTurnDelay = Math.Clamp(movementTurnDelay, 20, 1000);
+                _currentProfile.MovementTurnDelay = Math.Clamp(movementTurnDelay, 40, 1000);
             }
 
             if (int.TryParse(_movementTurnDelayFast.Text, out int movementTurnDelayFast))
             {
-                _currentProfile.MovementTurnDelayFast = Math.Clamp(movementTurnDelayFast, 20, 1000);
+                _currentProfile.MovementTurnDelayFast = Math.Clamp(movementTurnDelayFast, 40, 1000);
             }
 
             if (int.TryParse(_movementWalkingDelay.Text, out int movementWalkingDelay))
             {
-                _currentProfile.MovementWalkingDelay = Math.Clamp(movementWalkingDelay, 20, 1000);
+                _currentProfile.MovementWalkingDelay = Math.Clamp(movementWalkingDelay, 40, 1000);
             }
 
             if (int.TryParse(_movementPlayerWalkingDelay.Text, out int movementPlayerWalkingDelay))
             {
-                _currentProfile.MovementPlayerWalkingDelay = Math.Clamp(movementPlayerWalkingDelay, 20, 1000);
+                _currentProfile.MovementPlayerWalkingDelay = Math.Clamp(movementPlayerWalkingDelay, 40, 1000);
             }
 
             _currentProfile.HidePersistentNPCNames = _hidePersistentNPCNames.IsChecked;
@@ -5025,10 +5025,10 @@ namespace ClassicUO.Game.UI.Gumps
 
         private void SetMovementDelayInputs(int turnDelay, int fastTurnDelay, int walkingDelay, int playerWalkingDelay)
         {
-            _movementTurnDelay?.SetText(Math.Clamp(turnDelay, 20, 1000).ToString());
-            _movementTurnDelayFast?.SetText(Math.Clamp(fastTurnDelay, 20, 1000).ToString());
-            _movementWalkingDelay?.SetText(Math.Clamp(walkingDelay, 20, 1000).ToString());
-            _movementPlayerWalkingDelay?.SetText(Math.Clamp(playerWalkingDelay, 20, 1000).ToString());
+            _movementTurnDelay?.SetText(Math.Clamp(turnDelay, 40, 1000).ToString());
+            _movementTurnDelayFast?.SetText(Math.Clamp(fastTurnDelay, 40, 1000).ToString());
+            _movementWalkingDelay?.SetText(Math.Clamp(walkingDelay, 40, 1000).ToString());
+            _movementPlayerWalkingDelay?.SetText(Math.Clamp(playerWalkingDelay, 40, 1000).ToString());
         }
 
         private InputField AddInputField

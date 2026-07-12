@@ -35,6 +35,11 @@ namespace ClassicUO.Launcher.Custom
         public List<ShardServer> Servers { get; set; } = new();
         public string SelectedServer { get; set; } = "UODreams";
 
+        /// <summary>
+        /// Assistants whose path was explicitly cleared by the user; auto-detect must not refill them.
+        /// </summary>
+        public List<string> AssistantPathsClearedByUser { get; set; } = new();
+
         public static List<ShardServer> DefaultServers() => new()
         {
             new ShardServer { Name = "UODreams", Ip = "login.uodreams.com", Port = 2593 },
@@ -133,15 +138,60 @@ namespace ClassicUO.Launcher.Custom
         public void ResetUserPaths()
         {
             Assistant = "Nessuno";
-            ClassicAssistPath = "";
-            RazorPath = "";
-            OrionPath = "";
-            UOSteamPath = "";
+            ClearAllAssistantPaths();
             EnhancedMapPath = "";
             EnhancedMapAutoOpen = false;
             ClientPath = "";
             UoDirectory = "";
             FirstRunCompleted = false;
+        }
+
+        public void ClearAllAssistantPaths()
+        {
+            ClassicAssistPath = "";
+            RazorPath = "";
+            OrionPath = "";
+            UOSteamPath = "";
+        }
+
+        public void ClearAssistantPath(string assistant)
+        {
+            switch (assistant)
+            {
+                case "ClassicAssist":
+                    ClassicAssistPath = "";
+                    break;
+                case "Razor Enhanced":
+                    RazorPath = "";
+                    break;
+                case "Orion":
+                    OrionPath = "";
+                    break;
+                case "UOSteam":
+                    UOSteamPath = "";
+                    break;
+            }
+
+            MarkAssistantPathClearedByUser(assistant);
+        }
+
+        public bool IsAssistantPathClearedByUser(string assistant) =>
+            AssistantPathsClearedByUser?.Exists(a =>
+                string.Equals(a, assistant, StringComparison.OrdinalIgnoreCase)) == true;
+
+        public void MarkAssistantPathClearedByUser(string assistant)
+        {
+            AssistantPathsClearedByUser ??= new List<string>();
+            if (!IsAssistantPathClearedByUser(assistant))
+            {
+                AssistantPathsClearedByUser.Add(assistant);
+            }
+        }
+
+        public void ClearAssistantPathClearedFlag(string assistant)
+        {
+            AssistantPathsClearedByUser?.RemoveAll(a =>
+                string.Equals(a, assistant, StringComparison.OrdinalIgnoreCase));
         }
 
         /// <summary>

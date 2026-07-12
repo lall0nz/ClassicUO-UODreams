@@ -58,13 +58,8 @@ namespace ClassicUO.Launcher.Custom
 
         public static string GetDefaultInstallDirectory(string assistant)
         {
-            if (assistant == "Razor Enhanced")
-            {
-                string pluginsDir = ClientRuntimeDownloader.PluginsDir;
-                return Path.Combine(pluginsDir, "RazorEnhanced");
-            }
-
-            return Path.Combine(AppContext.BaseDirectory, "Assistants", SanitizeFolderName(assistant));
+            AssistantPaths.EnsureLauncherAssistantRoot();
+            return AssistantPaths.GetInstallDirectory(assistant);
         }
 
         public static bool IsInstalled(string assistant, string? path = null)
@@ -116,7 +111,9 @@ namespace ClassicUO.Launcher.Custom
 
             return assistant switch
             {
-                "Razor Enhanced" => FindPlugin(ClientRuntimeDownloader.DetectRazorEnhancedPath() ?? "", source.PluginCandidates),
+                "Razor Enhanced" => FindPlugin(
+                    AssistantPaths.DetectRazorInstallDirectory() ?? AssistantPaths.GetDefaultRazorExePath(),
+                    source.PluginCandidates),
                 "Orion" => ClientRuntimeDownloader.DetectOrionLauncherExe(),
                 "UOSteam" => ClientRuntimeDownloader.DetectUOSteamExe(),
                 _ => null
@@ -194,7 +191,7 @@ namespace ClassicUO.Launcher.Custom
                     TotalBytes = 1
                 });
 
-                return installDirectory;
+                return pluginPath;
             }
             finally
             {
@@ -228,17 +225,52 @@ namespace ClassicUO.Launcher.Custom
 
         private static string? ResolveInPath(string path, string[] candidates)
         {
-            if (File.Exists(path))
+            string normalized = NormalizeAssistantPath(path);
+            if (string.IsNullOrEmpty(normalized))
             {
-                return path;
+                return null;
             }
 
-            if (Directory.Exists(path))
+            if (File.Exists(normalized))
             {
-                return FindPlugin(path, candidates);
+                string fileName = Path.GetFileName(normalized);
+                foreach (string name in candidates)
+                {
+                    if (fileName.Equals(Path.GetFileName(name), StringComparison.OrdinalIgnoreCase))
+                    {
+                        return normalized;
+                    }
+                }
+
+                return null;
+            }
+
+            if (Directory.Exists(normalized))
+            {
+                return FindPlugin(normalized, candidates);
             }
 
             return null;
+        }
+
+        private static string NormalizeAssistantPath(string path)
+        {
+            path = (path ?? "").Trim().Trim('"');
+            if (string.IsNullOrEmpty(path))
+            {
+                return "";
+            }
+
+            try
+            {
+                return Path.IsPathRooted(path)
+                    ? Path.GetFullPath(path)
+                    : Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, path));
+            }
+            catch
+            {
+                return path;
+            }
         }
 
         private static string? FindPlugin(string root, string[] candidates)
@@ -367,8 +399,5 @@ namespace ClassicUO.Launcher.Custom
             fs.Read(header);
             return header[0] == 0x50 && header[1] == 0x4B;
         }
-
-        private static string SanitizeFolderName(string name) =>
-            name.Replace(" ", "", StringComparison.Ordinal);
     }
 }
