@@ -100,6 +100,7 @@ namespace ClassicUO.Assets
                     _files[i] = new UOFileMul(pathmul, pathidx, un[i], i == 0 ? 6 : -1);
                 }
 
+                // UOP animation packs are optional; older UO installs use anim*.mul only.
                 if (i > 0 && UOFileManager.IsUOPInstallation)
                 {
                     string pathuop = UOFileManager.GetUOFilePath($"AnimationFrame{i}.uop");
@@ -126,78 +127,8 @@ namespace ClassicUO.Assets
 
             if (UOFileManager.Version >= ClientVersion.CV_500A)
             {
-                string path = UOFileManager.GetUOFilePath("mobtypes.txt");
-
-                if (File.Exists(path))
-                {
-                    var typeNames = new string[5]
-                    {
-                        "monster",
-                        "sea_monster",
-                        "animal",
-                        "human",
-                        "equipment"
-                    };
-
-                    using (var reader = new StreamReader(File.OpenRead(path)))
-                    {
-                        string line;
-
-                        while ((line = reader.ReadLine()) != null)
-                        {
-                            line = line.Trim();
-
-                            if (line.Length == 0 || line[0] == '#' || !char.IsNumber(line[0]))
-                            {
-                                continue;
-                            }
-
-                            string[] parts = line.Split(
-                                new[] { '\t', ' ' },
-                                StringSplitOptions.RemoveEmptyEntries
-                            );
-
-                            if (parts.Length < 3)
-                            {
-                                continue;
-                            }
-
-                            int id = int.Parse(parts[0]);
-                            string testType = parts[1].ToLower();
-                            int commentIdx = parts[2].IndexOf('#');
-
-                            if (commentIdx > 0)
-                            {
-                                parts[2] = parts[2].Substring(0, commentIdx - 1);
-                            }
-                            else if (commentIdx == 0)
-                            {
-                                continue;
-                            }
-
-                            uint number = uint.Parse(parts[2], NumberStyles.HexNumber);
-
-                            for (int i = 0; i < 5; i++)
-                            {
-                                if (
-                                    testType.Equals(
-                                        typeNames[i],
-                                        StringComparison.InvariantCultureIgnoreCase
-                                    )
-                                )
-                                {
-                                    _mobTypes[id] = new MobTypeInfo()
-                                    {
-                                        Type = (AnimationGroupsType)i,
-                                        Flags = (AnimationFlags )(0x80000000 | number)
-                                    };
-
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
+                // UO mobtypes first (latest clients need UseUopAnimation for new bodies).
+                LoadMobTypesFromFile(UOFileManager.GetUOFilePath("mobtypes.txt"), overwrite: true);
             }
 
             string file = UOFileManager.GetUOFilePath("Anim1.def");
@@ -247,6 +178,136 @@ namespace ClassicUO.Assets
             ProcessEquipConvDef();
             ProcessBodyDef();
             ProcessCorpseDef();
+
+            ProcessBodyConvDef(
+                BodyConvFlags.Anim1
+                    | BodyConvFlags.Anim2
+                    | BodyConvFlags.Anim3
+                    | BodyConvFlags.Anim4
+            );
+        }
+
+        private void LoadMobTypesFromFile(string path, bool overwrite)
+        {
+            if (!File.Exists(path))
+            {
+                return;
+            }
+
+            var typeNames = new string[5]
+            {
+                "monster",
+                "sea_monster",
+                "animal",
+                "human",
+                "equipment"
+            };
+
+            using (var reader = new StreamReader(File.OpenRead(path)))
+            {
+                string line;
+
+                while ((line = reader.ReadLine()) != null)
+                {
+                    line = line.Trim();
+
+                    if (line.Length == 0 || line[0] == '#' || !char.IsNumber(line[0]))
+                    {
+                        continue;
+                    }
+
+                    string[] parts = line.Split(
+                        new[] { '\t', ' ' },
+                        StringSplitOptions.RemoveEmptyEntries
+                    );
+
+                    if (parts.Length < 3)
+                    {
+                        continue;
+                    }
+
+                    int id = int.Parse(parts[0]);
+
+                    if (!overwrite && _mobTypes.ContainsKey(id))
+                    {
+                        continue;
+                    }
+
+                    string testType = parts[1].ToLower();
+                    int commentIdx = parts[2].IndexOf('#');
+
+                    if (commentIdx > 0)
+                    {
+                        parts[2] = parts[2].Substring(0, commentIdx - 1);
+                    }
+                    else if (commentIdx == 0)
+                    {
+                        continue;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(parts[2]))
+                    {
+                        parts[2] = "0";
+                    }
+
+                    uint number = uint.Parse(parts[2], NumberStyles.HexNumber);
+
+                    for (int i = 0; i < 5; i++)
+                    {
+                        if (
+                            testType.Equals(
+                                typeNames[i],
+                                StringComparison.InvariantCultureIgnoreCase
+                            )
+                        )
+                        {
+                            _mobTypes[id] = new MobTypeInfo()
+                            {
+                                Type = (AnimationGroupsType)i,
+                                Flags = (AnimationFlags)(0x80000000 | number)
+                            };
+
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        private static bool IsNewBundledBody(int body) => body is 0x0581 or 0x0590;
+
+        private void EnsureNewBodyConvFallback(int body)
+        {
+            if (_bodyConvInfos.ContainsKey(body) || !IsNewBundledBody(body))
+            {
+                return;
+            }
+
+            switch (body)
+            {
+                case 0x0581:
+                    ApplyBodyConvEntry(0x0581, 2, 479, 0);
+                    break;
+                case 0x0590:
+                    ApplyBodyConvEntry(0x0590, 2, 494, 0);
+                    break;
+            }
+        }
+
+        private void ApplyBodyConvEntry(int index, int fileIndex, int graphic, sbyte mountHeight)
+        {
+            if (fileIndex < 0 || fileIndex >= _files.Length || _files[fileIndex] == null)
+            {
+                return;
+            }
+
+            _bodyConvInfos[index] = new BodyConvInfo()
+            {
+                FileIndex = fileIndex,
+                Graphic = (ushort)graphic,
+                AnimType = CalculateTypeByGraphic((ushort)graphic, fileIndex),
+                MountHeight = mountHeight
+            };
         }
 
         public bool ReplaceBody(ref ushort body, ref ushort hue)
@@ -316,7 +377,11 @@ namespace ClassicUO.Assets
                     animType = mobInfo.Type != AnimationGroupsType.Unknown ? mobInfo.Type : CalculateTypeByGraphic(body);
 
                 var replaceFound = _uopInfos.TryGetValue(body, out var uopInfo);
-                mountHeight = uopInfo.HeightOffset;
+                if (replaceFound)
+                {
+                    mountHeight = uopInfo.HeightOffset;
+                }
+
                 var animIndices = Array.Empty<AnimIdxBlock>();
 
                 for (int actioIdx = 0; actioIdx < MAX_ACTIONS; ++actioIdx)
@@ -344,7 +409,16 @@ namespace ClassicUO.Assets
                     }
                 }
 
-                return animIndices;
+                if (animIndices.Length > 0)
+                {
+                    return animIndices;
+                }
+
+                // UOP frames missing (MUL-only UO folders: 7.0.94.x, 7.0.102.3, etc.) —
+                // fall back to bodyconv.def + anim*.mul. Works for any launcher-selected UO path.
+                flags &= ~AnimationFlags.UseUopAnimation;
+                mountHeight = 0;
+                EnsureNewBodyConvFallback(body);
             }
 
             if (_bodyConvInfos.TryGetValue(body, out var bodyConvInfo))
@@ -353,13 +427,16 @@ namespace ClassicUO.Assets
                 body = bodyConvInfo.Graphic;
                 fileIndex = bodyConvInfo.FileIndex;
                 mountHeight = bodyConvInfo.MountHeight;
-
-                if (clientVersion < ClientVersion.CV_500A)
-                    animType = bodyConvInfo.AnimType;
+                animType = bodyConvInfo.AnimType;
             }
 
             if (animType == AnimationGroupsType.Unknown)
                 animType = mobInfo.Type != AnimationGroupsType.Unknown ? mobInfo.Type : CalculateTypeByGraphic(body, fileIndex);
+
+            if (fileIndex < 0 || fileIndex >= _files.Length || _files[fileIndex] == null)
+            {
+                return ReadOnlySpan<AnimIdxBlock>.Empty;
+            }
 
             var fileIdx = _files[fileIndex].IdxFile;
             var offsetAddress = CalculateOffset(body, animType, flags, out var actionCount);
@@ -530,12 +607,28 @@ namespace ClassicUO.Assets
 
         public void ProcessBodyConvDef(BodyConvFlags flags)
         {
+            ProcessBodyConvDefFile(UOFileManager.GetUOFilePath("Bodyconv.def"), flags, onlyIfMissing: false);
+
+            var bundledFlags =
+                BodyConvFlags.Anim1
+                | BodyConvFlags.Anim2
+                | BodyConvFlags.Anim3
+                | BodyConvFlags.Anim4;
+
+            // Bundled bodyconv only fills gaps (old UO folders missing new-body entries).
+            ProcessBodyConvDefFile(
+                UOFileManager.GetBundledAnimDefPath("bodyconv.def"),
+                bundledFlags,
+                onlyIfMissing: true
+            );
+        }
+
+        private void ProcessBodyConvDefFile(string file, BodyConvFlags flags, bool onlyIfMissing)
+        {
             if (UOFileManager.Version < ClientVersion.CV_300)
             {
                 return;
             }
-
-            var file = UOFileManager.GetUOFilePath("Bodyconv.def");
 
             if (!File.Exists(file))
                 return;
@@ -568,6 +661,11 @@ namespace ClassicUO.Assets
                             {
                                 continue;
                             }
+                        }
+
+                        if (onlyIfMissing && _bodyConvInfos.ContainsKey(index))
+                        {
+                            continue;
                         }
 
                         // NOTE: for fileindex >= 3 the client automatically accepts body conversion.
@@ -626,7 +724,6 @@ namespace ClassicUO.Assets
                         {
                             FileIndex = i,
                             Graphic = (ushort)body,
-                            // TODO: fix for UOFileManager.Version < ClientVersion.CV_500A
                             AnimType = CalculateTypeByGraphic((ushort)body, i),
                             MountHeight = mountedHeightOffset
                         };

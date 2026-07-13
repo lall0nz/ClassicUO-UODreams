@@ -1,0 +1,2 @@
+# Reserved - not loaded at startup. UO mobtypes.txt wins for UseUopAnimation.
+# MUL fallback handled at runtime via UOP->bodyconv in AnimationsLoader.

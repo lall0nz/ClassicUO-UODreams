@@ -411,6 +411,14 @@ function Copy-ClientBundleData([string]$ClientDir, [string]$BundleRoot) {
         robocopy $extSource $extTarget /E /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
         Write-Host "Bundled ExternalImages -> $extTarget" -ForegroundColor Green
     }
+
+    $uoAnimSource = Join-Path $dataRoot "UoAnim"
+    if (Test-Path $uoAnimSource) {
+        $uoAnimTarget = Join-Path $ClientDir "Data\UoAnim"
+        New-Item -ItemType Directory -Force -Path $uoAnimTarget | Out-Null
+        robocopy $uoAnimSource $uoAnimTarget /E /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
+        Write-Host "Bundled UoAnim (bodyconv, mobtypes) -> $uoAnimTarget" -ForegroundColor Green
+    }
 }
 
 $RazorEnhancedZip = Resolve-RazorEnhancedZip $RepoRoot $RazorEnhancedZip

@@ -360,6 +360,11 @@ namespace ClassicUO.Launcher.Custom
 
         protected override void OnPaint(PaintEventArgs e)
         {
+            if (!Theme.HasPaintableSize(Width, Height))
+            {
+                return;
+            }
+
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
             var rect = new Rectangle(0, 0, Width - 1, Height - 1);
 
@@ -376,14 +381,19 @@ namespace ClassicUO.Launcher.Custom
 
             int fillWidth = Math.Max(8, (int)((Width - 2) * (_value / 1000.0)));
             var fillRect = new Rectangle(1, 1, fillWidth, Height - 3);
+            if (!Theme.HasPaintableSize(fillRect))
+            {
+                return;
+            }
+
             using var fillPath = Theme.RoundedRect(fillRect, 9);
-            using var fillBrush = new LinearGradientBrush(
+            Theme.FillLinearGradientPath(
+                e.Graphics,
+                fillPath,
                 fillRect,
                 Color.FromArgb(34, 197, 94),
                 Color.FromArgb(22, 163, 74),
-                LinearGradientMode.Horizontal
-            );
-            e.Graphics.FillPath(fillBrush, fillPath);
+                LinearGradientMode.Horizontal);
         }
     }
 }

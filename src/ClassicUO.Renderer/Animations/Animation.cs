@@ -8,7 +8,7 @@ namespace ClassicUO.Renderer.Animations
 {
     public sealed class Animations
     {
-        const int MAX_ANIMATIONS_DATA_INDEX_COUNT = 2048;
+        const int MAX_ANIMATIONS_DATA_INDEX_COUNT = 4096;
 
         private readonly TextureAtlas _atlas;
         private readonly PixelPicker _picker = new PixelPicker();
@@ -42,10 +42,12 @@ namespace ClassicUO.Renderer.Animations
         public int MaxAnimationCount => _dataIndex.Length;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public AnimationGroupsType GetAnimType(ushort graphic) => _dataIndex[graphic]?.Type ?? 0;
+        public AnimationGroupsType GetAnimType(ushort graphic) =>
+            graphic < _dataIndex.Length ? _dataIndex[graphic]?.Type ?? 0 : 0;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public AnimationFlags  GetAnimFlags(ushort graphic) => _dataIndex[graphic]?.Flags ?? 0;
+        public AnimationFlags  GetAnimFlags(ushort graphic) =>
+            graphic < _dataIndex.Length ? _dataIndex[graphic]?.Flags ?? 0 : 0;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public sbyte GetMountedHeightOffset(ushort graphic) =>
@@ -142,6 +144,16 @@ namespace ClassicUO.Renderer.Animations
             }
 
             ref var index = ref _dataIndex[id];
+
+            if (
+                index != null
+                && index.Flags.HasFlag(AnimationFlags.UseUopAnimation)
+                && (index.UopGroups == null || index.Groups == null)
+            )
+            {
+                _dataIndex[id] = null;
+                index = ref _dataIndex[id];
+            }
 
             do
             {

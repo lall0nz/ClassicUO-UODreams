@@ -229,6 +229,7 @@ namespace ClassicUO.Configuration
         public bool InvisibleHousesEnabled { get; set; } = false;
         public int InvisibleHousesZ { get; set; } = 0;
         public int DontRemoveHouseBelowZ { get; set; } = 6;
+        public bool DrawMobilesWithSurfaceOverhead { get; set; } = false;
 
         // Visual Helpers (Dust765): "Highlight tiles on range". Colors the ring of
         // ground tiles at a fixed distance around the player. Two independent modes:

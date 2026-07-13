@@ -236,7 +236,13 @@ namespace ClassicUO
             Log.Trace($"Protocol: {Protocol}");
 
             // ok now load uo files
-            UOFileManager.Load(Version, Settings.GlobalSettings.UltimaOnlineDirectory, Settings.GlobalSettings.UseVerdata, Settings.GlobalSettings.Language);
+            UOFileManager.Load(
+                Version,
+                Settings.GlobalSettings.UltimaOnlineDirectory,
+                Settings.GlobalSettings.UseVerdata,
+                Settings.GlobalSettings.Language,
+                CUOEnviroment.ExecutablePath
+            );
             StaticFilters.Load();
 
             BuffTable.Load();

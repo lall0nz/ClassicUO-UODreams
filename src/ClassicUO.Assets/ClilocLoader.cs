@@ -105,7 +105,6 @@ namespace ClassicUO.Assets
 
         void ReadCliloc(string path)
         {
-            var newFileFormat = UOFileManager.Version >= ClientVersion.CV_7010400;
             using var fileStream = new FileStream(path, FileMode.Open, FileAccess.Read);
 
             int bytesRead;
@@ -114,7 +113,7 @@ namespace ClassicUO.Assets
             while ((bytesRead = fileStream.Read(buf, totalRead, Math.Min(4096, buf.Length - totalRead))) > 0)
                 totalRead += bytesRead;
 
-            var output = newFileFormat ? ClassicUO.Utility.BwtDecompress.Decompress(buf) : buf;
+            var output = ClilocFormatHelper.GetClilocPayload(buf, UOFileManager.Version);
 
             using (var reader = new BinaryReader(new MemoryStream(output)))
             {

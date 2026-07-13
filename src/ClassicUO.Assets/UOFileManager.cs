@@ -84,14 +84,32 @@ namespace ClassicUO.Assets
 
         public static ClientVersion Version;
         public static string BasePath = "";
+        public static string ClientInstallPath = "";
         public static bool IsUOPInstallation;
 
-        public static void Load(ClientVersion version, string basePath, bool useVerdata, string lang)
+        /// <summary>
+        /// Path to animation definition files shipped with the modded client (bodyconv.def, mobtypes.txt).
+        /// Independent of the user-selected Ultima Online data folder.
+        /// </summary>
+        public static string GetBundledAnimDefPath(string file)
+        {
+            if (string.IsNullOrEmpty(ClientInstallPath))
+            {
+                ClientInstallPath = AppContext.BaseDirectory;
+            }
+
+            return Path.Combine(ClientInstallPath, "Data", "UoAnim", file);
+        }
+
+        public static void Load(ClientVersion version, string basePath, bool useVerdata, string lang, string clientInstallPath = "")
         {
             Stopwatch stopwatch = Stopwatch.StartNew();
 
             Version = version;
             BasePath = basePath;
+            ClientInstallPath = string.IsNullOrWhiteSpace(clientInstallPath)
+                ? AppContext.BaseDirectory
+                : clientInstallPath;
 
             UOFilesOverrideMap.Instance.Load(); // need to load this first so that it manages can perform the file overrides if needed
 

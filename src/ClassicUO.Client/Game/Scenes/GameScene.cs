@@ -781,7 +781,7 @@ namespace ClassicUO.Game.Scenes
             {
                 mobile.IsMirrorClone = false;
 
-                if (!mobile.IsHuman || string.IsNullOrEmpty(mobile.Name))
+                if (string.IsNullOrEmpty(mobile.Name))
                 {
                     continue;
                 }
@@ -802,7 +802,7 @@ namespace ClassicUO.Game.Scenes
 
             foreach (Mobile mobile in _world.Mobiles.Values)
             {
-                if (!mobile.IsHuman || string.IsNullOrEmpty(mobile.Name) || mobile == _world.Player)
+                if (string.IsNullOrEmpty(mobile.Name) || mobile == _world.Player)
                 {
                     continue;
                 }
@@ -1409,21 +1409,24 @@ namespace ClassicUO.Game.Scenes
             p = Camera.WorldToScreen(p);
             Vector2 center = new Vector2(p.X, p.Y);
 
+            float zoom = Camera.Zoom;
+
             if (profile.LTHighlightRangeOnActivated)
             {
-                DrawRingDiamond(batcher, center, profile.LTHighlightRangeOnActivatedRange, profile.LTHighlightRangeOnActivatedHue, profile.LTHighlightRangeOutlinePixels);
+                DrawRingDiamond(batcher, center, profile.LTHighlightRangeOnActivatedRange, profile.LTHighlightRangeOnActivatedHue, profile.LTHighlightRangeOutlinePixels, zoom);
             }
 
             if (spellRing)
             {
-                DrawRingDiamond(batcher, center, profile.LTHighlightRangeOnCastRange, profile.LTHighlightRangeOnCastHue, profile.LTHighlightRangeOutlinePixels);
+                DrawRingDiamond(batcher, center, profile.LTHighlightRangeOnCastRange, profile.LTHighlightRangeOnCastHue, profile.LTHighlightRangeOutlinePixels, zoom);
             }
         }
 
-        private static void DrawRingDiamond(UltimaBatcher2D batcher, Vector2 center, int range, ushort hue, int outlinePixels)
+        private static void DrawRingDiamond(UltimaBatcher2D batcher, Vector2 center, int range, ushort hue, int outlinePixels, float zoom)
         {
-            float stroke = Math.Clamp(outlinePixels, 1, 10);
-            float ext = range * 44f;
+            float scale = 1f / Math.Max(zoom, 0.01f);
+            float stroke = Math.Clamp(outlinePixels, 1, 10) * scale;
+            float ext = range * 44f * scale;
 
             Vector2 n = new Vector2(center.X, center.Y - ext);
             Vector2 e = new Vector2(center.X + ext, center.Y);

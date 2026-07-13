@@ -577,13 +577,29 @@ namespace ClassicUO.Game.Scenes
             return InvisibleHousesHelper.ShouldHide(obj, _world);
         }
 
-        private bool HasSurfaceOverhead(Entity obj)
+        private bool HasSurfaceOverhead(Mobile mob)
         {
-            if (
-                obj.Serial == _world.Player.Serial /* || _maxZ == _maxGroundZ*/
-            )
+            if (mob.Serial == _world.Player.Serial)
             {
                 return false;
+            }
+
+            Profile profile = ProfileManager.CurrentProfile;
+
+            if (profile != null && profile.DrawMobilesWithSurfaceOverhead)
+            {
+                return false;
+            }
+
+            if (
+                profile != null
+                && !profile.InvisibleHousesEnabled
+                && mob._surfaceOverheadCacheX == mob.X
+                && mob._surfaceOverheadCacheY == mob.Y
+                && mob._surfaceOverheadCacheMaxZ == _maxZ
+            )
+            {
+                return mob._surfaceOverheadCache;
             }
 
             bool found = false;
@@ -592,7 +608,7 @@ namespace ClassicUO.Game.Scenes
             {
                 for (int x = -1; x <= 2; ++x)
                 {
-                    GameObject tile = _world.Map.GetTile(obj.X + x, obj.Y + y);
+                    GameObject tile = _world.Map.GetTile(mob.X + x, mob.Y + y);
 
                     found = false;
 
@@ -600,7 +616,7 @@ namespace ClassicUO.Game.Scenes
                     {
                         var next = tile.TNext;
 
-                        if (tile.Z > obj.Z && (tile is Static || tile is Multi))
+                        if (tile.Z > mob.Z && (tile is Static || tile is Multi))
                         {
                             if (tile is Multi multiTile)
                             {
@@ -613,8 +629,6 @@ namespace ClassicUO.Game.Scenes
                                 }
                             }
 
-                            Profile profile = ProfileManager.CurrentProfile;
-
                             if (profile?.InvisibleHousesEnabled == true && InvisibleHousesHelper.ShouldHide(tile, _world))
                             {
                                 tile = next;
@@ -625,7 +639,7 @@ namespace ClassicUO.Game.Scenes
 
                             if (itemData.IsNoShoot || itemData.IsWindow)
                             {
-                                if (_maxZ - tile.Z + 5 >= tile.Z - obj.Z)
+                                if (_maxZ - tile.Z + 5 >= tile.Z - mob.Z)
                                 {
                                     found = true;
 
@@ -639,10 +653,20 @@ namespace ClassicUO.Game.Scenes
 
                     if (!found)
                     {
-                        return false;
+                        break;
                     }
                 }
+
+                if (!found)
+                {
+                    break;
+                }
             }
+
+            mob._surfaceOverheadCacheX = (ushort)mob.X;
+            mob._surfaceOverheadCacheY = (ushort)mob.Y;
+            mob._surfaceOverheadCacheMaxZ = _maxZ;
+            mob._surfaceOverheadCache = found;
 
             return found;
         }

@@ -53,12 +53,14 @@ namespace ClassicUO.Launcher.Custom
         private int _enhancedMapRowY;
         private bool _updateAvailable;
         private bool _suppressAssistantPathEvents;
+        private string? _detectedUoVersion;
         private CardPanel _assistantCard = null!;
         private const int UoCardPadH = 18;
         private const int UoPathRowY = 40;
 
         public MainForm()
         {
+            SetStyle(ControlStyles.ResizeRedraw, true);
             Loc.Lang = _settings.Language == "en" ? "en" : "it";
             LoadWindowIcon();
             BuildUi();
@@ -67,6 +69,20 @@ namespace ClassicUO.Launcher.Custom
             RefreshWindowTitle();
 
             Shown += OnMainFormShown;
+            ResizeEnd += OnMainFormResizeEnd;
+        }
+
+        private FormWindowState _lastWindowState = FormWindowState.Normal;
+
+        private void OnMainFormResizeEnd(object? sender, EventArgs e)
+        {
+            if (_lastWindowState == FormWindowState.Minimized && WindowState != FormWindowState.Minimized)
+            {
+                Invalidate(true);
+                RefreshAssistantSectionLayout();
+            }
+
+            _lastWindowState = WindowState;
         }
 
         private void OnMainFormShown(object? sender, EventArgs e)
@@ -96,9 +112,12 @@ namespace ClassicUO.Launcher.Custom
 
         protected override void OnPaintBackground(PaintEventArgs e)
         {
-            using var brush = new LinearGradientBrush(
-                ClientRectangle, Theme.WindowTop, Theme.WindowBottom, LinearGradientMode.Vertical);
-            e.Graphics.FillRectangle(brush, ClientRectangle);
+            Theme.FillLinearGradient(
+                e.Graphics,
+                ClientRectangle,
+                Theme.WindowTop,
+                Theme.WindowBottom,
+                LinearGradientMode.Vertical);
         }
 
         private static Image? LoadLogo()
@@ -1041,6 +1060,8 @@ namespace ClassicUO.Launcher.Custom
                 Directory.Exists(uoPath) &&
                 File.Exists(Path.Combine(uoPath, "tiledata.mul"));
 
+            _detectedUoVersion = valid ? UoClientVersionDetector.Detect(uoPath) : null;
+
             _uoBrowseButton.Visible = true;
             LayoutUoClientSection(valid);
         }
@@ -1056,7 +1077,11 @@ namespace ClassicUO.Launcher.Custom
             {
                 _downloadUoButton.Visible = false;
                 _uoHintLabel.Visible = true;
-                _uoHintLabel.Text = Loc.S("✓ Client Ultima Online pronto.", "✓ Ultima Online client ready.");
+                _uoHintLabel.Text = string.IsNullOrWhiteSpace(_detectedUoVersion)
+                    ? Loc.S("✓ Client Ultima Online pronto.", "✓ Ultima Online client ready.")
+                    : Loc.S(
+                        $"✓ Client Ultima Online pronto (v{_detectedUoVersion}).",
+                        $"✓ Ultima Online client ready (v{_detectedUoVersion}).");
                 _uoHintLabel.ForeColor = Theme.SectionGreen;
                 _uoHintLabel.Location = new Point(UoCardPadH, UoPathRowY + 30 + 4);
             }
@@ -1635,6 +1660,7 @@ namespace ClassicUO.Launcher.Custom
             {
                 _uoPathBox.Text = dialog.SelectedPath;
                 UpdateUoDownloadUi();
+                SaveSettings();
             }
         }
 
@@ -1812,7 +1838,6 @@ namespace ClassicUO.Launcher.Custom
                     "Orion Launcher started. Select the profile and press Launch.");
                 LauncherLog.Info($"Orion Launcher avviato PID={process.Id}");
                 LaunchEnhancedMapIfNeeded();
-                Close();
             }
             catch (Exception ex)
             {
@@ -1873,7 +1898,6 @@ namespace ClassicUO.Launcher.Custom
                     "UOSteam started. Configure shard/port in the UOS interface.");
                 LauncherLog.Info($"UOSteam avviato PID={process.Id}");
                 LaunchEnhancedMapIfNeeded();
-                Close();
             }
             catch (Exception ex)
             {
@@ -2128,6 +2152,19 @@ namespace ClassicUO.Launcher.Custom
             psi.ArgumentList.Add("-encryption");
             psi.ArgumentList.Add(_encryptionCheck.Checked ? "1" : "0");
 
+            string? uoClientVersion = UoClientVersionDetector.Detect(uoPath);
+            if (!string.IsNullOrWhiteSpace(uoClientVersion))
+            {
+                psi.ArgumentList.Add("-clientversion");
+                psi.ArgumentList.Add(uoClientVersion);
+                ClassicUOSettingsSync.SyncForLaunch(clientWorkingDir, uoPath, uoClientVersion);
+                LauncherLog.Info($"UO client version detected: {uoClientVersion} (folder={uoPath})");
+            }
+            else
+            {
+                LauncherLog.Info($"Could not detect UO client version for folder={uoPath}");
+            }
+
             // always pass -plugins so a stale value in the client settings.json never wins
             psi.ArgumentList.Add("-plugins");
             psi.ArgumentList.Add(assistantDll ?? "");
@@ -2155,7 +2192,6 @@ namespace ClassicUO.Launcher.Custom
 
                 LauncherLog.Info($"Client avviato PID={process.Id}");
                 LaunchEnhancedMapIfNeeded();
-                Close();
             }
             catch (Exception ex)
             {

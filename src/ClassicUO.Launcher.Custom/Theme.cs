@@ -193,7 +193,31 @@ namespace ClassicUO.Launcher.Custom
 
         }
 
+        internal static bool HasPaintableSize(int width, int height) => width > 0 && height > 0;
 
+        internal static bool HasPaintableSize(Rectangle rect) => HasPaintableSize(rect.Width, rect.Height);
+
+        internal static void FillLinearGradient(Graphics g, Rectangle rect, Color start, Color end, LinearGradientMode mode)
+        {
+            if (!HasPaintableSize(rect))
+            {
+                return;
+            }
+
+            using var brush = new LinearGradientBrush(rect, start, end, mode);
+            g.FillRectangle(brush, rect);
+        }
+
+        internal static void FillLinearGradientPath(Graphics g, GraphicsPath path, Rectangle rect, Color start, Color end, LinearGradientMode mode)
+        {
+            if (!HasPaintableSize(rect))
+            {
+                return;
+            }
+
+            using var brush = new LinearGradientBrush(rect, start, end, mode);
+            g.FillPath(brush, path);
+        }
 
         // Layered path strokes to mimic the soft neon halo from the official Tauri/WebView launcher.
 
@@ -289,6 +313,11 @@ namespace ClassicUO.Launcher.Custom
 
         {
 
+            if (!Theme.HasPaintableSize(Width, Height))
+            {
+                return;
+            }
+
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
 
             var rect = new Rectangle(0, 0, Width - 1, Height - 1);
@@ -332,6 +361,11 @@ namespace ClassicUO.Launcher.Custom
         protected override void OnPaint(PaintEventArgs e)
 
         {
+
+            if (!Theme.HasPaintableSize(Width, Height))
+            {
+                return;
+            }
 
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
 
@@ -431,6 +465,11 @@ namespace ClassicUO.Launcher.Custom
 
         {
 
+            if (!Theme.HasPaintableSize(Width, Height))
+            {
+                return;
+            }
+
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
 
 
@@ -500,9 +539,7 @@ namespace ClassicUO.Launcher.Custom
 
 
 
-                using var brush = new LinearGradientBrush(rect, start, end, LinearGradientMode.Horizontal);
-
-                e.Graphics.FillPath(brush, path);
+                Theme.FillLinearGradientPath(e.Graphics, path, rect, start, end, LinearGradientMode.Horizontal);
 
             }
 
@@ -621,6 +658,11 @@ namespace ClassicUO.Launcher.Custom
         protected override void OnPaint(PaintEventArgs e)
 
         {
+
+            if (!Theme.HasPaintableSize(Width, Height))
+            {
+                return;
+            }
 
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
 
@@ -812,6 +854,11 @@ namespace ClassicUO.Launcher.Custom
 
         protected override void OnPaint(PaintEventArgs e)
         {
+            if (!Theme.HasPaintableSize(Width, Height))
+            {
+                return;
+            }
+
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
             e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
@@ -1019,6 +1066,11 @@ namespace ClassicUO.Launcher.Custom
 
         {
 
+            if (!Theme.HasPaintableSize(Width, Height))
+            {
+                return;
+            }
+
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
 
             e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
@@ -1171,6 +1223,11 @@ namespace ClassicUO.Launcher.Custom
 
         {
 
+            if (!Theme.HasPaintableSize(Width, Height))
+            {
+                return;
+            }
+
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
 
 
@@ -1255,6 +1312,11 @@ namespace ClassicUO.Launcher.Custom
         protected override void OnPaint(PaintEventArgs e)
 
         {
+
+            if (!Theme.HasPaintableSize(Width, Height))
+            {
+                return;
+            }
 
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
 

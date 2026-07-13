@@ -155,6 +155,11 @@ namespace ClassicUO.Game.GameObjects
 
         public bool IsMirrorClone;
 
+        internal bool _surfaceOverheadCache;
+        internal ushort _surfaceOverheadCacheX = ushort.MaxValue;
+        internal ushort _surfaceOverheadCacheY = ushort.MaxValue;
+        internal int _surfaceOverheadCacheMaxZ = int.MinValue;
+
         public bool IsDead
         {
             get =>
