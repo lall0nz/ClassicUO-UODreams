@@ -72,11 +72,24 @@ namespace ClassicUO.Launcher.Custom
 
         public static readonly Color PillCoffee = Color.FromArgb(255, 193, 58);
 
+        // Donation footer pill colors
+        public static readonly Color PillPayPalFill = Color.FromArgb(18, 32, 58);
+        public static readonly Color PillPayPalAccent = Color.FromArgb(0, 112, 186);
+        public static readonly Color PillPayPalText = Color.White;
+        public static readonly Color PillPayPalHeart = Color.FromArgb(220, 53, 69);
+        public static readonly Color PillCoffeeFill = Color.FromArgb(52, 44, 24);
+        public static readonly Color PillCoffeeAccent = Color.FromArgb(210, 168, 48);
+        public static readonly Color PillCoffeeText = Color.White;
+        public static readonly Color PillCoffeeCupBrown = Color.FromArgb(139, 90, 43);
+        public static readonly Color PillCoffeeCupWhite = Color.White;
+
         // Shared button metrics (DPI-safe layout constants)
         public const int PrimaryButtonHeight = 32;
         public const int PrimaryButtonRadius = 8;
-        public const int CompactPrimaryHeight = 30;
+        public const int CompactPrimaryHeight = 26;
         public const int CompactPrimaryRadius = 6;
+        public const int CompactPrimaryHorizontalPadding = 10;
+        public const int CompactPrimaryIconSize = 12;
         public const int ToolbarButtonHeight = 26;
         public const int ToolbarButtonRadius = 8;
         public const int OutlineAssistantHeight = 42;
@@ -84,12 +97,28 @@ namespace ClassicUO.Launcher.Custom
         public const int OutlineAssistantIconSize = 20;
         public const int OutlineAssistantHorizontalPadding = 4;
         public const int DownloadButtonHorizontalPadding = 22;
+        public const int DonationPillHeight = 27;
+        public const int DonationPillRadius = 6;
+        public const int DonationPillHorizontalPadding = 8;
+        public const int DonationPillIconSize = 14;
         public const int AssistantCardBottomPadding = 14;
         public const int SectionRowGap = 8;
 
         private static Font? _comboFont;
         private static Font? _outlineAssistantFont;
         private static Font? _compactPrimaryFont;
+        private static Font? _primaryButtonFont;
+        private static Font? _donationPillFont;
+        private static Font? _donationCreditFont;
+
+        public static Font PrimaryButtonFont =>
+            _primaryButtonFont ??= new Font("Segoe UI Semibold", 8.5f, FontStyle.Bold);
+
+        public static Font DonationPillFont =>
+            _donationPillFont ??= new Font("Segoe UI Semibold", 9f, FontStyle.Bold);
+
+        public static Font DonationCreditFont =>
+            _donationCreditFont ??= new Font("Segoe UI Semibold", 8.5f, FontStyle.Bold);
 
         public static Font OutlineAssistantFont =>
             _outlineAssistantFont ??= new Font("Segoe UI Semibold", 8.5f, FontStyle.Bold);
@@ -103,20 +132,22 @@ namespace ClassicUO.Launcher.Custom
             button.UseGradient = true;
             button.CornerRadius = PrimaryButtonRadius;
             button.ForeColor = Color.White;
-            button.Font = new Font("Segoe UI Semibold", 8.5f, FontStyle.Bold);
+            button.Font = PrimaryButtonFont;
             button.Height = PrimaryButtonHeight;
             button.Padding = new Padding(DownloadButtonHorizontalPadding, 0, DownloadButtonHorizontalPadding, 0);
         }
 
-        /// <summary>Compact filled gradient button (e.g. Buy me a coffee).</summary>
+        /// <summary>Compact filled gradient button (e.g. Buy me a coffee / donation footer).</summary>
         public static void ApplyCompactPrimaryStyle(ThemedButton button)
         {
             button.UseGradient = true;
             button.CornerRadius = CompactPrimaryRadius;
             button.ForeColor = Color.White;
-            button.Font = CompactPrimaryFont;
+            button.Font = PrimaryButtonFont;
             button.Height = CompactPrimaryHeight;
-            button.Padding = new Padding(16, 0, 16, 0);
+            button.Padding = new Padding(CompactPrimaryHorizontalPadding, 0, CompactPrimaryHorizontalPadding, 0);
+            button.TightContentFit = true;
+            button.IconSize = CompactPrimaryIconSize;
         }
 
         /// <summary>Compact toolbar gradient button (matches Update button height).</summary>
@@ -128,6 +159,18 @@ namespace ClassicUO.Launcher.Custom
             button.Font = new Font("Segoe UI Semibold", 8.5f, FontStyle.Bold);
             button.Height = ToolbarButtonHeight;
             button.Padding = new Padding(8, 0, 10, 0);
+        }
+
+        /// <summary>Compact donation footer pills (PayPal / Buy me a coffee).</summary>
+        public static void ApplyDonationPillStyle(ThemedButton button)
+        {
+            button.UseGradient = true;
+            button.CornerRadius = DonationPillRadius;
+            button.ForeColor = Color.White;
+            button.Font = PrimaryButtonFont;
+            button.Height = DonationPillHeight;
+            button.Padding = new Padding(DonationPillHorizontalPadding, 0, DonationPillHorizontalPadding, 0);
+            button.TightContentFit = true;
         }
 
         internal static void DrawRecoloredImage(Graphics g, Image image, Rectangle dest, Color color)
@@ -409,7 +452,13 @@ namespace ClassicUO.Launcher.Custom
 
         public int IconSize { get; set; } = 14;
 
+        public string IconText { get; set; } = "";
+
+        public Color IconTextColor { get; set; } = Color.Empty;
+
         public Color? IconTintColor { get; set; }
+
+        public bool TightContentFit { get; set; }
 
 
 
@@ -445,9 +494,23 @@ namespace ClassicUO.Launcher.Custom
         {
             Size textSize = TextRenderer.MeasureText(Text, Font, proposedSize, TextFormatFlags.NoPadding);
             const int iconGap = 5;
-            int iconExtra = IconImage != null ? IconSize + iconGap : 0;
-            int width = textSize.Width + Padding.Horizontal + iconExtra + 4;
-            int height = Math.Max(Height > 0 ? Height : Theme.PrimaryButtonHeight, textSize.Height + Padding.Vertical + 4);
+            bool hasIcon = IconImage != null || !string.IsNullOrEmpty(IconText);
+            int iconExtra = 0;
+            if (hasIcon)
+            {
+                if (TightContentFit && !string.IsNullOrEmpty(IconText))
+                {
+                    iconExtra = TextRenderer.MeasureText(IconText, Font, proposedSize, TextFormatFlags.NoPadding).Width + iconGap;
+                }
+                else
+                {
+                    iconExtra = IconSize + iconGap + (TightContentFit ? 0 : 2);
+                }
+            }
+
+            int contentPad = TightContentFit ? 2 : 4;
+            int width = textSize.Width + Padding.Horizontal + iconExtra + contentPad;
+            int height = Math.Max(Height > 0 ? Height : Theme.PrimaryButtonHeight, textSize.Height + Padding.Vertical + contentPad);
             if (MinimumSize.Width > 0)
             {
                 width = Math.Max(width, MinimumSize.Width);
@@ -564,13 +627,27 @@ namespace ClassicUO.Launcher.Custom
 
 
             const int iconGap = 5;
-            int iconExtra = IconImage != null ? IconSize + iconGap : 0;
+            bool hasIconImage = IconImage != null;
+            bool hasIconText = !string.IsNullOrEmpty(IconText);
             Size textSize = TextRenderer.MeasureText(e.Graphics, Text, Font, Size.Empty, TextFormatFlags.NoPadding);
+            int iconWidth = 0;
+            if (hasIconImage)
+            {
+                iconWidth = IconSize;
+            }
+            else if (hasIconText)
+            {
+                iconWidth = TightContentFit
+                    ? TextRenderer.MeasureText(e.Graphics, IconText, Font, Size.Empty, TextFormatFlags.NoPadding).Width
+                    : IconSize + 2;
+            }
+
+            int iconExtra = iconWidth > 0 ? iconWidth + iconGap : 0;
             int contentWidth = iconExtra + textSize.Width;
             int startX = rect.Left + Math.Max(Padding.Left, (rect.Width - contentWidth - Padding.Horizontal) / 2 + Padding.Left / 2);
             int centerY = rect.Top + rect.Height / 2;
 
-            if (IconImage != null)
+            if (hasIconImage)
             {
                 var iconRect = new Rectangle(startX, centerY - IconSize / 2, IconSize, IconSize);
                 if (IconTintColor is Color tint)
@@ -582,6 +659,19 @@ namespace ClassicUO.Launcher.Custom
                     e.Graphics.DrawImage(IconImage, iconRect);
                 }
 
+                startX = iconRect.Right + iconGap;
+            }
+            else if (hasIconText)
+            {
+                var iconRect = new Rectangle(startX, rect.Top, iconWidth, rect.Height);
+                Color iconColor = IconTextColor.IsEmpty ? textColor : IconTextColor;
+                TextRenderer.DrawText(
+                    e.Graphics,
+                    IconText,
+                    Font,
+                    iconRect,
+                    iconColor,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
                 startX = iconRect.Right + iconGap;
             }
 
@@ -946,7 +1036,11 @@ namespace ClassicUO.Launcher.Custom
 
         public Color AccentColor { get; set; } = Theme.SectionGreen;
 
+        public Color FillColor { get; set; } = PillFill;
+
         public string IconText { get; set; } = "";
+
+        public Color IconTextColor { get; set; } = Color.Empty;
 
 
 
@@ -1016,7 +1110,7 @@ namespace ClassicUO.Launcher.Custom
 
             ForeColor = Theme.Text;
 
-            Font = new Font("Segoe UI Semibold", 7.5f, FontStyle.Bold);
+            Font = Theme.DonationPillFont;
 
             Cursor = Cursors.Hand;
 
@@ -1095,7 +1189,7 @@ namespace ClassicUO.Launcher.Custom
 
 
 
-            using (var brush = new SolidBrush(PillFill))
+            using (var brush = new SolidBrush(FillColor))
 
             {
 
@@ -1119,9 +1213,9 @@ namespace ClassicUO.Launcher.Custom
 
 
 
-            const int iconSize = 16;
+            const int iconSize = 18;
 
-            const int iconGap = 5;
+            const int iconGap = 6;
 
             int contentLeft = pillRect.Left + 8;
 
@@ -1151,13 +1245,14 @@ namespace ClassicUO.Launcher.Custom
 
                 var iconRect = new Rectangle(contentLeft, contentTop, iconSize + 2, contentHeight);
 
+                Color iconColor = IconTextColor.IsEmpty ? ForeColor : IconTextColor;
                 TextRenderer.DrawText(
 
-                    e.Graphics, IconText, Font, iconRect, ForeColor,
+                    e.Graphics, IconText, Font, iconRect, iconColor,
 
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
 
-                contentLeft = iconRect.Right + 2;
+                contentLeft = iconRect.Right + iconGap;
 
             }
 
@@ -1169,7 +1264,7 @@ namespace ClassicUO.Launcher.Custom
 
                 e.Graphics, Text, Font, textRect, ForeColor,
 
-                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
 
         }
 

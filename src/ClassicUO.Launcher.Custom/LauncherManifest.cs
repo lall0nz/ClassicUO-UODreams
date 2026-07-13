@@ -21,8 +21,8 @@ namespace ClassicUO.Launcher.Custom
         public const string LauncherVersion = "1.1.9";
         public const string ClientRuntimeVersion = "1.1.9";
 #else
-        public const string LauncherVersion = "1.1.8";
-        public const string ClientRuntimeVersion = "1.1.8";
+        public const string LauncherVersion = "1.1.9";
+        public const string ClientRuntimeVersion = "1.1.9";
 #endif
         public const string GitHubRepo = "lall0nz/ClassicUO-UODreams";
 

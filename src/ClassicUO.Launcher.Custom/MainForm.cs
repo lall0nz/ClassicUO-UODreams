@@ -39,7 +39,8 @@ namespace ClassicUO.Launcher.Custom
         // References kept for language switching.
         private ThemedButton _langButton = null!;
         private ThemedButton _updateButton = null!;
-        private ThemedButton _buyCoffeeButton = null!;
+        private ThemedButton _paypalPill = null!;
+        private ThemedButton _coffeePill = null!;
         private ThemedButton _launchButton = null!;
         private BrowseDotsButton _uoBrowseButton = null!;
         private ThemedButton _editServerButton = null!;
@@ -148,7 +149,7 @@ namespace ClassicUO.Launcher.Custom
             }
         }
 
-        private static Image? LoadCoffeeIcon()
+        private static Image? LoadDonationCoffeeIcon()
         {
             Image? src = LoadPillIcon("coffee.png");
             if (src == null)
@@ -160,7 +161,7 @@ namespace ClassicUO.Launcher.Custom
             using (var g = Graphics.FromImage(bmp))
             {
                 g.Clear(Color.Transparent);
-                Theme.DrawRecoloredImage(g, src, new Rectangle(0, 0, src.Width, src.Height), Color.FromArgb(196, 118, 58));
+                Theme.DrawRecoloredImage(g, src, new Rectangle(0, 0, src.Width, src.Height), Theme.PillCoffeeCupBrown);
             }
 
             src.Dispose();
@@ -483,23 +484,56 @@ namespace ClassicUO.Launcher.Custom
             };
             _registerBtn.Click += (_, _) => OpenRegisterWindow();
             Controls.Add(_registerBtn);
+            y += footerH + 12;
+
+            // ----- Donation footer -----
+            const int donatePillH = Theme.CompactPrimaryHeight;
+            const int donatePillGap = 8;
+
+            var donationCredit = new Label
+            {
+                Text = "UODreams Launcher project by lall0ne",
+                Font = Theme.DonationCreditFont,
+                ForeColor = Theme.TextMuted,
+                BackColor = Color.Transparent,
+                AutoSize = true
+            };
+            Controls.Add(donationCredit);
+            donationCredit.Location = new Point(
+                margin + Math.Max(0, (width - donationCredit.PreferredSize.Width) / 2),
+                y);
+            y += donationCredit.Height + 8;
+
+            _paypalPill = new ThemedButton
+            {
+                Text = "PayPal",
+                IconText = "♥",
+                IconTextColor = Theme.PillPayPalHeart
+            };
+            Theme.ApplyCompactPrimaryStyle(_paypalPill);
+            _paypalPill.Click += (_, _) => OpenUrl("https://www.paypal.com/donate/?hosted_button_id=ZUGYHHC2L7ZXC");
+
+            _coffeePill = new ThemedButton
+            {
+                Text = Loc.S("Buy me a coffee", "Buy me a coffee"),
+                IconImage = LoadDonationCoffeeIcon()
+            };
+            Theme.ApplyCompactPrimaryStyle(_coffeePill);
+            _coffeePill.Click += (_, _) => OpenUrl("https://buymeacoffee.com/lall0ne");
+
+            int paypalW = _paypalPill.PreferredSize.Width;
+            int coffeeW = _coffeePill.PreferredSize.Width;
+
+            int donateRowW = paypalW + donatePillGap + coffeeW;
+            int donateStartX = margin + Math.Max(0, (width - donateRowW) / 2);
+            _paypalPill.Bounds = new Rectangle(donateStartX, y, paypalW, donatePillH);
+            _coffeePill.Bounds = new Rectangle(donateStartX + paypalW + donatePillGap, y, coffeeW, donatePillH);
+            Controls.Add(_paypalPill);
+            Controls.Add(_coffeePill);
+            y += donatePillH;
 
             // ----- Toolbar (top) -----
             const int toolbarBtnH = Theme.ToolbarButtonHeight;
-            _buyCoffeeButton = new ThemedButton
-            {
-                Text = Loc.S("Buy me a coffee", "Buy me a coffee"),
-                IconImage = LoadCoffeeIcon(),
-                IconSize = 14,
-                AutoSize = true,
-                MinimumSize = new Size(0, toolbarBtnH)
-            };
-            Theme.ApplyToolbarPrimaryStyle(_buyCoffeeButton);
-            int coffeeBtnW = _buyCoffeeButton.PreferredSize.Width;
-            _buyCoffeeButton.Bounds = new Rectangle(margin, 12, coffeeBtnW, toolbarBtnH);
-            _buyCoffeeButton.Click += (_, _) => OpenUrl("https://www.paypal.com/donate/?hosted_button_id=ZUGYHHC2L7ZXC");
-            Controls.Add(_buyCoffeeButton);
-
             _updateButton = new ThemedButton
             {
                 Text = Loc.S("⬇ Aggiorna", "⬇ Update"),
@@ -522,11 +556,10 @@ namespace ClassicUO.Launcher.Custom
             };
             _langButton.Click += (_, _) => ToggleLanguage();
             Controls.Add(_langButton);
-            _buyCoffeeButton.BringToFront();
             _updateButton.BringToFront();
             _langButton.BringToFront();
 
-            ClientSize = new Size(formWidth, y + footerH + bottomMargin);
+            ClientSize = new Size(formWidth, y + bottomMargin);
         }
 
         private void RefreshWindowTitle()
@@ -684,11 +717,11 @@ namespace ClassicUO.Launcher.Custom
             _downloadAssistantButton.Text = GetAssistantDownloadButtonText(SelectedAssistant);
             _downloadUoButton.Text = Loc.S("⬇ Scarica UODreams", "⬇ Download UODreams");
             _editServerButton.Text = "✎";
-            _buyCoffeeButton.Text = Loc.S("Buy me a coffee", "Buy me a coffee");
             _updateButton.Text = _updateAvailable
                 ? Loc.S("★ Aggiorna", "★ Update")
                 : Loc.S("⬇ Aggiorna", "⬇ Update");
             _launchButton.Text = Loc.S("AVVIA", "START");
+            _coffeePill.Text = Loc.S("Buy me a coffee", "Buy me a coffee");
             _registerBtn.Text = Loc.S("Registrati gratis", "Register for free");
             _enhancedMapLink.Text = Loc.S("🌍 ENHANCED MAP", "🌍 ENHANCED MAP");
             _enhancedMapAutoOpenCheck.Text = Loc.S("apri mappa automaticamente", "autoopen map");
