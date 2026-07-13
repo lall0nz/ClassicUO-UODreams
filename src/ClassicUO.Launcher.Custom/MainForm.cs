@@ -2204,6 +2204,8 @@ namespace ClassicUO.Launcher.Custom
                 CreateNoWindow = false
             };
 
+            ClientNativeRuntime.ApplyPvpGraphicsDriver(psi);
+
             psi.ArgumentList.Add("-ip");
             psi.ArgumentList.Add(_ipBox.Text.Trim());
             psi.ArgumentList.Add("-port");

@@ -6,7 +6,7 @@
 # On client update, ClientRuntimeDownloader backs up and restores the same paths.
 # See RELEASE.md for the full policy.
 param(
-    [string]$Version = "1.1.9",
+    [string]$Version = "1.1.10",
     [ValidateSet("pvp", "classic")]
     [string]$Edition = "pvp",
     [string]$OfficialCuo = "$env:USERPROFILE\Downloads\ClassicUOLauncher-win-x64-releasee\ClassicUO",

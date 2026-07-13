@@ -89,6 +89,20 @@ namespace ClassicUO.Game.GameObjects
             ushort graphic = DisplayedGraphic;
             bool partial = ItemData.IsPartialHue;
 
+            Profile energyFieldProfile = ProfileManager.CurrentProfile;
+
+            if (energyFieldProfile != null && energyFieldProfile.BlockEnergyF)
+            {
+                if (
+                    StaticFilters.IsEnergyField(Graphic)
+                    || Graphic == energyFieldProfile.BlockEnergyFArt
+                )
+                {
+                    ref StaticTiles tile = ref TileDataLoader.Instance.StaticData[Graphic];
+                    tile.Flags |= TileFlag.Impassable;
+                }
+            }
+
             if (OnGround)
             {
                 if (ItemData.IsAnimated)

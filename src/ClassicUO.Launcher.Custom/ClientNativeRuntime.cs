@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 
@@ -15,6 +16,17 @@ namespace ClassicUO.Launcher.Custom
             "FNA3D.dll",
             "libtheorafile.dll"
         };
+
+        /// <summary>PVP edition: prefer D3D11; client falls back to OpenGL if init fails.</summary>
+        public static void ApplyPvpGraphicsDriver(ProcessStartInfo psi)
+        {
+            if (!LauncherManifest.IsPvpEdition || Environment.OSVersion.Platform == PlatformID.Unix)
+            {
+                return;
+            }
+
+            psi.Environment["FNA3D_FORCE_DRIVER"] = "D3D11";
+        }
 
         public static string? Validate(string clientDir)
         {

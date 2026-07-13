@@ -265,6 +265,12 @@ namespace ClassicUO.Configuration
         public int HighlightLastTargetTypeMortalled { get; set; } = 0;
         public ushort HighlightLastTargetTypeMortalledHue { get; set; } = 0x0044;
 
+        // Visual Helpers (Dust765): remap AoS Energy Field graphics to a Wall-of-Stone-style
+        // tile (hue 293) and mark them impassable so pathfinding auto-avoids them.
+        public bool BlockEnergyFArtForceAoS { get; set; } = false;
+        public bool BlockEnergyF { get; set; } = false;
+        public uint BlockEnergyFArt { get; set; } = 1872;
+
         // UODreams: stub stone-roof tooltip spam instead of requesting OPL from server.
         public bool EnableUoDreamsNetworkOptimizer { get; set; } = true;
 

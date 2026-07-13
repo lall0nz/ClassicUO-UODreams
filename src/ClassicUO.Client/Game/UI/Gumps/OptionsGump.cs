@@ -166,6 +166,7 @@ namespace ClassicUO.Game.UI.Gumps
         private readonly HashSet<int> _optionsSearchPagesWithHits = new HashSet<int>();
         private Checkbox _hidePersistentNPCNames, _nameOverheadAlwaysOn;
         private Checkbox _showAllLayersPaperdoll;
+        private Checkbox _energyFieldWallOfStoneAutoAvoid;
 
         // infobar
         private List<InfoBarBuilderControl> _infoBarBuilderControls;
@@ -588,6 +589,13 @@ namespace ClassicUO.Game.UI.Gumps
             return 0;
         }
 
+        private static string OptionsLocalizedLabel(string italian, string english)
+        {
+            return string.Equals(Settings.GlobalSettings.Language, "ITA", StringComparison.OrdinalIgnoreCase)
+                ? italian
+                : english;
+        }
+
         private static void GetControlPositionInOptionsGump(OptionsGump gump, Control c, out int gx, out int gy)
         {
             if (c.Parent == gump)
@@ -875,6 +883,18 @@ namespace ClassicUO.Game.UI.Gumps
             visualHelpers.AddRight(_highlightLastTargetTypeMortalled = AddCombobox(null, VisualHighlightStateModes, _currentProfile.HighlightLastTargetTypeMortalled, startX, startY, 100), 2);
             visualHelpers.Add(AddLabel(null, "Custom color", startX, startY));
             visualHelpers.AddRight(_highlightLastTargetTypeMortalledHue = AddColorBox(null, startX, startY, _currentProfile.HighlightLastTargetTypeMortalledHue, string.Empty), 2);
+            visualHelpers.Add(
+                _energyFieldWallOfStoneAutoAvoid = AddCheckBox(
+                    null,
+                    OptionsLocalizedLabel(
+                        "EnergyField come WallofStone auto-avoid",
+                        "EnergyField WallofStone-style auto-avoid"
+                    ),
+                    _currentProfile.BlockEnergyFArtForceAoS,
+                    startX,
+                    startY
+                )
+            );
             visualHelpers.SyncContentHeight();
 
             SettingsSection connections = AddSettingsSection(box, "Connections");
@@ -4381,6 +4401,27 @@ namespace ClassicUO.Game.UI.Gumps
             _currentProfile.HighlightLastTargetTypeParaHue = _highlightLastTargetTypeParaHue.Hue;
             _currentProfile.HighlightLastTargetTypeStunnedHue = _highlightLastTargetTypeStunnedHue.Hue;
             _currentProfile.HighlightLastTargetTypeMortalledHue = _highlightLastTargetTypeMortalledHue.Hue;
+            bool energyFieldAutoAvoid = _energyFieldWallOfStoneAutoAvoid.IsChecked;
+            _currentProfile.BlockEnergyFArtForceAoS = energyFieldAutoAvoid;
+
+            if (_currentProfile.BlockEnergyF != energyFieldAutoAvoid)
+            {
+                ushort eFieldGraphic = (ushort)Math.Min(_currentProfile.BlockEnergyFArt, ushort.MaxValue);
+
+                if (energyFieldAutoAvoid)
+                {
+                    ref StaticTiles tile = ref TileDataLoader.Instance.StaticData[eFieldGraphic];
+                    tile.Flags |= TileFlag.Impassable;
+                }
+                else
+                {
+                    ref StaticTiles tile = ref TileDataLoader.Instance.StaticData[eFieldGraphic];
+                    tile.Flags &= ~TileFlag.Impassable;
+                }
+
+                _currentProfile.BlockEnergyF = energyFieldAutoAvoid;
+            }
+
             _currentProfile.NameOverheadToggled = _nameOverheadAlwaysOn.IsChecked;
             _currentProfile.EnableUoDreamsNetworkOptimizer = _enableUoDreamsNetworkOptimizer.IsChecked;
             _currentProfile.EnableFullSocketDrain = _enableFullSocketDrain.IsChecked;

@@ -254,23 +254,41 @@ namespace ClassicUO
             }
             else
             {
-                switch (Settings.GlobalSettings.ForceDriver)
-                {
-                    case 1: // OpenGL
-                        Environment.SetEnvironmentVariable("FNA3D_FORCE_DRIVER", "OpenGL");
-
-                        break;
-
-                    case 2: // Vulkan
-                        Environment.SetEnvironmentVariable("FNA3D_FORCE_DRIVER", "Vulkan");
-
-                        break;
-                }
-
-                Client.Run(pluginHost);
+                ApplyGraphicsDriverFromSettings();
+                Client.RunWithGraphicsDriverFallback(pluginHost);
             }
 
             Log.Trace("Closing...");
+        }
+
+        // PVP modded client: D3D11 on Windows when force_driver is unset; OpenGL only on explicit choice or D3D11 init failure.
+        private static void ApplyGraphicsDriverFromSettings()
+        {
+            switch (Settings.GlobalSettings.ForceDriver)
+            {
+                case 1: // OpenGL
+                    Environment.SetEnvironmentVariable("FNA3D_FORCE_DRIVER", "OpenGL");
+
+                    break;
+
+                case 2: // Vulkan
+                    Environment.SetEnvironmentVariable("FNA3D_FORCE_DRIVER", "Vulkan");
+
+                    break;
+
+                case 3: // D3D11
+                    Environment.SetEnvironmentVariable("FNA3D_FORCE_DRIVER", "D3D11");
+
+                    break;
+
+                default:
+                    if (!CUOEnviroment.IsUnix)
+                    {
+                        Environment.SetEnvironmentVariable("FNA3D_FORCE_DRIVER", "D3D11");
+                    }
+
+                    break;
+            }
         }
 
         private static void ReadSettingsFromArgs(string[] args)
@@ -497,6 +515,11 @@ namespace ClassicUO
 
                                 case 2: // Vulkan
                                     Settings.GlobalSettings.ForceDriver = 2;
+
+                                    break;
+
+                                case 3: // D3D11
+                                    Settings.GlobalSettings.ForceDriver = 3;
 
                                     break;
 

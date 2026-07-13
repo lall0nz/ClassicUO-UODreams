@@ -18,8 +18,8 @@ namespace ClassicUO.Launcher.Custom
 #endif
 
 #if LAUNCHER_EDITION_PVP
-        public const string LauncherVersion = "1.1.9";
-        public const string ClientRuntimeVersion = "1.1.9";
+        public const string LauncherVersion = "1.1.10";
+        public const string ClientRuntimeVersion = "1.1.10";
 #else
         public const string LauncherVersion = "1.1.9";
         public const string ClientRuntimeVersion = "1.1.9";

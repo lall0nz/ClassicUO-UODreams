@@ -274,26 +274,55 @@ namespace ClassicUO
         public static GameController Game { get; private set; }
 
 
-        public static void Run(IPluginHost pluginHost)
+        public static void Run(IPluginHost pluginHost) => RunWithGraphicsDriverFallback(pluginHost);
+
+        public static void RunWithGraphicsDriverFallback(IPluginHost pluginHost)
         {
             Debug.Assert(Game == null);
 
             Log.Trace("Running game...");
 
-            using (Game = new GameController(pluginHost))
+            for (int attempt = 0; attempt < 2; attempt++)
             {
-                // https://github.com/FNA-XNA/FNA/wiki/7:-FNA-Environment-Variables#fna_graphics_enable_highdpi
-                CUOEnviroment.IsHighDPI = Environment.GetEnvironmentVariable("FNA_GRAPHICS_ENABLE_HIGHDPI") == "1";
-
-                if (CUOEnviroment.IsHighDPI)
+                try
                 {
-                    Log.Trace("HIGH DPI - ENABLED");
-                }
+                    using (Game = new GameController(pluginHost))
+                    {
+                        // https://github.com/FNA-XNA/FNA/wiki/7:-FNA-Environment-Variables#fna_graphics_enable_highdpi
+                        CUOEnviroment.IsHighDPI = Environment.GetEnvironmentVariable("FNA_GRAPHICS_ENABLE_HIGHDPI") == "1";
 
-                Game.Run();
+                        if (CUOEnviroment.IsHighDPI)
+                        {
+                            Log.Trace("HIGH DPI - ENABLED");
+                        }
+
+                        Game.Run();
+                    }
+
+                    break;
+                }
+                catch (Exception ex) when (attempt == 0 && CanFallbackToOpenGl())
+                {
+                    Log.Warn($"D3D11 renderer failed ({ex.Message}); falling back to OpenGL.");
+                    Environment.SetEnvironmentVariable("FNA3D_FORCE_DRIVER", "OpenGL");
+                    Game = null;
+                }
             }
 
             Log.Trace("Exiting game...");
+        }
+
+        private static bool CanFallbackToOpenGl()
+        {
+            if (CUOEnviroment.IsUnix || Settings.GlobalSettings.ForceDriver != 0)
+            {
+                return false;
+            }
+
+            string? driver = Environment.GetEnvironmentVariable("FNA3D_FORCE_DRIVER");
+
+            return string.IsNullOrEmpty(driver)
+                || string.Equals(driver, "D3D11", StringComparison.OrdinalIgnoreCase);
         }
 
         public static void ShowErrorMessage(string msg)

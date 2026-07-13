@@ -911,6 +911,8 @@ namespace ClassicUO.Network
                 type = 2;
             }
 
+            ApplyEnergyFieldWallOfStoneAutoAvoid(ref graphic, ref hue);
+
             UpdateGameObject(
                 world,
                 serial,
@@ -5786,6 +5788,8 @@ namespace ClassicUO.Network
             Flags flags = (Flags)p.ReadUInt8();
             ushort unk2 = p.ReadUInt16BE();
 
+            ApplyEnergyFieldWallOfStoneAutoAvoid(ref graphic, ref hue);
+
             if (serial != world.Player)
             {
                 UpdateGameObject(
@@ -6227,6 +6231,27 @@ namespace ClassicUO.Network
             }
 
             UIManager.GetTradingGump(containerSerial)?.RequestUpdateContents();
+        }
+
+        private static void ApplyEnergyFieldWallOfStoneAutoAvoid(ref ushort graphic, ref ushort hue)
+        {
+            Profile profile = ProfileManager.CurrentProfile;
+
+            if (profile == null || !profile.BlockEnergyFArtForceAoS)
+            {
+                return;
+            }
+
+            if (graphic >= 0x3946 && graphic <= 0x3964)
+            {
+                graphic = (ushort)Math.Min(profile.BlockEnergyFArt, ushort.MaxValue);
+                hue = 293;
+            }
+            else if (graphic == 0x28A8 && hue == 0x0125)
+            {
+                graphic = (ushort)Math.Min(profile.BlockEnergyFArt, ushort.MaxValue);
+                hue = 293;
+            }
         }
 
         private static void UpdateGameObject(
