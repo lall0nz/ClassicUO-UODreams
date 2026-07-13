@@ -692,6 +692,7 @@ namespace ClassicUO.Launcher.Custom
             _registerBtn.Text = Loc.S("Registrati gratis", "Register for free");
             _enhancedMapLink.Text = Loc.S("🌍 ENHANCED MAP", "🌍 ENHANCED MAP");
             _enhancedMapAutoOpenCheck.Text = Loc.S("apri mappa automaticamente", "autoopen map");
+            RebuildEnhancedMapMenu();
             LayoutEnhancedMapControls(24, 620 - 48, _enhancedMapRowY);
 
             // Refresh dynamic/contextual texts.
@@ -712,6 +713,20 @@ namespace ClassicUO.Launcher.Custom
             {
                 LauncherLog.Error("Failed to open registration window", ex);
                 RegisterForm.OpenInExternalBrowser("https://www.gamesnet.it/register");
+            }
+        }
+
+        private void OpenRoomRequestWindow()
+        {
+            try
+            {
+                using var form = new RoomRequestForm();
+                form.ShowDialog(this);
+            }
+            catch (Exception ex)
+            {
+                LauncherLog.Error("Failed to open room request window", ex);
+                RegisterForm.OpenInExternalBrowser("http://www.uodreams.it/?f=page");
             }
         }
 
@@ -1503,15 +1518,28 @@ namespace ClassicUO.Launcher.Custom
 
         private void ShowEnhancedMapMenu()
         {
-            if (_enhancedMapMenu == null || _enhancedMapMenu.IsDisposed)
+            RebuildEnhancedMapMenu();
+            _enhancedMapMenu!.ShowBelow(_enhancedMapLink);
+        }
+
+        private void RebuildEnhancedMapMenu()
+        {
+            if (_enhancedMapMenu != null)
             {
-                _enhancedMapMenu = new ThemedContextMenu();
-                _enhancedMapMenu.AddAction(Loc.S("Avvia", "Launch"), () => LaunchEnhancedMap());
-                _enhancedMapMenu.AddAction(Loc.S("Sfoglia…", "Browse…"), BrowseEnhancedMap);
-                _enhancedMapMenu.AddAction(Loc.S("Scarica", "Download"), DownloadEnhancedMap);
+                _enhancedMapMenu.Dispose();
+                _enhancedMapMenu = null;
             }
 
-            _enhancedMapMenu.ShowBelow(_enhancedMapLink);
+            _enhancedMapMenu = new ThemedContextMenu();
+            _enhancedMapMenu.AddAction(Loc.S("Avvia", "Launch"), () => LaunchEnhancedMap());
+            _enhancedMapMenu.AddAction(Loc.S("Sfoglia…", "Browse…"), BrowseEnhancedMap);
+            _enhancedMapMenu.AddAction(Loc.S("Scarica", "Download"), DownloadEnhancedMap);
+            if (!LauncherManifest.IsPvpEdition)
+            {
+                _enhancedMapMenu.AddAction(
+                    Loc.S("Richiedi Stanza", "Request Room"),
+                    OpenRoomRequestWindow);
+            }
         }
 
         private void BrowseEnhancedMap()

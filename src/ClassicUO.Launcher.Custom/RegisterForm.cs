@@ -493,4 +493,183 @@ namespace ClassicUO.Launcher.Custom
             }
         }
     }
+
+    public sealed class RoomRequestForm : Form
+    {
+        private const string PageUrl = "http://www.uodreams.it/?f=page";
+
+        private readonly WebView2 _webView;
+        private readonly Label _statusLabel;
+        private bool _webViewReady;
+
+        public RoomRequestForm()
+        {
+            Text = Loc.S("UODreams Launcher — Richiedi Stanza", "UODreams Launcher — Request Room");
+            FormBorderStyle = FormBorderStyle.Sizable;
+            MinimizeBox = true;
+            MaximizeBox = true;
+            StartPosition = FormStartPosition.CenterParent;
+            ClientSize = new Size(520, 720);
+            MinimumSize = new Size(420, 560);
+            BackColor = Theme.WindowBottom;
+            ForeColor = Theme.Text;
+            Font = new Font("Segoe UI", 9.5f);
+
+            LoadWindowIcon();
+
+            var openInBrowserBar = new Label
+            {
+                Dock = DockStyle.Top,
+                Height = 28,
+                Text = Loc.S(
+                    "Clicca qui per aprire sul tuo browser",
+                    "Click here to open in your browser"),
+                ForeColor = Theme.Text,
+                BackColor = Theme.ButtonNeutral,
+                Cursor = Cursors.Hand,
+                Padding = new Padding(14, 5, 14, 5),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Font = new Font("Segoe UI", 9f, FontStyle.Underline)
+            };
+            openInBrowserBar.Click += (_, _) => RegisterForm.OpenInExternalBrowser(PageUrl);
+            openInBrowserBar.MouseEnter += (_, _) => openInBrowserBar.BackColor = Theme.ButtonNeutralHover;
+            openInBrowserBar.MouseLeave += (_, _) => openInBrowserBar.BackColor = Theme.ButtonNeutral;
+
+            _statusLabel = new Label
+            {
+                Dock = DockStyle.Bottom,
+                Height = 26,
+                Text = Loc.S("Caricamento pagina…", "Loading page…"),
+                ForeColor = Theme.TextMuted,
+                BackColor = Theme.WindowBottom,
+                Padding = new Padding(14, 4, 14, 4),
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+
+            _webView = new WebView2
+            {
+                Dock = DockStyle.Fill,
+                DefaultBackgroundColor = Theme.WindowBottom
+            };
+
+            Controls.Add(_webView);
+            Controls.Add(_statusLabel);
+            Controls.Add(openInBrowserBar);
+
+            Shown += OnShown;
+        }
+
+        private void LoadWindowIcon()
+        {
+            try
+            {
+                using Stream? stream = System.Reflection.Assembly.GetExecutingAssembly()
+                    .GetManifestResourceStream("ClassicUO.Launcher.Custom.Resources.uodreams.ico");
+                if (stream != null)
+                {
+                    Icon = new Icon(stream);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        private async void OnShown(object? sender, EventArgs e)
+        {
+            Shown -= OnShown;
+            await InitializeWebViewAsync();
+        }
+
+        private async Task InitializeWebViewAsync()
+        {
+            try
+            {
+                string userDataFolder = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "UODreamsLauncher",
+                    "WebView2"
+                );
+                Directory.CreateDirectory(userDataFolder);
+
+                var env = await CoreWebView2Environment.CreateAsync(null, userDataFolder)
+                    .ConfigureAwait(true);
+                await _webView.EnsureCoreWebView2Async(env).ConfigureAwait(true);
+
+                CoreWebView2 core = _webView.CoreWebView2;
+                core.Settings.AreDevToolsEnabled = false;
+                core.Settings.AreDefaultContextMenusEnabled = false;
+                core.Settings.IsStatusBarEnabled = false;
+                core.Settings.IsSwipeNavigationEnabled = false;
+
+                core.NewWindowRequested += (_, args) =>
+                {
+                    args.Handled = true;
+                    if (!string.IsNullOrEmpty(args.Uri))
+                    {
+                        core.Navigate(args.Uri);
+                    }
+                };
+
+                core.NavigationStarting += (_, _) =>
+                {
+                    _statusLabel.Text = Loc.S("Caricamento…", "Loading…");
+                };
+
+                core.NavigationCompleted += (_, args) =>
+                {
+                    _statusLabel.Text = args.IsSuccess
+                        ? Loc.S("Pagina pronta.", "Page ready.")
+                        : Loc.S(
+                            "Impossibile caricare la pagina. Controlla la connessione.",
+                            "Unable to load the page. Check your connection.");
+                };
+
+                _webViewReady = true;
+                core.Navigate(PageUrl);
+            }
+            catch (Exception ex)
+            {
+                _webViewReady = false;
+                LauncherLog.Error("WebView2 init failed (Richiedi Stanza)", ex);
+                ShowRuntimeMissingFallback();
+            }
+        }
+
+        private void ShowRuntimeMissingFallback()
+        {
+            _statusLabel.Text = Loc.S(
+                "Componente browser non disponibile.",
+                "Browser component unavailable.");
+
+            var result = MessageBox.Show(
+                Loc.S(
+                    "Per aprire Richiedi Stanza nel launcher è necessario il runtime Microsoft Edge WebView2, "
+                        + "che non risulta installato.\n\n"
+                        + "Vuoi aprire la pagina nel browser predefinito?",
+                    "Opening Request Room in the launcher requires the Microsoft Edge WebView2 runtime, "
+                        + "which is not installed.\n\n"
+                        + "Open the page in your default browser instead?"),
+                Loc.S("UODreams Launcher", "UODreams Launcher"),
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Information
+            );
+
+            if (result == DialogResult.Yes)
+            {
+                RegisterForm.OpenInExternalBrowser(PageUrl);
+            }
+
+            Close();
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            base.OnFormClosed(e);
+            if (_webViewReady)
+            {
+                _webView.Dispose();
+            }
+        }
+    }
 }
