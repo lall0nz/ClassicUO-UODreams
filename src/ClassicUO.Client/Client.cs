@@ -1,4 +1,4 @@
-#region license
+﻿#region license
 
 // Copyright (c) 2024, andreakarasho
 // All rights reserved.
@@ -42,7 +42,7 @@ using ClassicUO.Utility;
 using ClassicUO.Utility.Logging;
 using ClassicUO.Utility.Platforms;
 using Microsoft.Xna.Framework.Graphics;
-using SDL3;
+using SDL2;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -274,55 +274,26 @@ namespace ClassicUO
         public static GameController Game { get; private set; }
 
 
-        public static void Run(IPluginHost pluginHost) => RunWithGraphicsDriverFallback(pluginHost);
-
-        public static void RunWithGraphicsDriverFallback(IPluginHost pluginHost)
+        public static void Run(IPluginHost pluginHost)
         {
             Debug.Assert(Game == null);
 
             Log.Trace("Running game...");
 
-            for (int attempt = 0; attempt < 2; attempt++)
+            using (Game = new GameController(pluginHost))
             {
-                try
+                // https://github.com/FNA-XNA/FNA/wiki/7:-FNA-Environment-Variables#fna_graphics_enable_highdpi
+                CUOEnviroment.IsHighDPI = Environment.GetEnvironmentVariable("FNA_GRAPHICS_ENABLE_HIGHDPI") == "1";
+
+                if (CUOEnviroment.IsHighDPI)
                 {
-                    using (Game = new GameController(pluginHost))
-                    {
-                        // https://github.com/FNA-XNA/FNA/wiki/7:-FNA-Environment-Variables#fna_graphics_enable_highdpi
-                        CUOEnviroment.IsHighDPI = Environment.GetEnvironmentVariable("FNA_GRAPHICS_ENABLE_HIGHDPI") == "1";
-
-                        if (CUOEnviroment.IsHighDPI)
-                        {
-                            Log.Trace("HIGH DPI - ENABLED");
-                        }
-
-                        Game.Run();
-                    }
-
-                    break;
+                    Log.Trace("HIGH DPI - ENABLED");
                 }
-                catch (Exception ex) when (attempt == 0 && CanFallbackToOpenGl())
-                {
-                    Log.Warn($"D3D11 renderer failed ({ex.Message}); falling back to OpenGL.");
-                    Environment.SetEnvironmentVariable("FNA3D_FORCE_DRIVER", "OpenGL");
-                    Game = null;
-                }
+
+                Game.Run();
             }
 
             Log.Trace("Exiting game...");
-        }
-
-        private static bool CanFallbackToOpenGl()
-        {
-            if (CUOEnviroment.IsUnix || Settings.GlobalSettings.ForceDriver != 0)
-            {
-                return false;
-            }
-
-            string? driver = Environment.GetEnvironmentVariable("FNA3D_FORCE_DRIVER");
-
-            return string.IsNullOrEmpty(driver)
-                || string.Equals(driver, "D3D11", StringComparison.OrdinalIgnoreCase);
         }
 
         public static void ShowErrorMessage(string msg)

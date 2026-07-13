@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -132,12 +133,22 @@ namespace ClassicUO.Launcher.Custom
                 return null;
             }
 
-            string effectiveClientVersion = string.IsNullOrWhiteSpace(localClientVersion)
-                ? LauncherManifest.ClientRuntimeVersion
-                : localClientVersion;
+            string effectiveClientVersion = NormalizeVersion(
+                string.IsNullOrWhiteSpace(localClientVersion)
+                    ? LauncherManifest.ClientRuntimeVersion
+                    : localClientVersion);
 
             bool needsClient = NeedsComponentUpdate(bestVersion, effectiveClientVersion, clientUrl != null);
             bool needsLauncher = NeedsComponentUpdate(bestVersion, LauncherManifest.RuntimeLauncherVersion, launcherUrl != null);
+
+            if (!needsClient &&
+                clientUrl != null &&
+                CompareVersions(LauncherManifest.RuntimeLauncherVersion, effectiveClientVersion) > 0 &&
+                CompareVersions(bestVersion, effectiveClientVersion) >= 0)
+            {
+                // Launcher was updated in-place but client files/settings lag behind the same release.
+                needsClient = true;
+            }
 
             return new UpdateCheckResult
             {
@@ -273,8 +284,8 @@ namespace ClassicUO.Launcher.Custom
                 return null;
             }
 
-            Match match = Regex.Match(fileName, @"v([\d.]+)", RegexOptions.IgnoreCase);
-            return match.Success ? match.Groups[1].Value : null;
+            Match match = Regex.Match(fileName, @"v(\d+(?:\.\d+)*)", RegexOptions.IgnoreCase);
+            return match.Success ? NormalizeVersion(match.Groups[1].Value) : null;
         }
 
         private static bool MatchesEditionTag(string tag)
@@ -301,8 +312,8 @@ namespace ClassicUO.Launcher.Custom
 
         private static string? ParseVersionFromTag(string tag)
         {
-            Match match = Regex.Match(tag, @"(?:pvp-v|classic-v|v)([\d.]+)$", RegexOptions.IgnoreCase);
-            return match.Success ? match.Groups[1].Value : null;
+            Match match = Regex.Match(tag, @"(?:pvp-v|classic-v|v)(\d+(?:\.\d+)*)$", RegexOptions.IgnoreCase);
+            return match.Success ? NormalizeVersion(match.Groups[1].Value) : null;
         }
 
         private static bool IsClientPackage(string name)
@@ -492,8 +503,32 @@ namespace ClassicUO.Launcher.Custom
             }
             catch
             {
-                return string.Compare(left, right, StringComparison.OrdinalIgnoreCase);
+                return CompareVersionSegments(left, right);
             }
+        }
+
+        private static int CompareVersionSegments(string left, string right)
+        {
+            string[] leftParts = left.Split('.', StringSplitOptions.RemoveEmptyEntries);
+            string[] rightParts = right.Split('.', StringSplitOptions.RemoveEmptyEntries);
+            int count = Math.Max(leftParts.Length, rightParts.Length);
+
+            for (int i = 0; i < count; i++)
+            {
+                int leftValue = i < leftParts.Length && int.TryParse(leftParts[i], out int parsedLeft)
+                    ? parsedLeft
+                    : 0;
+                int rightValue = i < rightParts.Length && int.TryParse(rightParts[i], out int parsedRight)
+                    ? parsedRight
+                    : 0;
+
+                if (leftValue != rightValue)
+                {
+                    return leftValue.CompareTo(rightValue);
+                }
+            }
+
+            return 0;
         }
 
         internal static string MaxVersion(string? left, string? right)
@@ -525,9 +560,41 @@ namespace ClassicUO.Launcher.Custom
             return CompareVersions(remoteLatest, localVersion) > 0;
         }
 
-        private static string NormalizeVersion(string? version)
+        internal static string NormalizeVersion(string? version)
         {
-            return (version ?? "").Trim().TrimStart('v', 'V');
+            if (string.IsNullOrWhiteSpace(version))
+            {
+                return "";
+            }
+
+            string text = version.Trim().TrimStart('v', 'V');
+            while (text.EndsWith('.'))
+            {
+                text = text[..^1];
+            }
+
+            var parts = new List<string>();
+            foreach (string segment in text.Split('.', StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (segment.Length == 0 || !segment.All(char.IsDigit))
+                {
+                    break;
+                }
+
+                parts.Add(segment);
+            }
+
+            if (parts.Count == 0)
+            {
+                return "";
+            }
+
+            if (parts.Count > 3)
+            {
+                parts.RemoveRange(3, parts.Count - 3);
+            }
+
+            return string.Join('.', parts);
         }
     }
 }

@@ -31,7 +31,7 @@
 #endregion
 
 using Microsoft.Xna.Framework;
-using SDL3;
+using SDL2;
 
 namespace ClassicUO.Input
 {
@@ -71,7 +71,7 @@ namespace ClassicUO.Input
                     break;
             }
 
-            SDL.SDL_CaptureMouse(true);
+            SDL.SDL_CaptureMouse(SDL.SDL_bool.SDL_TRUE);
         }
 
         /* Log a button release event at the given time */
@@ -103,7 +103,7 @@ namespace ClassicUO.Input
 
             if (!(LButtonPressed || RButtonPressed || MButtonPressed))
             {
-                SDL.SDL_CaptureMouse(false);
+                SDL.SDL_CaptureMouse(SDL.SDL_bool.SDL_FALSE);
             }
         }
 
@@ -145,16 +145,14 @@ namespace ClassicUO.Input
         {
             if (!MouseInWindow)
             {
-                SDL.SDL_GetGlobalMouseState(out float x, out float y);
+                SDL.SDL_GetGlobalMouseState(out int x, out int y);
                 SDL.SDL_GetWindowPosition(Client.Game.Window.Handle, out int winX, out int winY);
-                Position.X = (int)x - winX;
-                Position.Y = (int)y - winY;
+                Position.X = x - winX;
+                Position.Y = y - winY;
             }
             else
             {
-                SDL.SDL_GetMouseState(out float mx, out float my);
-                Position.X = (int)mx;
-                Position.Y = (int)my;
+                SDL.SDL_GetMouseState(out Position.X, out Position.Y);
             }
 
             // Scale the mouse coordinates for the faux-backbuffer

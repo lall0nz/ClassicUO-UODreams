@@ -17,15 +17,10 @@ namespace ClassicUO.Launcher.Custom
             "libtheorafile.dll"
         };
 
-        /// <summary>PVP edition: prefer D3D11; client falls back to OpenGL if init fails.</summary>
+        /// <summary>PVP edition: no forced graphics driver; client uses settings.json force_driver (OpenGL default).</summary>
         public static void ApplyPvpGraphicsDriver(ProcessStartInfo psi)
         {
-            if (!LauncherManifest.IsPvpEdition || Environment.OSVersion.Platform == PlatformID.Unix)
-            {
-                return;
-            }
-
-            psi.Environment["FNA3D_FORCE_DRIVER"] = "D3D11";
+            // SDL2/OpenGL PVP builds must not force D3D11 from the launcher.
         }
 
         public static string? Validate(string clientDir)

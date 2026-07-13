@@ -50,7 +50,7 @@ using System;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Threading;
-using static SDL3.SDL;
+using static SDL2.SDL;
 
 namespace ClassicUO
 {
@@ -113,9 +113,6 @@ namespace ClassicUO
 
             _filter = HandleSdlEvent;
             SDL_SetEventFilter(_filter, IntPtr.Zero);
-
-            // SDL3 requires an explicit text-input session; without this, login/chat TextBox controls never receive SDL_EVENT_TEXT_INPUT.
-            Microsoft.Xna.Framework.Input.TextInputEXT.StartTextInput();
 
             base.Initialize();
         }
@@ -282,20 +279,21 @@ namespace ClassicUO
 
             SDL_SetWindowBordered(
                 Window.Handle,
-                !borderless
+                borderless ? SDL_bool.SDL_FALSE : SDL_bool.SDL_TRUE
             );
-            SDL_DisplayMode* displayMode = (SDL_DisplayMode*)SDL_GetCurrentDisplayMode(
-                SDL_GetDisplayForWindow(Window.Handle)
+            SDL_GetCurrentDisplayMode(
+                SDL_GetWindowDisplayIndex(Window.Handle),
+                out SDL_DisplayMode displayMode
             );
 
-            int width = displayMode->w;
-            int height = displayMode->h;
+            int width = displayMode.w;
+            int height = displayMode.h;
 
             if (borderless)
             {
                 SetWindowSize(width, height);
                 SDL_GetDisplayUsableBounds(
-                    SDL_GetDisplayForWindow(Window.Handle),
+                    SDL_GetWindowDisplayIndex(Window.Handle),
                     out SDL_Rect rect
                 );
                 SDL_SetWindowPosition(Window.Handle, rect.x, rect.y);
@@ -542,11 +540,13 @@ namespace ClassicUO
             }
         }
 
-        private bool HandleSdlEvent(IntPtr userData, SDL_Event* sdlEvent)
+        private int HandleSdlEvent(IntPtr userData, IntPtr ptr)
         {
+            SDL_Event* sdlEvent = (SDL_Event*)ptr;
+
             if (Plugin.ProcessWndProc(sdlEvent) != 0)
             {
-                if ((SDL_EventType)sdlEvent->type == SDL_EventType.SDL_EVENT_MOUSE_MOTION)
+                if (sdlEvent->type == SDL_EventType.SDL_MOUSEMOTION)
                 {
                     if (UO.GameCursor != null)
                     {
@@ -554,45 +554,56 @@ namespace ClassicUO
                     }
                 }
 
-                return true;
+                return 1;
             }
 
-            switch ((SDL_EventType)sdlEvent->type)
+            switch (sdlEvent->type)
             {
-                case SDL_EventType.SDL_EVENT_AUDIO_DEVICE_ADDED:
+                case SDL_EventType.SDL_AUDIODEVICEADDED:
                     Console.WriteLine("AUDIO ADDED: {0}", sdlEvent->adevice.which);
 
                     break;
 
-                case SDL_EventType.SDL_EVENT_AUDIO_DEVICE_REMOVED:
+                case SDL_EventType.SDL_AUDIODEVICEREMOVED:
                     Console.WriteLine("AUDIO REMOVED: {0}", sdlEvent->adevice.which);
 
                     break;
 
-                case SDL_EventType.SDL_EVENT_WINDOW_MOUSE_ENTER:
-                    Mouse.MouseInWindow = true;
+                case SDL_EventType.SDL_WINDOWEVENT:
+
+                    switch (sdlEvent->window.windowEvent)
+                    {
+                        case SDL_WindowEventID.SDL_WINDOWEVENT_ENTER:
+                            Mouse.MouseInWindow = true;
+
+                            break;
+
+                        case SDL_WindowEventID.SDL_WINDOWEVENT_LEAVE:
+                            Mouse.MouseInWindow = false;
+
+                            break;
+
+                        case SDL_WindowEventID.SDL_WINDOWEVENT_FOCUS_GAINED:
+                            Plugin.OnFocusGained();
+
+                            break;
+
+                        case SDL_WindowEventID.SDL_WINDOWEVENT_FOCUS_LOST:
+                            Plugin.OnFocusLost();
+
+                            break;
+                    }
+
                     break;
 
-                case SDL_EventType.SDL_EVENT_WINDOW_MOUSE_LEAVE:
-                    Mouse.MouseInWindow = false;
-                    break;
-
-                case SDL_EventType.SDL_EVENT_WINDOW_FOCUS_GAINED:
-                    Plugin.OnFocusGained();
-                    break;
-
-                case SDL_EventType.SDL_EVENT_WINDOW_FOCUS_LOST:
-                    Plugin.OnFocusLost();
-                    break;
-
-                case SDL_EventType.SDL_EVENT_KEY_DOWN:
+                case SDL_EventType.SDL_KEYDOWN:
 
                     Keyboard.OnKeyDown(sdlEvent->key);
 
                     if (
                         Plugin.ProcessHotkeys(
-                            (int)sdlEvent->key.key,
-                            (int)sdlEvent->key.mod,
+                            (int)sdlEvent->key.keysym.sym,
+                            (int)sdlEvent->key.keysym.mod,
                             true
                         )
                     )
@@ -600,8 +611,8 @@ namespace ClassicUO
                         _ignoreNextTextInput = false;
 
                         UIManager.KeyboardFocusControl?.InvokeKeyDown(
-                            (SDL_Keycode)sdlEvent->key.key,
-                            sdlEvent->key.mod
+                            sdlEvent->key.keysym.sym,
+                            sdlEvent->key.keysym.mod
                         );
 
                         Scene.OnKeyDown(sdlEvent->key);
@@ -613,40 +624,41 @@ namespace ClassicUO
 
                     break;
 
-                case SDL_EventType.SDL_EVENT_KEY_UP:
+                case SDL_EventType.SDL_KEYUP:
 
                     Keyboard.OnKeyUp(sdlEvent->key);
                     UIManager.KeyboardFocusControl?.InvokeKeyUp(
-                        (SDL_Keycode)sdlEvent->key.key,
-                        sdlEvent->key.mod
+                        sdlEvent->key.keysym.sym,
+                        sdlEvent->key.keysym.mod
                     );
                     Scene.OnKeyUp(sdlEvent->key);
                     Plugin.ProcessHotkeys(0, 0, false);
 
-                    if ((SDL_Keycode)sdlEvent->key.key == SDL_Keycode.SDLK_PRINTSCREEN)
+                    if (sdlEvent->key.keysym.sym == SDL_Keycode.SDLK_PRINTSCREEN)
                     {
                         TakeScreenshot();
                     }
 
                     break;
 
-                case SDL_EventType.SDL_EVENT_TEXT_INPUT:
+                case SDL_EventType.SDL_TEXTINPUT:
 
                     if (_ignoreNextTextInput)
                     {
                         break;
                     }
 
-                    byte* ptrText = sdlEvent->text.text;
-                    while (*ptrText != 0)
+                    // Fix for linux OS: https://github.com/andreakarasho/ClassicUO/pull/1263
+                    // Fix 2: SDL owns this behaviour. Cheating is not a real solution.
+                    /*if (!Utility.Platforms.PlatformHelper.IsWindows)
                     {
-                        ptrText++;
-                    }
+                        if (Keyboard.Alt || Keyboard.Ctrl)
+                        {
+                            break;
+                        }
+                    }*/
 
-                    string s = System.Text.Encoding.UTF8.GetString(
-                        sdlEvent->text.text,
-                        (int)(ptrText - sdlEvent->text.text)
-                    );
+                    string s = UTF8_ToManaged((IntPtr)sdlEvent->text.text, false);
 
                     if (!string.IsNullOrEmpty(s))
                     {
@@ -656,7 +668,7 @@ namespace ClassicUO
 
                     break;
 
-                case SDL_EventType.SDL_EVENT_MOUSE_MOTION:
+                case SDL_EventType.SDL_MOUSEMOTION:
 
                     if (UO.GameCursor != null && !UO.GameCursor.AllowDrawSDLCursor)
                     {
@@ -676,11 +688,11 @@ namespace ClassicUO
 
                     break;
 
-                case SDL_EventType.SDL_EVENT_MOUSE_WHEEL:
+                case SDL_EventType.SDL_MOUSEWHEEL:
                     Mouse.Update();
                     bool isScrolledUp = sdlEvent->wheel.y > 0;
 
-                    Plugin.ProcessMouse(0, (int)sdlEvent->wheel.y);
+                    Plugin.ProcessMouse(0, sdlEvent->wheel.y);
 
                     if (!Scene.OnMouseWheel(isScrolledUp))
                     {
@@ -689,7 +701,7 @@ namespace ClassicUO
 
                     break;
 
-                case SDL_EventType.SDL_EVENT_MOUSE_BUTTON_DOWN:
+                case SDL_EventType.SDL_MOUSEBUTTONDOWN:
                 {
                     SDL_MouseButtonEvent mouse = sdlEvent->button;
 
@@ -789,7 +801,7 @@ namespace ClassicUO
                     break;
                 }
 
-                case SDL_EventType.SDL_EVENT_MOUSE_BUTTON_UP:
+                case SDL_EventType.SDL_MOUSEBUTTONUP:
                 {
                     SDL_MouseButtonEvent mouse = sdlEvent->button;
 
@@ -839,7 +851,7 @@ namespace ClassicUO
                 }
             }
 
-            return true;
+            return 1;
         }
 
         protected override void OnExiting(object sender, EventArgs args)

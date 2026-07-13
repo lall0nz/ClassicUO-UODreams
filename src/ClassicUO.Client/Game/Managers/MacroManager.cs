@@ -46,7 +46,7 @@ using ClassicUO.Network;
 using ClassicUO.Resources;
 using ClassicUO.Utility;
 using ClassicUO.Utility.Logging;
-using SDL3;
+using SDL2;
 
 namespace ClassicUO.Game.Managers
 {

@@ -1,4 +1,4 @@
-#region license
+﻿#region license
 
 // Copyright (c) 2024, andreakarasho
 // All rights reserved.
@@ -39,7 +39,7 @@ using ClassicUO.Resources;
 using ClassicUO.Utility;
 using ClassicUO.Utility.Logging;
 using ClassicUO.Utility.Platforms;
-using SDL3;
+using SDL2;
 using System;
 using System.Globalization;
 using System.IO;
@@ -81,6 +81,9 @@ namespace ClassicUO
             // Legacy code-page encodings (e.g. 850) are not available by default on
             // modern .NET; managed assistants like ClassicAssist/IronPython need them.
             System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+
+            // FNA 26.x defaults to SDL3; our native libs ship SDL2 (external/x64).
+            Environment.SetEnvironmentVariable("FNA_PLATFORM_BACKEND", "SDL2");
 
             Log.Start(LogTypes.All);
 
@@ -254,41 +257,23 @@ namespace ClassicUO
             }
             else
             {
-                ApplyGraphicsDriverFromSettings();
-                Client.RunWithGraphicsDriverFallback(pluginHost);
+                switch (Settings.GlobalSettings.ForceDriver)
+                {
+                    case 1: // OpenGL
+                        Environment.SetEnvironmentVariable("FNA3D_FORCE_DRIVER", "OpenGL");
+
+                        break;
+
+                    case 2: // Vulkan
+                        Environment.SetEnvironmentVariable("FNA3D_FORCE_DRIVER", "Vulkan");
+
+                        break;
+                }
+
+                Client.Run(pluginHost);
             }
 
             Log.Trace("Closing...");
-        }
-
-        // PVP modded client: D3D11 on Windows when force_driver is unset; OpenGL only on explicit choice or D3D11 init failure.
-        private static void ApplyGraphicsDriverFromSettings()
-        {
-            switch (Settings.GlobalSettings.ForceDriver)
-            {
-                case 1: // OpenGL
-                    Environment.SetEnvironmentVariable("FNA3D_FORCE_DRIVER", "OpenGL");
-
-                    break;
-
-                case 2: // Vulkan
-                    Environment.SetEnvironmentVariable("FNA3D_FORCE_DRIVER", "Vulkan");
-
-                    break;
-
-                case 3: // D3D11
-                    Environment.SetEnvironmentVariable("FNA3D_FORCE_DRIVER", "D3D11");
-
-                    break;
-
-                default:
-                    if (!CUOEnviroment.IsUnix)
-                    {
-                        Environment.SetEnvironmentVariable("FNA3D_FORCE_DRIVER", "D3D11");
-                    }
-
-                    break;
-            }
         }
 
         private static void ReadSettingsFromArgs(string[] args)
@@ -515,11 +500,6 @@ namespace ClassicUO
 
                                 case 2: // Vulkan
                                     Settings.GlobalSettings.ForceDriver = 2;
-
-                                    break;
-
-                                case 3: // D3D11
-                                    Settings.GlobalSettings.ForceDriver = 3;
 
                                     break;
 

@@ -1,4 +1,4 @@
-#region license
+﻿#region license
 
 // Copyright (c) 2024, andreakarasho
 // All rights reserved.
@@ -35,7 +35,7 @@ using ClassicUO.Game.Managers;
 using ClassicUO.Input;
 using ClassicUO.Assets;
 using ClassicUO.Renderer;
-using SDL3;
+using SDL2;
 
 namespace ClassicUO.Game.Scenes
 {

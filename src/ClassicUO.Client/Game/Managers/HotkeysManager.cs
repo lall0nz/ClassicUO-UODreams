@@ -1,4 +1,4 @@
-#region license
+﻿#region license
 
 // Copyright (c) 2024, andreakarasho
 // All rights reserved.
@@ -32,7 +32,7 @@
 
 using System;
 using System.Collections.Generic;
-using SDL3;
+using SDL2;
 
 namespace ClassicUO.Game.Managers
 {

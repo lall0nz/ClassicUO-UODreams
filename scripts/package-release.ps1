@@ -6,7 +6,7 @@
 # On client update, ClientRuntimeDownloader backs up and restores the same paths.
 # See RELEASE.md for the full policy.
 param(
-    [string]$Version = "1.1.10",
+    [string]$Version = "1.1.12",
     [ValidateSet("pvp", "classic")]
     [string]$Edition = "pvp",
     [string]$OfficialCuo = "$env:USERPROFILE\Downloads\ClassicUOLauncher-win-x64-releasee\ClassicUO",
@@ -51,21 +51,31 @@ function Copy-NativeRuntimeFiles([string[]]$SourceDirs, [string]$TargetDir) {
     }
 }
 
-function Copy-Sdl3NativeRuntime([string]$TargetDir, [string]$OfficialDir, [string]$RepoRoot) {
-    foreach ($name in @('zlib.dll','SDL3.dll','FAudio.dll','FNA3D.dll','libtheorafile.dll')) {
-        $src = Join-Path $OfficialDir $name
-        if (-not (Test-Path $src)) {
-            $src = Join-Path $RepoRoot "external\x64-sdl3\$name"
+function Copy-Sdl2NativeRuntime([string]$TargetDir, [string]$OfficialDir, [string]$RepoRoot) {
+    $sourceDirs = @(
+        (Join-Path $RepoRoot "external\x64"),
+        $OfficialDir
+    )
+
+    foreach ($name in @('zlib.dll','SDL2.dll','FAudio.dll','FNA3D.dll','libtheorafile.dll')) {
+        $copied = $false
+        foreach ($sourceDir in $sourceDirs) {
+            if ([string]::IsNullOrWhiteSpace($sourceDir)) { continue }
+            $src = Join-Path $sourceDir $name
+            if (Test-Path $src) {
+                Copy-Item -Force $src (Join-Path $TargetDir $name)
+                $copied = $true
+                break
+            }
         }
-        if (-not (Test-Path $src)) {
-            throw "Missing SDL3 runtime file: $name (provide -OfficialCuo with SDL3.dll or add external/x64-sdl3/$name)"
+        if (-not $copied) {
+            throw "Missing SDL2 runtime file: $name (add external/x64/$name or pass -OfficialCuo with SDL2.dll)"
         }
-        Copy-Item -Force $src (Join-Path $TargetDir $name)
     }
 
-    $sdl2 = Join-Path $TargetDir 'SDL2.dll'
-    if (Test-Path $sdl2) {
-        Remove-Item -Force $sdl2
+    $sdl3 = Join-Path $TargetDir 'SDL3.dll'
+    if (Test-Path $sdl3) {
+        Remove-Item -Force $sdl3
     }
 }
 
@@ -295,11 +305,11 @@ function Test-UnifiedPvpClientLayout([string]$ClientRoot) {
         $errors += "ClassicUO.exe bootstrap host missing"
     }
 
-    if (-not (Test-Path (Join-Path $ClientRoot "SDL3.dll"))) {
-        $errors += "SDL3.dll missing (PVP v1.1.8+ requires SDL3 runtime)"
+    if (-not (Test-Path (Join-Path $ClientRoot "SDL2.dll"))) {
+        $errors += "SDL2.dll missing (PVP v1.1.12+ requires SDL2 + OpenGL runtime)"
     }
-    if (Test-Path (Join-Path $ClientRoot "SDL2.dll")) {
-        $errors += "SDL2.dll must not be present in SDL3 PVP layout"
+    if (Test-Path (Join-Path $ClientRoot "SDL3.dll")) {
+        $errors += "SDL3.dll must not be present in SDL2 PVP layout"
     }
 
     $pluginsDir = Join-Path $ClientRoot "Data\Plugins"
@@ -456,14 +466,16 @@ pointing at the extracted folder (flat layout or ClassicUO/ subfolder both work)
 "@
 }
 
-if ($Edition -eq "pvp" -and -not (Test-Path $OfficialCuo)) {
-    throw @"
-Official ClassicUO SDL3 folder not found: $OfficialCuo
+if ($Edition -eq "pvp") {
+    $sdl2Runtime = Join-Path $RepoRoot "external\x64\SDL2.dll"
+    if (-not (Test-Path $sdl2Runtime) -and -not (Test-Path (Join-Path $OfficialCuo "SDL2.dll"))) {
+        throw @"
+SDL2 native runtime not found.
 
-PVP v1.1.8 requires SDL3.dll from the official ClassicUO release. Download and extract:
-  https://github.com/ClassicUO/ClassicUO/releases/download/ClassicUO-main-release/ClassicUO-win-x64-release.zip
-Then pass -OfficialCuo pointing at the extracted ClassicUO folder.
+Provide external/x64/SDL2.dll in the repo, or pass -OfficialCuo pointing at a ClassicUO folder with SDL2.dll
+(older official release or local SDL2 build).
 "@
+    }
 }
 
 Write-Step "Preparing $editionLabel edition output: $OutputDir"
@@ -529,14 +541,14 @@ if ($Edition -eq "classic") {
     dotnet publish (Join-Path $RepoRoot "src\ClassicUO.Bootstrap\src\ClassicUO.Bootstrap.csproj") `
         -c Release -o $bootstrapOut | Out-Null
 
-    Write-Step "Assembling unified PVP client (SDL3 mods, no bundled Razor in Client)"
+    Write-Step "Assembling unified PVP client (SDL2 + OpenGL mods, no bundled Razor in Client)"
     robocopy $clientOut $clientDir /E /XD Bootstrap /XF "ClassicUO.exe" /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
     Remove-BuildArtifacts $clientDir
     Remove-PrebundledRazorPlugins $clientDir
     Clear-ClientPluginsDirectory $clientDir
 
     Copy-BootstrapHostFiles $bootstrapOut $clientDir
-    Copy-Sdl3NativeRuntime $clientDir $OfficialCuo $RepoRoot
+    Copy-Sdl2NativeRuntime $clientDir $OfficialCuo $RepoRoot
     New-Item -ItemType Directory -Force -Path (Join-Path $clientDir "Data\Plugins") | Out-Null
     if (Test-Path "$clientDir\cuo.exe") { Remove-Item "$clientDir\cuo.exe" -Force -ErrorAction SilentlyContinue }
     if (Test-Path "$clientDir\cuo-modded.exe") { Remove-Item "$clientDir\cuo-modded.exe" -Force -ErrorAction SilentlyContinue }
@@ -598,7 +610,7 @@ Compress-Archive -Path (Join-Path $launcherPackageRoot "*") -DestinationPath $la
 
 $launcherMb = [math]::Round((Get-Item $launcherZip).Length / 1MB, 1)
 $clientMb = [math]::Round((Get-Item $clientZip).Length / 1MB, 1)
-$layout = if ($Edition -eq "classic") { "classic (official unmodded, no Razor)" } else { "pvp unified SDL3 (NativeAOT mods + Razor in Assistant\RazorEnhanced)" }
+$layout = if ($Edition -eq "classic") { "classic (official unmodded, no Razor)" } else { "pvp unified SDL2 + OpenGL (NativeAOT mods + Razor in Assistant\RazorEnhanced)" }
 $releaseTitle = if ($Edition -eq "pvp") { "UODreams PVP Launcher v$Version" } else { "UODreams Launcher v$Version" }
 
 Write-Host ""

@@ -66,6 +66,7 @@ namespace ClassicUO.Launcher.Custom
             LoadWindowIcon();
             BuildUi();
             LoadFromSettings();
+            _settings.SanitizeInstalledClientVersion();
             _settings.SyncInstalledClientVersionFromRuntime();
             RefreshWindowTitle();
 
@@ -572,6 +573,19 @@ namespace ClassicUO.Launcher.Custom
                 : $"{title} v{launcherVer} · client v{clientVer}";
         }
 
+        private bool ShouldHighlightUpdate(UpdateCheckResult? info)
+        {
+            if (info?.HasAnyUpdate == true)
+            {
+                return true;
+            }
+
+            // Launcher ahead of installed client (e.g. launcher-only OTA) must still offer client update.
+            return LauncherUpdater.CompareVersions(
+                LauncherManifest.RuntimeLauncherVersion,
+                _settings.EffectiveClientVersion) > 0;
+        }
+
         private void SetUpdateAvailable(bool available)
         {
             _updateAvailable = available;
@@ -586,11 +600,12 @@ namespace ClassicUO.Launcher.Custom
         {
             try
             {
+                _settings.SanitizeInstalledClientVersion();
                 _settings.SyncInstalledClientVersionFromRuntime();
                 UpdateCheckResult? info = await LauncherUpdater.CheckForUpdatesAsync(_settings.EffectiveClientVersion);
                 if (!IsDisposed)
                 {
-                    BeginInvoke(() => SetUpdateAvailable(info?.HasAnyUpdate == true));
+                    BeginInvoke(() => SetUpdateAvailable(ShouldHighlightUpdate(info)));
                 }
             }
             catch
@@ -633,7 +648,7 @@ namespace ClassicUO.Launcher.Custom
 
         private void MarkClientUpdated(string version)
         {
-            _settings.InstalledClientVersion = version;
+            _settings.InstalledClientVersion = LauncherUpdater.NormalizeVersion(version);
             _settings.Save();
             RefreshWindowTitle();
         }
@@ -1974,6 +1989,7 @@ namespace ClassicUO.Launcher.Custom
 
             try
             {
+                _settings.SanitizeInstalledClientVersion();
                 _settings.SyncInstalledClientVersionFromRuntime();
                 RefreshWindowTitle();
                 UpdateCheckResult? info = await LauncherUpdater.CheckForUpdatesAsync(_settings.EffectiveClientVersion);
@@ -2016,18 +2032,7 @@ namespace ClassicUO.Launcher.Custom
                     return;
                 }
 
-                if (info.NeedsLauncherUpdate &&
-                    !string.IsNullOrEmpty(info.LauncherDownloadUrl) &&
-                    !string.IsNullOrEmpty(info.LauncherPackageFileName))
-                {
-                    using var launcherForm = DownloadProgressForm.ForLauncherUpdate(
-                        info.LauncherDownloadUrl,
-                        info.LauncherPackageFileName);
-                    launcherForm.ShowDialog(this);
-                    Environment.Exit(0);
-                    return;
-                }
-
+                // Client first: launcher update restarts the process and would skip client otherwise.
                 if (info.NeedsClientUpdate &&
                     !string.IsNullOrEmpty(info.ClientDownloadUrl) &&
                     !string.IsNullOrEmpty(info.ClientPackageFileName))
@@ -2046,6 +2051,18 @@ namespace ClassicUO.Launcher.Custom
                     MarkClientUpdated(clientVersion);
                     _clientPathBox.Text = DetectDefaultClient();
                     UpdateAssistantUi();
+                }
+
+                if (info.NeedsLauncherUpdate &&
+                    !string.IsNullOrEmpty(info.LauncherDownloadUrl) &&
+                    !string.IsNullOrEmpty(info.LauncherPackageFileName))
+                {
+                    using var launcherForm = DownloadProgressForm.ForLauncherUpdate(
+                        info.LauncherDownloadUrl,
+                        info.LauncherPackageFileName);
+                    launcherForm.ShowDialog(this);
+                    Environment.Exit(0);
+                    return;
                 }
 
                 SetUpdateAvailable(false);

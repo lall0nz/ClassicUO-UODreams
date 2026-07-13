@@ -1,4 +1,4 @@
-#region license
+﻿#region license
 
 // Copyright (c) 2024, andreakarasho
 // All rights reserved.
@@ -41,7 +41,7 @@ using ClassicUO.Input;
 using ClassicUO.Assets;
 using ClassicUO.Resources;
 using ClassicUO.Utility;
-using SDL3;
+using SDL2;
 
 namespace ClassicUO.Game.UI.Gumps.Login
 {

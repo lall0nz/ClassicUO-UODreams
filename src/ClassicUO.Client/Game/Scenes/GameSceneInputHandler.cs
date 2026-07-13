@@ -43,7 +43,7 @@ using ClassicUO.Network;
 using ClassicUO.Resources;
 using ClassicUO.Utility;
 using Microsoft.Xna.Framework;
-using SDL3;
+using SDL2;
 using MathHelper = ClassicUO.Utility.MathHelper;
 
 namespace ClassicUO.Game.Scenes
@@ -1156,12 +1156,12 @@ namespace ClassicUO.Game.Scenes
 
         internal override void OnKeyDown(SDL.SDL_KeyboardEvent e)
         {
-            if ((SDL.SDL_Keycode)e.key == SDL.SDL_Keycode.SDLK_TAB && e.repeat)
+            if (e.keysym.sym == SDL.SDL_Keycode.SDLK_TAB && e.repeat != 0)
             {
                 return;
             }
 
-            if ((SDL.SDL_Keycode)e.key == SDL.SDL_Keycode.SDLK_ESCAPE && _world.TargetManager.IsTargeting)
+            if (e.keysym.sym == SDL.SDL_Keycode.SDLK_ESCAPE && _world.TargetManager.IsTargeting)
             {
                 _world.TargetManager.CancelTarget();
             }
@@ -1171,7 +1171,7 @@ namespace ClassicUO.Game.Scenes
                 return;
             }
 
-            switch ((SDL.SDL_Keycode)e.key)
+            switch (e.keysym.sym)
             {
                 case SDL.SDL_Keycode.SDLK_ESCAPE:
 
@@ -1236,7 +1236,7 @@ namespace ClassicUO.Game.Scenes
                         {
                             UIManager.SystemChat.IsActive = true;
                         }
-                        else if (Keyboard.Shift && (SDL.SDL_Keycode)e.key == SDL.SDL_Keycode.SDLK_SEMICOLON)
+                        else if (Keyboard.Shift && e.keysym.sym == SDL.SDL_Keycode.SDLK_SEMICOLON)
                         {
                             UIManager.SystemChat.IsActive = true;
                         }
@@ -1282,13 +1282,13 @@ namespace ClassicUO.Game.Scenes
             if (CanExecuteMacro())
             {
                 Macro macro = _world.Macros.FindMacro(
-                    (SDL.SDL_Keycode)e.key,
+                    e.keysym.sym,
                     Keyboard.Alt,
                     Keyboard.Ctrl,
                     Keyboard.Shift
                 );
 
-                if (macro != null && (SDL.SDL_Keycode)e.key != SDL.SDL_Keycode.SDLK_UNKNOWN)
+                if (macro != null && e.keysym.sym != SDL.SDL_Keycode.SDLK_UNKNOWN)
                 {
                     if (macro.Items is MacroObject mac)
                     {
@@ -1362,7 +1362,7 @@ namespace ClassicUO.Game.Scenes
                 {
                     if (string.IsNullOrEmpty(UIManager.SystemChat.TextBoxControl.Text))
                     {
-                        switch ((SDL.SDL_Keycode)e.key)
+                        switch (e.keysym.sym)
                         {
                             case SDL.SDL_Keycode.SDLK_UP:
                                 _flags[0] = true;
@@ -1408,13 +1408,13 @@ namespace ClassicUO.Game.Scenes
             if (_flags[4] || Client.Game.Scene.Camera.PeekingToMouse)
             {
                 Macro macro = _world.Macros.FindMacro(
-                    (SDL.SDL_Keycode)e.key,
+                    e.keysym.sym,
                     Keyboard.Alt,
                     Keyboard.Ctrl,
                     Keyboard.Shift
                 );
 
-                if (macro != null && (SDL.SDL_Keycode)e.key != SDL.SDL_Keycode.SDLK_UNKNOWN)
+                if (macro != null && e.keysym.sym != SDL.SDL_Keycode.SDLK_UNKNOWN)
                 {
                     if (macro.Items is MacroObject mac)
                     {
@@ -1495,7 +1495,7 @@ namespace ClassicUO.Game.Scenes
                 }
             }
 
-            switch ((SDL.SDL_Keycode)e.key)
+            switch (e.keysym.sym)
             {
                 case SDL.SDL_Keycode.SDLK_UP:
                     _flags[0] = false;
@@ -1519,7 +1519,7 @@ namespace ClassicUO.Game.Scenes
             }
 
             if (
-                (SDL.SDL_Keycode)e.key == SDL.SDL_Keycode.SDLK_TAB
+                e.keysym.sym == SDL.SDL_Keycode.SDLK_TAB
                 && !ProfileManager.CurrentProfile.DisableTabBtn
             )
             {

@@ -73,10 +73,36 @@ namespace ClassicUO.Launcher.Custom
             Path.Combine(AppContext.BaseDirectory, "launcher.settings.json");
 
         [JsonIgnore]
-        public string EffectiveClientVersion =>
-            string.IsNullOrWhiteSpace(InstalledClientVersion)
-                ? LauncherManifest.ClientRuntimeVersion
-                : InstalledClientVersion;
+        public string EffectiveClientVersion
+        {
+            get
+            {
+                string version = string.IsNullOrWhiteSpace(InstalledClientVersion)
+                    ? LauncherManifest.ClientRuntimeVersion
+                    : InstalledClientVersion;
+                return LauncherUpdater.NormalizeVersion(version);
+            }
+        }
+
+        /// <summary>
+        /// Repairs legacy values such as "1.1.9." parsed from package filenames.
+        /// </summary>
+        public void SanitizeInstalledClientVersion()
+        {
+            if (string.IsNullOrWhiteSpace(InstalledClientVersion))
+            {
+                return;
+            }
+
+            string normalized = LauncherUpdater.NormalizeVersion(InstalledClientVersion);
+            if (string.Equals(normalized, InstalledClientVersion, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            InstalledClientVersion = normalized;
+            Save();
+        }
 
         /// <summary>
         /// Seeds InstalledClientVersion on first install only. Never overwrites a stored value,
@@ -99,7 +125,7 @@ namespace ClassicUO.Launcher.Custom
                 return;
             }
 
-            InstalledClientVersion = LauncherManifest.ClientRuntimeVersion;
+            InstalledClientVersion = LauncherUpdater.NormalizeVersion(LauncherManifest.ClientRuntimeVersion);
             Save();
         }
 
@@ -114,6 +140,7 @@ namespace ClassicUO.Launcher.Custom
                     {
                         loaded.EnsureDefaultServers();
                         loaded.MigrateFirstRunFlag();
+                        loaded.SanitizeInstalledClientVersion();
                         return loaded;
                     }
                 }
