@@ -11,30 +11,48 @@
     <PublishAot>false</PublishAot>
     <ApplicationIcon>Resources\uodreams.ico</ApplicationIcon>
     <LauncherEdition Condition="'$(LauncherEdition)' == ''">pvp</LauncherEdition>
-    <Version>1.1.12.0</Version>
-    <AssemblyVersion>1.1.12.0</AssemblyVersion>
-    <FileVersion>1.1.12.0</FileVersion>
+    <Version>1.3.1.0</Version>
+    <AssemblyVersion>1.3.1.0</AssemblyVersion>
+    <FileVersion>1.3.1.0</FileVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(LauncherEdition)' == 'pvp'">
     <DefineConstants>$(DefineConstants);LAUNCHER_EDITION_PVP</DefineConstants>
   </PropertyGroup>
 
+  <!-- ONEUO: display branding only; keeps PVP update channel / client package logic. -->
+  <PropertyGroup Condition="'$(LauncherEdition)' == 'oneuo'">
+    <DefineConstants>$(DefineConstants);LAUNCHER_EDITION_ONEUO;LAUNCHER_EDITION_PVP</DefineConstants>
+    <ApplicationIcon>Resources\oneuo.ico</ApplicationIcon>
+    <AssemblyName>0nE UO Launcher</AssemblyName>
+  </PropertyGroup>
+
   <ItemGroup>
     <EmbeddedResource Include="Resources\uodreams_logo.png" />
     <EmbeddedResource Include="Resources\uodreams.ico" />
+    <EmbeddedResource Include="Resources\oneuo_logo.png" />
+    <EmbeddedResource Include="Resources\oneuo.ico" />
     <EmbeddedResource Include="Resources\razor.png" />
     <EmbeddedResource Include="Resources\classicassist.png" />
     <EmbeddedResource Include="Resources\orion.png" />
     <EmbeddedResource Include="Resources\uosteam.png" />
     <EmbeddedResource Include="Resources\coffee.png" />
-    <Content Include="Resources\uodreams.ico" Link="uodreams.ico">
+    <Content Include="Resources\uodreams.ico" Link="uodreams.ico" Condition="'$(LauncherEdition)' != 'oneuo'">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Resources\oneuo.ico" Link="oneuo.ico" Condition="'$(LauncherEdition)' == 'oneuo'">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4078.44" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>ClassicUO.Launcher.UnitTests</_Parameter1>
+    </AssemblyAttribute>
   </ItemGroup>
 
 </Project>

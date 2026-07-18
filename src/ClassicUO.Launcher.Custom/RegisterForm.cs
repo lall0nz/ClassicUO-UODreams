@@ -41,7 +41,7 @@ namespace ClassicUO.Launcher.Custom
             StartPosition = FormStartPosition.CenterParent;
             ClientSize = new Size(520, 720);
             MinimumSize = new Size(420, 560);
-            BackColor = Theme.WindowBottom;
+            BackColor = Theme.DialogBackground;
             ForeColor = Theme.Text;
             Font = new Font("Segoe UI", 9.5f);
 
@@ -87,7 +87,7 @@ namespace ClassicUO.Launcher.Custom
                 Height = 26,
                 Text = "Caricamento pagina di registrazione…",
                 ForeColor = Theme.TextMuted,
-                BackColor = Theme.WindowBottom,
+                BackColor = Theme.DialogBackground,
                 Padding = new Padding(14, 4, 14, 4),
                 TextAlign = ContentAlignment.MiddleLeft
             };
@@ -95,7 +95,7 @@ namespace ClassicUO.Launcher.Custom
             _webView = new WebView2
             {
                 Dock = DockStyle.Fill,
-                DefaultBackgroundColor = Theme.WindowBottom
+                DefaultBackgroundColor = Theme.DialogBackground
             };
 
             // Docking is resolved from the last-added control inward, so add the
@@ -113,8 +113,13 @@ namespace ClassicUO.Launcher.Custom
         {
             try
             {
+#if LAUNCHER_EDITION_ONEUO
+                const string iconResource = "ClassicUO.Launcher.Custom.Resources.oneuo.ico";
+#else
+                const string iconResource = "ClassicUO.Launcher.Custom.Resources.uodreams.ico";
+#endif
                 using Stream? stream = System.Reflection.Assembly.GetExecutingAssembly()
-                    .GetManifestResourceStream("ClassicUO.Launcher.Custom.Resources.uodreams.ico");
+                    .GetManifestResourceStream(iconResource);
                 if (stream != null)
                 {
                     Icon = new Icon(stream);
@@ -393,7 +398,7 @@ namespace ClassicUO.Launcher.Custom
                 ShowInTaskbar = false,
                 StartPosition = FormStartPosition.CenterParent,
                 ClientSize = new Size(420, 190),
-                BackColor = Theme.WindowBottom,
+                BackColor = Theme.DialogBackground,
                 ForeColor = Theme.Text,
                 Font = new Font("Segoe UI", 9.5f)
             };
@@ -511,7 +516,7 @@ namespace ClassicUO.Launcher.Custom
             StartPosition = FormStartPosition.CenterParent;
             ClientSize = new Size(520, 720);
             MinimumSize = new Size(420, 560);
-            BackColor = Theme.WindowBottom;
+            BackColor = Theme.DialogBackground;
             ForeColor = Theme.Text;
             Font = new Font("Segoe UI", 9.5f);
 
@@ -541,7 +546,7 @@ namespace ClassicUO.Launcher.Custom
                 Height = 26,
                 Text = Loc.S("Caricamento pagina…", "Loading page…"),
                 ForeColor = Theme.TextMuted,
-                BackColor = Theme.WindowBottom,
+                BackColor = Theme.DialogBackground,
                 Padding = new Padding(14, 4, 14, 4),
                 TextAlign = ContentAlignment.MiddleLeft
             };
@@ -549,7 +554,7 @@ namespace ClassicUO.Launcher.Custom
             _webView = new WebView2
             {
                 Dock = DockStyle.Fill,
-                DefaultBackgroundColor = Theme.WindowBottom
+                DefaultBackgroundColor = Theme.DialogBackground
             };
 
             Controls.Add(_webView);
@@ -563,8 +568,13 @@ namespace ClassicUO.Launcher.Custom
         {
             try
             {
+#if LAUNCHER_EDITION_ONEUO
+                const string iconResource = "ClassicUO.Launcher.Custom.Resources.oneuo.ico";
+#else
+                const string iconResource = "ClassicUO.Launcher.Custom.Resources.uodreams.ico";
+#endif
                 using Stream? stream = System.Reflection.Assembly.GetExecutingAssembly()
-                    .GetManifestResourceStream("ClassicUO.Launcher.Custom.Resources.uodreams.ico");
+                    .GetManifestResourceStream(iconResource);
                 if (stream != null)
                 {
                     Icon = new Icon(stream);

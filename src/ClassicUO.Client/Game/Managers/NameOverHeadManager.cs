@@ -112,23 +112,29 @@ namespace ClassicUO.Game.Managers
 
         public void Open()
         {
-            if (_gump == null || _gump.IsDisposed)
+            // Custom UODreams: do not auto-show the NameOverHeadHandler filter gump
+            // (All / Mobiles only / Items only / ...). Name overheads still work via
+            // IsToggled / Ctrl+Shift; the last TypeAllowed stays in the profile.
+            if (_gump != null && !_gump.IsDisposed)
             {
-                _gump = new NameOverHeadHandlerGump(_world);
-                UIManager.Add(_gump);
+                _gump.Dispose();
+                _gump = null;
             }
-
-            _gump.IsEnabled = true;
-            _gump.IsVisible = true;
         }
 
         public void Close()
         {
             if (_gump == null)
+            {
                 return;
+            }
 
-            _gump.IsEnabled = false;
-            _gump.IsVisible = false;
+            if (!_gump.IsDisposed)
+            {
+                _gump.Dispose();
+            }
+
+            _gump = null;
         }
 
         public void ToggleOverheads()

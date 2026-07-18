@@ -1,4 +1,4 @@
-﻿#region license
+#region license
 
 // Copyright (c) 2024, andreakarasho
 // All rights reserved.
@@ -65,8 +65,12 @@ namespace ClassicUO.Input
                     break;
 
                 case MouseButtonType.XButton1:
+                    XButton1Pressed = true;
+
+                    break;
+
                 case MouseButtonType.XButton2:
-                    XButtonPressed = true;
+                    XButton2Pressed = true;
 
                     break;
             }
@@ -95,13 +99,17 @@ namespace ClassicUO.Input
                     break;
 
                 case MouseButtonType.XButton1:
+                    XButton1Pressed = false;
+
+                    break;
+
                 case MouseButtonType.XButton2:
-                    XButtonPressed = false;
+                    XButton2Pressed = false;
 
                     break;
             }
 
-            if (!(LButtonPressed || RButtonPressed || MButtonPressed))
+            if (!(LButtonPressed || RButtonPressed || MButtonPressed || XButton1Pressed || XButton2Pressed))
             {
                 SDL.SDL_CaptureMouse(SDL.SDL_bool.SDL_FALSE);
             }
@@ -129,7 +137,11 @@ namespace ClassicUO.Input
 
         public static bool MButtonPressed { get; set; }
 
-        public static bool XButtonPressed { get; set; }
+        public static bool XButton1Pressed { get; set; }
+
+        public static bool XButton2Pressed { get; set; }
+
+        public static bool XButtonPressed => XButton1Pressed || XButton2Pressed;
 
         public static bool IsDragging { get; set; }
 

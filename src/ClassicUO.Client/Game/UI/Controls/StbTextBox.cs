@@ -249,16 +249,9 @@ namespace ClassicUO.Game.UI.Controls
 
             set
             {
-                if (_maxCharCount > 0)
+                if (_maxCharCount > 0 && value != null && value.Length > _maxCharCount)
                 {
-                    if (NumbersOnly)
-                    {
-
-                    }
-                    if (value != null && value.Length > _maxCharCount)
-                    {
-                        value = value.Substring(0, _maxCharCount);
-                    }
+                    value = value.Substring(0, _maxCharCount);
                 }
                 
                 //Sanitize(ref value);
@@ -355,7 +348,7 @@ namespace ClassicUO.Game.UI.Controls
 
         private bool IsMaxCharReached(int count)
         {
-            return _maxCharCount >= 0 && Length + count >= _maxCharCount;
+            return _maxCharCount >= 0 && Length + count > _maxCharCount;
         }
 
         private void Sanitize(ref string text)
@@ -755,16 +748,9 @@ namespace ClassicUO.Game.UI.Controls
             }
             else
             {
-                if (_maxCharCount > 0)
+                if (_maxCharCount > 0 && text.Length > _maxCharCount)
                 {
-                    if (NumbersOnly)
-                    {
-                        // TODO ?
-                    }
-                    else if (text.Length > _maxCharCount)
-                    {
-                        text = text.Substring(0, _maxCharCount);
-                    }
+                    text = text.Substring(0, _maxCharCount);
                 }
 
                 Stb.ClearState(!Multiline);
@@ -848,17 +834,6 @@ namespace ClassicUO.Game.UI.Controls
                         if (!char.IsNumber(c[i]))
                         {
                             _is_writing = false;
-
-                            return;
-                        }
-                    }
-
-                    if (_maxCharCount > 0 && int.TryParse(Stb.text + c, out int val))
-                    {
-                        if (val > _maxCharCount)
-                        {
-                            _is_writing = false;
-                            SetText(_maxCharCount.ToString());
 
                             return;
                         }

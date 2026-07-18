@@ -33,6 +33,7 @@
 using ClassicUO.Network.Encryption;
 using ClassicUO.Utility;
 using ClassicUO.Utility.Logging;
+using ClassicUO.Game.Scenes;
 using System;
 using System.Net;
 using System.Net.Sockets;
@@ -134,6 +135,13 @@ namespace ClassicUO.Network
     {
         private const int BUFF_SIZE = 0x10000;
 
+        // NOTE: deliberately kept at 4096 (not BUFF_SIZE/65536). A larger read buffer lets a
+        // single CollectAvailableData() pass hand Huffman.Decompress() up to 65536 bytes of
+        // compressed input; real UO traffic can expand ~2x on decompress, which can exceed the
+        // fixed 65536-byte _uncompressedBuffer and makes Decompress() return false -> Disconnect()
+        // -> "Connection lost: Socket Error", most visible right at login / char-select under
+        // bursty packet traffic. Confirmed regression source in a prior test build - do not raise
+        // this without also reworking the decompress path to handle multi-pass/overflow safely.
         private readonly byte[] _compressedBuffer = new byte[4096];
         private readonly byte[] _uncompressedBuffer = new byte[BUFF_SIZE];
         private readonly byte[] _sendingBuffer = new byte[4096];
@@ -291,6 +299,8 @@ namespace ClassicUO.Network
             {
                 return;
             }
+
+            Client.Game.GetScene<GameScene>()?.ObserveOutgoingBandagePacket(message);
 
             if (!ignorePlugin && !Plugin.ProcessSendPacket(ref message))
             {

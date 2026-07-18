@@ -158,6 +158,13 @@ namespace ClassicUO.Game.UI.Gumps
             }
 
             Location = position;
+
+            // Persist movable server gump positions (incl. Razor Running Scripts / Agent Status).
+            // Control.OnDragEnd does this, but this override previously skipped it — so logout/restart lost the spot.
+            if (ServerSerial != 0 && CanMove && !IsDisposed)
+            {
+                UIManager.SavePosition(ServerSerial, Location);
+            }
         }
 
         public override bool Draw(UltimaBatcher2D batcher, int x, int y)

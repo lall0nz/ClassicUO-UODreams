@@ -66,6 +66,16 @@ namespace ClassicUO
         private bool _suppressedDraw;
         private Texture2D _background;
 
+        // Hold-to-repeat for plugin mouse hotkeys (Middle / X1 / X2), like keyboard auto-repeat.
+        private const uint PluginMouseRepeatDelayMs = 400;
+        private const uint PluginMouseRepeatIntervalMs = 50;
+        private bool _pluginMouseRepeatArmedMiddle;
+        private bool _pluginMouseRepeatArmedX1;
+        private bool _pluginMouseRepeatArmedX2;
+        private uint _pluginMouseRepeatNextMiddle;
+        private uint _pluginMouseRepeatNextX1;
+        private uint _pluginMouseRepeatNextX2;
+
         public GameController(IPluginHost pluginHost)
         {
             GraphicManager = new GraphicsDeviceManager(this);
@@ -363,6 +373,7 @@ namespace ClassicUO
             Time.Delta = (float)gameTime.ElapsedGameTime.TotalSeconds;
 
             Mouse.Update();
+            UpdatePluginMouseHoldRepeat();
 
             var handler = PacketHandlers.Handler;
             Profile profile = ProfileManager.CurrentProfile;
@@ -484,6 +495,17 @@ namespace ClassicUO
             }
 
             UIManager.Draw(_uoSpriteBatch);
+
+            // Drawn after every gump, with the full (unclipped) window viewport, so the
+            // "Show Timer Countdown" overlay can be positioned anywhere on the client window
+            // (e.g. over the backpack/paperdoll) instead of being confined/clipped to the
+            // game world viewport rectangle.
+            if (Scene is GameScene gameScene)
+            {
+                _uoSpriteBatch.Begin();
+                gameScene.DrawTimerCountdown(_uoSpriteBatch);
+                _uoSpriteBatch.End();
+            }
 
             if ((UO.World?.InGame ?? false) && SelectedObject.Object is TextObject t)
             {
@@ -859,6 +881,71 @@ namespace ClassicUO
             Scene?.Dispose();
 
             base.OnExiting(sender, args);
+        }
+
+        private void UpdatePluginMouseHoldRepeat()
+        {
+            uint now = Time.Ticks;
+            TickPluginMouseRepeat(
+                ref _pluginMouseRepeatArmedMiddle,
+                ref _pluginMouseRepeatNextMiddle,
+                Mouse.MButtonPressed,
+                (int)MouseButtonType.Middle,
+                now
+            );
+            TickPluginMouseRepeat(
+                ref _pluginMouseRepeatArmedX1,
+                ref _pluginMouseRepeatNextX1,
+                Mouse.XButton1Pressed,
+                (int)MouseButtonType.XButton1,
+                now
+            );
+            TickPluginMouseRepeat(
+                ref _pluginMouseRepeatArmedX2,
+                ref _pluginMouseRepeatNextX2,
+                Mouse.XButton2Pressed,
+                (int)MouseButtonType.XButton2,
+                now
+            );
+        }
+
+        private static void TickPluginMouseRepeat(
+            ref bool armed,
+            ref uint nextTick,
+            bool pressed,
+            int sdlButton,
+            uint now
+        )
+        {
+            if (!pressed)
+            {
+                armed = false;
+                nextTick = 0;
+
+                return;
+            }
+
+            if (!armed)
+            {
+                // Initial Plugin.ProcessMouse already fired on SDL_MOUSEBUTTONDOWN.
+                armed = true;
+                nextTick = now + PluginMouseRepeatDelayMs;
+
+                return;
+            }
+
+            if (nextTick == 0)
+            {
+                nextTick = now + PluginMouseRepeatDelayMs;
+
+                return;
+            }
+
+            if (now >= nextTick)
+            {
+                Plugin.ProcessMouse(sdlButton, 0);
+                nextTick = now + PluginMouseRepeatIntervalMs;
+            }
         }
 
         private void TakeScreenshot()

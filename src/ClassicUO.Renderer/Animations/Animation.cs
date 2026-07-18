@@ -145,16 +145,6 @@ namespace ClassicUO.Renderer.Animations
 
             ref var index = ref _dataIndex[id];
 
-            if (
-                index != null
-                && index.Flags.HasFlag(AnimationFlags.UseUopAnimation)
-                && (index.UopGroups == null || index.Groups == null)
-            )
-            {
-                _dataIndex[id] = null;
-                index = ref _dataIndex[id];
-            }
-
             do
             {
                 if (index == null)
@@ -254,7 +244,7 @@ namespace ClassicUO.Renderer.Animations
 
             Span<AnimationsLoader.FrameInfo> frames;
 
-            if (animDir.FrameCount <= 0 || animDir.SpriteInfos == null)
+            if (animDir.FrameCount <= 0 && animDir.SpriteInfos == null)
             {
                 if (useUOP
                 //animDir.IsUOP ||

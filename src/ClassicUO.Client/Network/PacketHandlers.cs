@@ -4222,9 +4222,20 @@ namespace ClassicUO.Network
                             }
                             else
                             {
+                                // Persist movable gump locations on close, but never write 0,0 for
+                                // Razor assistant gumps (character-select teardown used to do that).
                                 if (first.Value.CanMove)
                                 {
-                                    UIManager.SavePosition(ser, first.Value.Location);
+                                    Point loc = first.Value.Location;
+                                    bool assistant = ser == 887766u || ser == 887767u;
+                                    if (!assistant || loc.X > 0 || loc.Y > 0)
+                                    {
+                                        UIManager.SavePosition(ser, loc);
+                                    }
+                                    else
+                                    {
+                                        UIManager.RemovePosition(ser);
+                                    }
                                 }
                                 else
                                 {
@@ -5576,6 +5587,12 @@ namespace ClassicUO.Network
                 if (count == 0)
                 {
                     world.Player.RemoveBuff(ic);
+
+                    if (ic == BuffIconType.Healing || ic == BuffIconType.Veterinary)
+                    {
+                        Client.Game.GetScene<GameScene>()?.NotifyBandageBuffChanged(false);
+                    }
+
                     gump?.RequestUpdateContents();
                 }
                 else
@@ -5644,6 +5661,11 @@ namespace ClassicUO.Network
                         string text = $"<left>{title}{description}{wtf}</left>";
                         bool alreadyExists = world.Player.IsBuffIconExists(ic);
                         world.Player.AddBuff(ic, BuffTable.Table[iconID], timer, text);
+
+                        if (ic == BuffIconType.Healing || ic == BuffIconType.Veterinary)
+                        {
+                            Client.Game.GetScene<GameScene>()?.NotifyBandageBuffChanged(true);
+                        }
 
                         if (!alreadyExists)
                         {
@@ -6624,7 +6646,47 @@ namespace ClassicUO.Network
             Gump gump = null;
             bool mustBeAdded = true;
 
-            if (UIManager.GetGumpCachePosition(gumpID, out Point pos))
+            // Razor assistant movable gumps: always honor the coordinates Razor sends.
+            // Otherwise the first open caches the default spot and every later SendGump
+            // (and the next login) ignores the saved X/Y from the assistant.
+            const uint assistantAgentStatus = 887766u;
+            const uint assistantRunningScripts = 887767u;
+            bool isAssistantGump = gumpID == assistantAgentStatus || gumpID == assistantRunningScripts;
+
+            if (isAssistantGump)
+            {
+                // Prefer last dragged location from cache when available (drag persists via OnDragEnd),
+                // but never trust 0,0 — that is the character-select leftover spot.
+                if (UIManager.GetGumpCachePosition(gumpID, out Point cached) && (cached.X > 0 || cached.Y > 0))
+                {
+                    x = cached.X;
+                    y = cached.Y;
+                }
+                else if (x > 0 || y > 0)
+                {
+                    UIManager.SavePosition(gumpID, new Point(x, y));
+                }
+
+                for (
+                    LinkedListNode<Gump> last = UIManager.Gumps.Last;
+                    last != null;
+                    last = last.Previous
+                )
+                {
+                    Control g = last.Value;
+
+                    if (!g.IsDisposed && g.LocalSerial == sender && g.ServerSerial == gumpID)
+                    {
+                        // Reuse in place — keep wherever the user dragged it.
+                        g.Clear();
+                        gump = g as Gump;
+                        mustBeAdded = false;
+
+                        break;
+                    }
+                }
+            }
+            else if (UIManager.GetGumpCachePosition(gumpID, out Point pos))
             {
                 x = pos.X;
                 y = pos.Y;

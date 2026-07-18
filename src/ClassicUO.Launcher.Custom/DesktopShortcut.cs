@@ -7,8 +7,17 @@ namespace ClassicUO.Launcher.Custom
 {
     internal static class DesktopShortcut
     {
+#if LAUNCHER_EDITION_ONEUO
+        private const string ShortcutName = "0nE UO Launcher.lnk";
+        private const string IconFileName = "oneuo.ico";
+        private const string ShortcutDescription = "0nE UO Launcher";
+        private const string IconResourceName = "ClassicUO.Launcher.Custom.Resources.oneuo.ico";
+#else
         private const string ShortcutName = "UODreams Launcher.lnk";
         private const string IconFileName = "uodreams.ico";
+        private const string ShortcutDescription = "UODreams Launcher";
+        private const string IconResourceName = "ClassicUO.Launcher.Custom.Resources.uodreams.ico";
+#endif
 
         public static bool TryCreate()
         {
@@ -41,7 +50,7 @@ namespace ClassicUO.Launcher.Custom
 
                 shortcut.TargetPath = exePath;
                 shortcut.WorkingDirectory = Path.GetDirectoryName(exePath) ?? "";
-                shortcut.Description = "UODreams Launcher";
+                shortcut.Description = ShortcutDescription;
                 shortcut.IconLocation = string.IsNullOrEmpty(iconPath)
                     ? $"{exePath},0"
                     : $"{iconPath},0";
@@ -74,7 +83,7 @@ namespace ClassicUO.Launcher.Custom
             try
             {
                 using Stream? stream = Assembly.GetExecutingAssembly()
-                    .GetManifestResourceStream("ClassicUO.Launcher.Custom.Resources.uodreams.ico");
+                    .GetManifestResourceStream(IconResourceName);
 
                 if (stream == null)
                 {

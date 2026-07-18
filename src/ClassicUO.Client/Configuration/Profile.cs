@@ -54,6 +54,7 @@ namespace ClassicUO.Configuration
     [JsonSerializable(typeof(MessageType))]
     [JsonSerializable(typeof(MessageType[]))]
     [JsonSerializable(typeof(Dictionary<string, MessageType[]>))]
+    [JsonSerializable(typeof(Dictionary<string, string>))]
     sealed partial class ProfileJsonContext : JsonSerializerContext
     {
         sealed class SnakeCaseNamingPolicy : JsonNamingPolicy
@@ -150,6 +151,9 @@ namespace ClassicUO.Configuration
         public bool TreeToStumps { get; set; } = true;
         public bool EnableCaveBorder { get; set; } = true;
         public bool HideVegetation { get; set; } = true;
+        // Client-side only: prevents drawing known carpet/rug/goza-mat graphics (see Data/Client/carpets.txt).
+        // Items are NOT removed from the server, just hidden from your own view.
+        public bool HideCarpets { get; set; } = false;
         public int FieldsType { get; set; } = 2; // 0 = normal, 1 = static, 2 = tile
         public bool NoColorObjectsOutOfRange { get; set; }
         public bool UseCircleOfTransparency { get; set; } = true;
@@ -195,6 +199,8 @@ namespace ClassicUO.Configuration
         public bool TopbarGumpIsMinimized { get; set; }
         public bool TopbarGumpIsDisabled { get; set; }
         public List<string> AutoOpenXmlGumps { get; set; } = new List<string>();
+        // Positions of XML gumps, keyed by gump file name (without extension). Value is stored as "X,Y".
+        public Dictionary<string, string> XmlGumpPositions { get; set; } = new Dictionary<string, string>();
         public bool UseAlternativeLights { get; set; }
         public bool UseCustomLightLevel { get; set; } = true;
         public byte LightLevel { get; set; }
@@ -248,6 +254,11 @@ namespace ClassicUO.Configuration
         public bool HighlightMirrorImageClones { get; set; } = true;
         public ushort MirrorImageCloneHue { get; set; } = 0x038E;
 
+        // Item cooldown ring timers (bandage/apple/confla/heal). X/Y = -1 → under player.
+        public bool ShowBandageRingTimer { get; set; } = true;
+        public int BandageRingTimerX { get; set; } = -1;
+        public int BandageRingTimerY { get; set; } = -1;
+
         // Visual Helpers (Dust765): re-hue / highlight modes (0 = off, 1 = white, 2 = pink, 3 = ice, 4 = fire, 5 = custom).
         // State highlights also support 5 = special preset hue, 6 = custom.
         public int GlowingWeaponsType { get; set; } = 0;
@@ -277,8 +288,11 @@ namespace ClassicUO.Configuration
         // Drain all pending socket data each frame instead of one ~4KB read.
         public bool EnableFullSocketDrain { get; set; } = true;
 
-        // Movement / ping tuning (Dust765): turn and walking delays in milliseconds.
-        public int MovementTurnDelay { get; set; } = 100;
+        // Movement / ping tuning — exact Dust765-Light Constants defaults (no Light presets exist).
+        // Turn/Fast/Walk/PlayerWalk = 80 / 45 / 150 / 150. (Full Dust765 uses Turn=100.)
+        // FastRotation default matches Dust (false); enable for snappy first-turn delay.
+        public bool FastRotation { get; set; } = false;
+        public int MovementTurnDelay { get; set; } = 80;
         public int MovementTurnDelayFast { get; set; } = 45;
         public int MovementWalkingDelay { get; set; } = 150;
         public int MovementPlayerWalkingDelay { get; set; } = 150;
@@ -388,11 +402,12 @@ namespace ClassicUO.Configuration
         public bool Grid_UseContainerHue { get; set; } = false;
         public ushort AltGridContainerBackgroundHue { get; set; } = 0;
         public int ContainerOpacity { get; set; } = 50;
-        public bool Grid_HideBorder { get; set; } = true;
+        public bool Grid_HideBorder { get; set; } = false;
         public int GridContainerSearchMode { get; set; } = 1; // 0 = filter/hide, 1 = highlight
         public bool CorpseSingleClickLoot { get; set; } = false;
-        public ushort GridBorderHue { get; set; } = 0;
-        public int GridBorderAlpha { get; set; } = 75;
+        public ushort GridContainerBorderHue { get; set; } = 946;
+        public ushort GridBorderHue { get; set; } = 946;
+        public int GridBorderAlpha { get; set; } = 35;
         public bool GridEnableContPreview { get; set; } = true;
 
         public bool RelativeDragAndDropItems { get; set; }

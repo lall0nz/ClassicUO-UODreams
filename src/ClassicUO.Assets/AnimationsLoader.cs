@@ -57,7 +57,7 @@ namespace ClassicUO.Assets
         private static byte[] _decompressedData;
 
         private readonly UOFileMul[] _files = new UOFileMul[5];
-        private readonly UOFileUop[] _filesUop = new UOFileUop[4];
+        private readonly UOFileUop[] _filesUop = new UOFileUop[10];
 
         private readonly Dictionary<ushort, Dictionary<ushort, EquipConvData>> _equipConv = new Dictionary<ushort, Dictionary<ushort, EquipConvData>>();
         private readonly Dictionary<int, MobTypeInfo> _mobTypes = new Dictionary<int, MobTypeInfo>();
@@ -99,23 +99,23 @@ namespace ClassicUO.Assets
                 {
                     _files[i] = new UOFileMul(pathmul, pathidx, un[i], i == 0 ? 6 : -1);
                 }
+            }
 
-                // UOP animation packs are optional; older UO installs use anim*.mul only.
-                if (i > 0 && UOFileManager.IsUOPInstallation)
+            // UOP animation packs are optional; older UO installs use anim*.mul only.
+            // Scan AnimationFrame0..9 so packs like AnimationFrame6.uop are found.
+            if (UOFileManager.IsUOPInstallation)
+            {
+                for (int i = 0; i < _filesUop.Length; i++)
                 {
                     string pathuop = UOFileManager.GetUOFilePath($"AnimationFrame{i}.uop");
 
                     if (File.Exists(pathuop))
                     {
-                        _filesUop[i - 1] = new UOFileUop(
+                        _filesUop[i] = new UOFileUop(
                             pathuop,
                             "build/animationlegacyframe/{0:D6}/{0:D2}.bin"
                         );
-
-                        if (!loaduop)
-                        {
-                            loaduop = true;
-                        }
+                        loaduop = true;
                     }
                 }
             }

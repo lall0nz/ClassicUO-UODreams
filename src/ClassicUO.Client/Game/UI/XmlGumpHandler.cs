@@ -1,5 +1,6 @@
 using ClassicUO.Assets;
 using FontStyle = ClassicUO.Game.FontStyle;
+using ClassicUO.Configuration;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
 using ClassicUO.Game.UI.Controls;
@@ -19,6 +20,11 @@ namespace ClassicUO.Game.UI
 {
     internal class XmlGumpHandler
     {
+        // Default spawn position used when a XML gump has no position saved in the
+        // current profile and the gump file itself doesn't specify one.
+        public const int DefaultGumpX = 200;
+        public const int DefaultGumpY = 200;
+
         public static string XmlGumpPath => Path.Combine(CUOEnviroment.ExecutablePath, "Data", "XmlGumps");
 
         public static XmlGump CreateGumpFromFile(World world, string filePath)
@@ -27,6 +33,7 @@ namespace ClassicUO.Game.UI
             gump.CanCloseWithRightClick = true;
             gump.AcceptMouseInput = true;
             gump.CanMove = true;
+            gump.GumpName = Path.GetFileNameWithoutExtension(filePath);
 
             if (File.Exists(filePath))
             {
@@ -78,7 +85,40 @@ namespace ClassicUO.Game.UI
                 gump.ForceSizeUpdate();
             }
 
+            // A position saved in the current profile always wins (last spot the user moved it
+            // to, kept across logout/login). Otherwise every XML gump spawns at the fixed
+            // default below, regardless of any x/y authored in the gump file itself.
+            if (
+                ProfileManager.CurrentProfile != null
+                && ProfileManager.CurrentProfile.XmlGumpPositions.TryGetValue(gump.GumpName, out string savedPos)
+                && TryParsePosition(savedPos, out int savedX, out int savedY)
+            )
+            {
+                gump.X = savedX;
+                gump.Y = savedY;
+            }
+            else
+            {
+                gump.X = DefaultGumpX;
+                gump.Y = DefaultGumpY;
+            }
+
             return gump;
+        }
+
+        private static bool TryParsePosition(string value, out int x, out int y)
+        {
+            x = 0;
+            y = 0;
+
+            if (string.IsNullOrEmpty(value))
+            {
+                return false;
+            }
+
+            string[] parts = value.Split(',');
+
+            return parts.Length == 2 && int.TryParse(parts[0], out x) && int.TryParse(parts[1], out y);
         }
 
         public static void TryAutoOpenByName(World world, string name)
@@ -920,6 +960,12 @@ namespace ClassicUO.Game.UI
         public bool SavePosition { get; set; }
         public string FilePath { get; set; }
 
+        /// <summary>
+        /// File name (without extension) used as the key to save/restore this gump's position
+        /// in the current profile (ProfileManager.CurrentProfile.XmlGumpPositions).
+        /// </summary>
+        public string GumpName { get; set; }
+
         private uint nextUpdate;
         private int _savingFile;
         private uint saveFileAfter = uint.MaxValue;
@@ -1016,9 +1062,23 @@ namespace ClassicUO.Game.UI
         {
             base.OnMove(x, y);
 
+            SaveProfilePosition();
+
             if (SavePosition)
             {
                 saveFileAfter = Time.Ticks + 2000;
+            }
+        }
+
+        /// <summary>
+        /// Persists the current position into the active profile (in-memory) so it survives
+        /// logout/login. Written to disk whenever the profile itself gets saved (e.g. on logout).
+        /// </summary>
+        private void SaveProfilePosition()
+        {
+            if (!string.IsNullOrEmpty(GumpName) && ProfileManager.CurrentProfile != null)
+            {
+                ProfileManager.CurrentProfile.XmlGumpPositions[GumpName] = $"{X},{Y}";
             }
         }
 

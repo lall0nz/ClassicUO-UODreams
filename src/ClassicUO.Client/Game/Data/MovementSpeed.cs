@@ -46,6 +46,22 @@ namespace ClassicUO.Game.Data
 
         public static int TurnDelay => FastRotation ? MovementTimingManager.TurnDelayFast : MovementTimingManager.TurnDelay;
 
+        /// <summary>
+        /// Dust765-Light turn timing: when FastRotation is on, the first free turn
+        /// (empty walk queue) uses the fast delay; otherwise normal turn delay.
+        /// </summary>
+        public static int GetTurnPacketDelay(int unacceptedPacketsCount)
+        {
+            if (!FastRotation)
+            {
+                return MovementTimingManager.TurnDelay;
+            }
+
+            return unacceptedPacketsCount == 0
+                ? MovementTimingManager.TurnDelayFast
+                : MovementTimingManager.TurnDelay;
+        }
+
         public static int TimeToCompleteMovement(bool run, bool mounted)
         {
             if (mounted)

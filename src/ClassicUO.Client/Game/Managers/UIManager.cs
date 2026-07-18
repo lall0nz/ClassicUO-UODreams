@@ -32,6 +32,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Scenes;
 using ClassicUO.Game.UI.Controls;
@@ -277,6 +278,7 @@ namespace ClassicUO.Game.Managers
         public static void SavePosition(uint serverSerial, Point point)
         {
             _gumpPositionCache[serverSerial] = point;
+            PersistAssistantGumpPosition(serverSerial, point);
         }
 
         public static bool RemovePosition(uint serverSerial)
@@ -287,6 +289,114 @@ namespace ClassicUO.Game.Managers
         public static bool GetGumpCachePosition(uint id, out Point pos)
         {
             return _gumpPositionCache.TryGetValue(id, out pos);
+        }
+
+        // Razor Enhanced movable status gumps (Agent Status / Running Scripts).
+        private const uint ASSISTANT_GUMP_AGENT_STATUS = 887766u;
+        private const uint ASSISTANT_GUMP_RUNNING_SCRIPTS = 887767u;
+
+        private static void PersistAssistantGumpPosition(uint serverSerial, Point point)
+        {
+            if (serverSerial != ASSISTANT_GUMP_AGENT_STATUS && serverSerial != ASSISTANT_GUMP_RUNNING_SCRIPTS)
+            {
+                return;
+            }
+
+            // Never persist the character-select / unset spot.
+            if (point.X <= 0 && point.Y <= 0)
+            {
+                return;
+            }
+
+            try
+            {
+                string path = GetAssistantGumpPositionsPath();
+
+                if (string.IsNullOrEmpty(path))
+                {
+                    return;
+                }
+
+                Dictionary<uint, Point> map = LoadAssistantGumpPositions(path);
+                map[serverSerial] = point;
+
+                using (StreamWriter writer = new StreamWriter(path, false))
+                {
+                    foreach (KeyValuePair<uint, Point> kv in map)
+                    {
+                        writer.WriteLine($"{kv.Key}={kv.Value.X},{kv.Value.Y}");
+                    }
+                }
+            }
+            catch
+            {
+                // Best-effort persistence for assistant gumps.
+            }
+        }
+
+        private static string GetAssistantGumpPositionsPath()
+        {
+            string[] plugins = Settings.GlobalSettings?.Plugins;
+
+            if (plugins == null)
+            {
+                return null;
+            }
+
+            foreach (string plugin in plugins)
+            {
+                if (string.IsNullOrWhiteSpace(plugin))
+                {
+                    continue;
+                }
+
+                string full = Path.GetFullPath(plugin);
+                string dir = Path.GetDirectoryName(full);
+
+                if (!string.IsNullOrEmpty(dir) &&
+                    (full.IndexOf("RazorEnhanced", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                     Directory.Exists(dir)))
+                {
+                    return Path.Combine(dir, ".assistant_gump_positions");
+                }
+            }
+
+            return null;
+        }
+
+        private static Dictionary<uint, Point> LoadAssistantGumpPositions(string path)
+        {
+            Dictionary<uint, Point> map = new Dictionary<uint, Point>();
+
+            if (!File.Exists(path))
+            {
+                return map;
+            }
+
+            foreach (string line in File.ReadAllLines(path))
+            {
+                if (string.IsNullOrWhiteSpace(line))
+                {
+                    continue;
+                }
+
+                int eq = line.IndexOf('=');
+                int comma = line.LastIndexOf(',');
+
+                if (eq <= 0 || comma <= eq)
+                {
+                    continue;
+                }
+
+                if (uint.TryParse(line.Substring(0, eq), out uint id) &&
+                    int.TryParse(line.Substring(eq + 1, comma - eq - 1), out int x) &&
+                    int.TryParse(line.Substring(comma + 1), out int y))
+                {
+                    map[id] = new Point(x, y);
+                }
+            }
+
+            return map;
         }
 
         public static void ShowContextMenu(ContextMenuShowMenu menu)

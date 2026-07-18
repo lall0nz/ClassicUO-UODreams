@@ -493,6 +493,16 @@ namespace ClassicUO.Game
                 Socket.Send_DoubleClick(serial);
             }
 
+            if (SerialHelper.IsItem(serial))
+            {
+                Item item = world.Items.Get(serial);
+
+                if (BandageRingTimer.IsBandageItem(item))
+                {
+                    Client.Game.GetScene<GameScene>()?.NotifyBandageUsed();
+                }
+            }
+
             if (SerialHelper.IsItem(serial) || (SerialHelper.IsMobile(serial) && (world.Mobiles.Get(serial)?.IsHuman ?? false)))
             {
                 world.LastObject = serial;

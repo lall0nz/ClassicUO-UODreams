@@ -104,6 +104,12 @@ namespace ClassicUO.Game.UI.Gumps
             }
         }
 
+        public ushort BorderHue
+        {
+            get => _borderControl.Hue;
+            set => _borderControl.Hue = value;
+        }
+
         public bool AlwaysShowResizeHandle
         {
             get => _alwaysShowResizeHandle;

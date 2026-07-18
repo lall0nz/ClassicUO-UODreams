@@ -31,6 +31,7 @@ namespace ClassicUO.Launcher.Custom
         public bool FirstRunCompleted { get; set; } = false;
         public string Language { get; set; } = "en"; // it | en
         public string InstalledClientVersion { get; set; } = "";
+        public string UiTheme { get; set; } = Theme.DefaultUiThemeId;
 
         public List<ShardServer> Servers { get; set; } = new();
         public string SelectedServer { get; set; } = "UODreams";
@@ -77,10 +78,13 @@ namespace ClassicUO.Launcher.Custom
         {
             get
             {
-                string version = string.IsNullOrWhiteSpace(InstalledClientVersion)
-                    ? LauncherManifest.ClientRuntimeVersion
-                    : InstalledClientVersion;
-                return LauncherUpdater.NormalizeVersion(version);
+                string? marker = ClientRuntimeDownloader.TryReadClientVersionMarker();
+                if (!string.IsNullOrWhiteSpace(marker))
+                {
+                    return marker;
+                }
+
+                return LauncherUpdater.NormalizeVersion(InstalledClientVersion);
             }
         }
 
@@ -105,28 +109,11 @@ namespace ClassicUO.Launcher.Custom
         }
 
         /// <summary>
-        /// Seeds InstalledClientVersion on first install only. Never overwrites a stored value,
-        /// so a client updated via GitHub is not downgraded to the launcher's compile-time floor.
+        /// No-op kept for call-site compatibility. Client version is tracked via
+        /// uodreams-client.version and InstalledClientVersion after a successful client install.
         /// </summary>
         public void SyncInstalledClientVersionFromRuntime()
         {
-            if (!ClientRuntimeDownloader.IsInstalled())
-            {
-                return;
-            }
-
-            if (!string.IsNullOrWhiteSpace(InstalledClientVersion))
-            {
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(LauncherManifest.ClientRuntimeVersion))
-            {
-                return;
-            }
-
-            InstalledClientVersion = LauncherUpdater.NormalizeVersion(LauncherManifest.ClientRuntimeVersion);
-            Save();
         }
 
         public static LauncherSettings Load()

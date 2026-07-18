@@ -112,7 +112,7 @@ namespace ClassicUO.Launcher.Custom
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterParent;
             ClientSize = new Size(520, 210 + infoHeight + targetPathHeight);
-            BackColor = Theme.WindowBottom;
+            BackColor = Theme.DialogBackground;
             ForeColor = Theme.Text;
             Font = new Font("Segoe UI", 9.5f);
             DoubleBuffered = true;

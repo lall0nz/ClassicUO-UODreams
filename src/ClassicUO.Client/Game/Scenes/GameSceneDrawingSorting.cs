@@ -847,6 +847,14 @@ namespace ClassicUO.Game.Scenes
                         continue;
                     }
 
+                    if (
+                        ProfileManager.CurrentProfile.HideCarpets
+                        && StaticFilters.IsCarpet(obj.Graphic)
+                    )
+                    {
+                        continue;
+                    }
+
                     byte height = 0;
 
                     if (obj.AllowedToDraw)
@@ -1074,6 +1082,15 @@ namespace ClassicUO.Game.Scenes
                         !itemData.IsMultiMovable
                         && itemData.IsFoliage
                         && ProfileManager.CurrentProfile.TreeToStumps
+                    )
+                    {
+                        continue;
+                    }
+
+                    if (
+                        !item.IsMulti
+                        && ProfileManager.CurrentProfile.HideCarpets
+                        && StaticFilters.IsCarpet(obj.Graphic)
                     )
                     {
                         continue;

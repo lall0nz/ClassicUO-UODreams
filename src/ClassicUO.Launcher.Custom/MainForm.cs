@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
 using System.IO;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -10,7 +11,7 @@ using System.Windows.Forms;
 
 namespace ClassicUO.Launcher.Custom
 {
-    public sealed class MainForm : Form
+    public sealed class MainForm : Form, IGradientBackgroundHost
     {
         private readonly LauncherSettings _settings = LauncherSettings.Load();
 
@@ -38,6 +39,10 @@ namespace ClassicUO.Launcher.Custom
 
         // References kept for language switching.
         private ThemedButton _langButton = null!;
+#if LAUNCHER_EDITION_ONEUO
+        private ThemedButton _themeButton = null!;
+        private ThemedContextMenu? _themeMenu;
+#endif
         private ThemedButton _updateButton = null!;
         private ThemedButton _paypalPill = null!;
         private ThemedButton _coffeePill = null!;
@@ -63,6 +68,9 @@ namespace ClassicUO.Launcher.Custom
         {
             SetStyle(ControlStyles.ResizeRedraw, true);
             Loc.Lang = _settings.Language == "en" ? "en" : "it";
+#if LAUNCHER_EDITION_ONEUO
+            Theme.ApplyLauncherTheme(_settings.UiTheme);
+#endif
             LoadWindowIcon();
             BuildUi();
             LoadFromSettings();
@@ -89,6 +97,18 @@ namespace ClassicUO.Launcher.Custom
 
         private void OnMainFormShown(object? sender, EventArgs e)
         {
+            try
+            {
+                if (LauncherUpdater.EnsureHealthyDefaultRazorProfile())
+                {
+                    LauncherLog.Info("Repaired corrupted Razor Default PVP profile from bundled stock.");
+                }
+            }
+            catch (Exception ex)
+            {
+                LauncherLog.Error($"Razor Default PVP profile health check failed: {ex.Message}", ex);
+            }
+
             RefreshAssistantSectionLayout();
             BeginInvoke(RefreshAssistantSectionLayout);
             _ = CheckForUpdatesOnStartupAsync();
@@ -98,8 +118,13 @@ namespace ClassicUO.Launcher.Custom
         {
             try
             {
+#if LAUNCHER_EDITION_ONEUO
+                const string iconResource = "ClassicUO.Launcher.Custom.Resources.oneuo.ico";
+#else
+                const string iconResource = "ClassicUO.Launcher.Custom.Resources.uodreams.ico";
+#endif
                 using Stream? stream = Assembly.GetExecutingAssembly()
-                    .GetManifestResourceStream("ClassicUO.Launcher.Custom.Resources.uodreams.ico");
+                    .GetManifestResourceStream(iconResource);
 
                 if (stream != null)
                 {
@@ -122,19 +147,174 @@ namespace ClassicUO.Launcher.Custom
                 LinearGradientMode.Vertical);
         }
 
+        /// <summary>Lets child controls (see <see cref="Theme.GetSurfaceBrush"/>) sample the exact
+        /// gradient color behind their bounds instead of approximating with a flat fill.</summary>
+        Color IGradientBackgroundHost.GetBackgroundColorAt(int clientY, int clientHeight) =>
+            Theme.SampleWindowGradient(clientY, clientHeight);
+
         private static Image? LoadLogo()
         {
             try
             {
+#if LAUNCHER_EDITION_ONEUO
+                const string logoResource = "ClassicUO.Launcher.Custom.Resources.oneuo_logo.png";
+#else
+                const string logoResource = "ClassicUO.Launcher.Custom.Resources.uodreams_logo.png";
+#endif
                 using Stream? s = Assembly.GetExecutingAssembly()
-                    .GetManifestResourceStream("ClassicUO.Launcher.Custom.Resources.uodreams_logo.png");
-                return s != null ? Image.FromStream(s) : null;
+                    .GetManifestResourceStream(logoResource);
+                if (s == null)
+                {
+                    return null;
+                }
+
+                using Image raw = Image.FromStream(s);
+#if LAUNCHER_EDITION_ONEUO
+                // Make the solid-black backdrop (and near-black shading) transparent, then drop the
+                // now-empty padding so Zoom fills the banner with artwork instead of a black box.
+                using Bitmap keyed = ApplyBlackChromaKey(raw);
+                return TrimSolidBlackBorders(keyed);
+#else
+                return new Bitmap(raw);
+#endif
             }
             catch
             {
                 return null;
             }
         }
+
+#if LAUNCHER_EDITION_ONEUO
+        // Pixels darker than this are pure background/padding -> fully transparent.
+        private const int ChromaKeyLowThreshold = 6;
+        // Pixels between the low and high threshold fade in proportionally, so anti-aliased edges
+        // (and the wing artwork's own dark shading/texture holes) blend smoothly into whatever
+        // theme background sits behind the logo instead of leaving a hard black cutout.
+        private const int ChromaKeyHighThreshold = 50;
+
+        /// <summary>
+        /// Converts the logo's solid-black background (and near-black shading) into real alpha
+        /// transparency, so no opaque black box remains behind the skull/wings artwork.
+        /// </summary>
+        private static Bitmap ApplyBlackChromaKey(Image source)
+        {
+            var bmp = new Bitmap(source.Width, source.Height, PixelFormat.Format32bppArgb);
+            using (var g = Graphics.FromImage(bmp))
+            {
+                g.DrawImage(source, new Rectangle(0, 0, source.Width, source.Height));
+            }
+
+            var rect = new Rectangle(0, 0, bmp.Width, bmp.Height);
+            BitmapData data = bmp.LockBits(rect, ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
+            try
+            {
+                int stride = data.Stride;
+                int byteCount = stride * bmp.Height;
+                byte[] buffer = new byte[byteCount];
+                System.Runtime.InteropServices.Marshal.Copy(data.Scan0, buffer, 0, byteCount);
+
+                for (int y = 0; y < bmp.Height; y++)
+                {
+                    int rowStart = y * stride;
+                    for (int x = 0; x < bmp.Width; x++)
+                    {
+                        int i = rowStart + x * 4; // Format32bppArgb byte order: B, G, R, A
+                        byte a = buffer[i + 3];
+                        if (a == 0)
+                        {
+                            continue;
+                        }
+
+                        int brightness = Math.Max(buffer[i], Math.Max(buffer[i + 1], buffer[i + 2]));
+                        if (brightness <= ChromaKeyLowThreshold)
+                        {
+                            buffer[i + 3] = 0;
+                        }
+                        else if (brightness < ChromaKeyHighThreshold)
+                        {
+                            float ratio = (brightness - ChromaKeyLowThreshold) / (float)(ChromaKeyHighThreshold - ChromaKeyLowThreshold);
+                            buffer[i + 3] = (byte)Math.Round(a * ratio);
+                        }
+                    }
+                }
+
+                System.Runtime.InteropServices.Marshal.Copy(buffer, 0, data.Scan0, byteCount);
+            }
+            finally
+            {
+                bmp.UnlockBits(data);
+            }
+
+            return bmp;
+        }
+
+        /// <summary>
+        /// Crops near-black borders so the logo art fills its PictureBox without letterboxing.
+        /// </summary>
+        private static Bitmap TrimSolidBlackBorders(Image source)
+        {
+            using var src = new Bitmap(source);
+            int w = src.Width;
+            int h = src.Height;
+            const int threshold = 18; // treat near-black as padding
+
+            int left = 0, top = 0, right = w - 1, bottom = h - 1;
+
+            bool RowIsPadding(int y)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    Color c = src.GetPixel(x, y);
+                    if (c.A > 8 && (c.R > threshold || c.G > threshold || c.B > threshold))
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+
+            bool ColIsPadding(int x)
+            {
+                for (int y = 0; y < h; y++)
+                {
+                    Color c = src.GetPixel(x, y);
+                    if (c.A > 8 && (c.R > threshold || c.G > threshold || c.B > threshold))
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+
+            while (top <= bottom && RowIsPadding(top)) top++;
+            while (bottom >= top && RowIsPadding(bottom)) bottom--;
+            while (left <= right && ColIsPadding(left)) left++;
+            while (right >= left && ColIsPadding(right)) right--;
+
+            if (right < left || bottom < top)
+            {
+                return new Bitmap(src);
+            }
+
+            // Small breathing room so spikes/wings aren't flush against the edge.
+            const int pad = 4;
+            left = Math.Max(0, left - pad);
+            top = Math.Max(0, top - pad);
+            right = Math.Min(w - 1, right + pad);
+            bottom = Math.Min(h - 1, bottom + pad);
+
+            var rect = new Rectangle(left, top, right - left + 1, bottom - top + 1);
+            var trimmed = new Bitmap(rect.Width, rect.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            using (var g = Graphics.FromImage(trimmed))
+            {
+                g.DrawImage(src, new Rectangle(0, 0, rect.Width, rect.Height), rect, GraphicsUnit.Pixel);
+            }
+
+            return trimmed;
+        }
+#endif
 
         private static Image? LoadPillIcon(string fileName)
         {
@@ -177,19 +357,29 @@ namespace ClassicUO.Launcher.Custom
             MaximizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
             DoubleBuffered = true;
+#if LAUNCHER_EDITION_ONEUO
+            BackColor = Color.Black;
+#endif
 
             const int formWidth = 620;
             const int bottomMargin = 10;
             int margin = 22;
             int width = formWidth - margin * 2;
+            // Same vertical rhythm as classic launcher — do NOT grow the window for ONEUO.
             int y = 16;
 
-            // ----- UODreams banner -----
+            // ----- Banner logo -----
             Image? logo = LoadLogo();
+            int logoBottomY = y;
 
             if (logo != null)
             {
+#if LAUNCHER_EDITION_ONEUO
+                // Slightly taller banner; Enhanced Map overlays the black corner (form height unchanged).
+                const int bannerH = 178;
+#else
                 const int bannerH = 148;
+#endif
                 var logoBox = new PictureBox
                 {
                     Image = logo,
@@ -198,11 +388,17 @@ namespace ClassicUO.Launcher.Custom
                     Bounds = new Rectangle(margin, y, width, bannerH)
                 };
                 Controls.Add(logoBox);
+                logoBottomY = y + bannerH;
                 y += bannerH + 4;
             }
 
-            // ----- Enhanced Map (right-aligned below banner) -----
+            // ----- Enhanced Map (right-aligned) -----
+#if LAUNCHER_EDITION_ONEUO
+            // Sit in the black corner over the logo — does not push the layout down.
+            _enhancedMapRowY = Math.Max(16, logoBottomY - 44);
+#else
             _enhancedMapRowY = y;
+#endif
             _enhancedMapLink = new Label
             {
                 Text = Loc.S("🌍 ENHANCED MAP", "🌍 ENHANCED MAP"),
@@ -231,7 +427,14 @@ namespace ClassicUO.Launcher.Custom
             };
             Controls.Add(_enhancedMapAutoOpenCheck);
             LayoutEnhancedMapControls(margin, width, _enhancedMapRowY);
+            _enhancedMapLink.BringToFront();
+            _enhancedMapAutoOpenCheck.BringToFront();
+#if LAUNCHER_EDITION_ONEUO
+            // Map controls overlay the logo; only a tiny gap before the first card.
+            y = logoBottomY + 8;
+#else
             y += 50;
+#endif
 
             // ----- Card 1: assistant -----
             const int pathRowH = 30;
@@ -493,7 +696,11 @@ namespace ClassicUO.Launcher.Custom
 
             var donationCredit = new Label
             {
+#if LAUNCHER_EDITION_ONEUO
+                Text = "0nE UO Launcher project by lall0ne",
+#else
                 Text = "UODreams Launcher project by lall0ne",
+#endif
                 Font = Theme.DonationCreditFont,
                 ForeColor = Theme.TextMuted,
                 BackColor = Color.Transparent,
@@ -534,17 +741,23 @@ namespace ClassicUO.Launcher.Custom
             y += donatePillH;
 
             // ----- Toolbar (top) -----
-            const int toolbarBtnH = Theme.ToolbarButtonHeight;
+            const int toolbarBtnHTop = Theme.ToolbarButtonHeight;
             _updateButton = new ThemedButton
             {
-                Text = Loc.S("⬇ Aggiorna", "⬇ Update"),
+                Text = UpToDateButtonText(),
                 CornerRadius = 8,
                 Font = new Font("Segoe UI Semibold", 8.5f, FontStyle.Bold),
                 ForeColor = Theme.Text,
-                Bounds = new Rectangle(formWidth - margin - 148, 12, 76, toolbarBtnH)
+                Padding = new Padding(Theme.CompactPrimaryHorizontalPadding, 0, Theme.CompactPrimaryHorizontalPadding, 0),
+#if LAUNCHER_EDITION_ONEUO
+                Bounds = new Rectangle(margin, 12, 76, toolbarBtnHTop)
+#else
+                Bounds = new Rectangle(formWidth - margin - 148, 12, 76, toolbarBtnHTop)
+#endif
             };
             _updateButton.Click += (_, _) => CheckForUpdates();
             Controls.Add(_updateButton);
+            ResizeUpdateButtonToFitText();
 
             // ----- Language toggle (top-right) -----
             _langButton = new ThemedButton
@@ -553,10 +766,28 @@ namespace ClassicUO.Launcher.Custom
                 CornerRadius = 8,
                 Font = new Font("Segoe UI Semibold", 8.5f, FontStyle.Bold),
                 ForeColor = Theme.Text,
-                Bounds = new Rectangle(formWidth - margin - 66, 12, 66, toolbarBtnH)
+                Bounds = new Rectangle(formWidth - margin - 66, 12, 66, toolbarBtnHTop)
             };
             _langButton.Click += (_, _) => ToggleLanguage();
             Controls.Add(_langButton);
+
+#if LAUNCHER_EDITION_ONEUO
+            // ----- Theme picker (top-right, left of language toggle) -----
+            const int themeBtnW = 76;
+            const int themeBtnGap = 8;
+            _themeButton = new ThemedButton
+            {
+                Text = Loc.S("🎨 Tema", "🎨 Theme"),
+                CornerRadius = 8,
+                Font = new Font("Segoe UI Semibold", 8.5f, FontStyle.Bold),
+                ForeColor = Theme.Text,
+                Bounds = new Rectangle(formWidth - margin - 66 - themeBtnGap - themeBtnW, 12, themeBtnW, toolbarBtnHTop)
+            };
+            _themeButton.Click += (_, _) => ShowThemeMenu();
+            Controls.Add(_themeButton);
+            _themeButton.BringToFront();
+#endif
+
             _updateButton.BringToFront();
             _langButton.BringToFront();
 
@@ -566,11 +797,16 @@ namespace ClassicUO.Launcher.Custom
         private void RefreshWindowTitle()
         {
             string launcherVer = LauncherManifest.RuntimeLauncherVersion;
-            string clientVer = _settings.EffectiveClientVersion;
             string title = LauncherManifest.ProductTitle;
+#if LAUNCHER_EDITION_ONEUO
+            // Always: "0nE UO Launcher vX.Y.Z by lall0ne" — never append client version.
+            Text = $"{title} v{launcherVer} by lall0ne";
+#else
+            string clientVer = _settings.EffectiveClientVersion;
             Text = string.Equals(launcherVer, clientVer, StringComparison.OrdinalIgnoreCase)
                 ? $"{title} v{launcherVer}"
                 : $"{title} v{launcherVer} · client v{clientVer}";
+#endif
         }
 
         private bool ShouldHighlightUpdate(UpdateCheckResult? info)
@@ -586,13 +822,38 @@ namespace ClassicUO.Launcher.Custom
                 _settings.EffectiveClientVersion) > 0;
         }
 
+        private static string UpToDateButtonText() => Loc.S("Aggiornato", "Up to date");
+
+        private static string UpdateAvailableButtonText() => Loc.S("Aggiornamento disponibile", "Update Available");
+
+        /// <summary>
+        /// Grows (or shrinks back to a sane minimum) the update button so its current text never
+        /// gets clipped. Anchored to the left edge on ONEUO (top-left placement) and to the right
+        /// edge otherwise, so it never overlaps the Theme/language toggles.
+        /// </summary>
+        private void ResizeUpdateButtonToFitText()
+        {
+            int preferredWidth = _updateButton.GetPreferredSize(Size.Empty).Width;
+            int newWidth = Math.Max(76, preferredWidth);
+#if LAUNCHER_EDITION_ONEUO
+            _updateButton.Width = newWidth;
+#else
+            int right = _updateButton.Right;
+            _updateButton.Width = newWidth;
+            _updateButton.Left = right - newWidth;
+#endif
+        }
+
         private void SetUpdateAvailable(bool available)
         {
             _updateAvailable = available;
+            // Static (non-animated) highlight only when an update is available; "up to date"
+            // always renders with the normal, non-highlighted button chrome.
             _updateButton.HighlightAsUpdate = available;
             _updateButton.Text = available
-                ? Loc.S("★ Aggiorna", "★ Update")
-                : Loc.S("⬇ Aggiorna", "⬇ Update");
+                ? UpdateAvailableButtonText()
+                : UpToDateButtonText();
+            ResizeUpdateButtonToFitText();
             _updateButton.Invalidate();
         }
 
@@ -648,8 +909,10 @@ namespace ClassicUO.Launcher.Custom
 
         private void MarkClientUpdated(string version)
         {
-            _settings.InstalledClientVersion = LauncherUpdater.NormalizeVersion(version);
+            string normalized = LauncherUpdater.NormalizeVersion(version);
+            _settings.InstalledClientVersion = normalized;
             _settings.Save();
+            ClientRuntimeDownloader.WriteClientVersionMarker(normalized);
             RefreshWindowTitle();
         }
 
@@ -716,6 +979,44 @@ namespace ClassicUO.Launcher.Custom
             ApplyLanguage();
         }
 
+#if LAUNCHER_EDITION_ONEUO
+        private void ShowThemeMenu()
+        {
+            _themeMenu?.Dispose();
+            _themeMenu = new ThemedContextMenu();
+            foreach (Theme.LauncherThemePreset preset in Theme.LauncherThemes)
+            {
+                string label = Theme.ThemeLabel(preset);
+                bool isCurrent = string.Equals(preset.Id, Theme.CurrentUiThemeId, StringComparison.OrdinalIgnoreCase);
+                _themeMenu.AddAction(isCurrent ? $"✓ {label}" : $"    {label}", () => ApplyUiTheme(preset.Id));
+            }
+
+            _themeMenu.ShowBelow(_themeButton);
+        }
+
+        private void ApplyUiTheme(string themeId)
+        {
+            Theme.ApplyLauncherTheme(themeId);
+            _settings.UiTheme = Theme.CurrentUiThemeId;
+            _settings.Save();
+            RefreshThemeUi();
+        }
+
+        /// <summary>
+        /// Re-applies theme-derived colors that were snapshotted at control construction time,
+        /// then invalidates the form (and every child, including CardPanels) to repaint live-read colors.
+        /// </summary>
+        private void RefreshThemeUi()
+        {
+            _assistantPathBox.BackColor = Theme.Input;
+            _uoPathBox.BackColor = Theme.Input;
+            _serverCombo.BackColor = Theme.Input;
+            _serverCombo.ForeColor = Theme.Text;
+
+            Invalidate(true);
+        }
+#endif
+
         private void ApplyLanguage()
         {
             _langButton.Text = LangButtonText();
@@ -733,8 +1034,9 @@ namespace ClassicUO.Launcher.Custom
             _downloadUoButton.Text = Loc.S("⬇ Scarica UODreams", "⬇ Download UODreams");
             _editServerButton.Text = "✎";
             _updateButton.Text = _updateAvailable
-                ? Loc.S("★ Aggiorna", "★ Update")
-                : Loc.S("⬇ Aggiorna", "⬇ Update");
+                ? UpdateAvailableButtonText()
+                : UpToDateButtonText();
+            ResizeUpdateButtonToFitText();
             _launchButton.Text = Loc.S("AVVIA", "START");
             _coffeePill.Text = Loc.S("Buy me a coffee", "Buy me a coffee");
             _registerBtn.Text = Loc.S("Registrati gratis", "Register for free");
@@ -911,7 +1213,16 @@ namespace ClassicUO.Launcher.Custom
             string saved = _settings.RazorPath.Trim();
             if (!string.IsNullOrEmpty(saved) && !AssistantPaths.IsLegacyClientPluginsRazorPath(saved))
             {
-                return saved;
+                string? resolved = ResolveExistingRazorExe(saved);
+                if (!string.IsNullOrEmpty(resolved))
+                {
+                    return resolved;
+                }
+
+                // Stale path (Razor moved/uninstalled): clear so UI falls back to bundled/default.
+                _settings.RazorPath = "";
+                _settings.Save();
+                saved = "";
             }
 
             if (!LauncherManifest.IsPvpEdition)
@@ -949,6 +1260,48 @@ namespace ClassicUO.Launcher.Custom
             }
 
             return "";
+        }
+
+        /// <summary>
+        /// Accepts RazorEnhanced.exe or its containing folder; returns null if missing.
+        /// </summary>
+        private static string? ResolveExistingRazorExe(string path)
+        {
+            string trimmed = path.Trim().Trim('"');
+            if (string.IsNullOrEmpty(trimmed))
+            {
+                return null;
+            }
+
+            if (File.Exists(trimmed) &&
+                Path.GetFileName(trimmed).Equals("RazorEnhanced.exe", StringComparison.OrdinalIgnoreCase))
+            {
+                return trimmed;
+            }
+
+            if (Directory.Exists(trimmed))
+            {
+                string candidate = Path.Combine(trimmed, "RazorEnhanced.exe");
+                if (File.Exists(candidate))
+                {
+                    return candidate;
+                }
+            }
+
+            return null;
+        }
+
+        private bool IsShowingBundledRazorPath()
+        {
+            if (!IsBundledRazorAvailable())
+            {
+                return false;
+            }
+
+            string current = (_assistantPathBox.Text ?? "").Trim();
+            string bundled = GetBundledRazorPath();
+            return !string.IsNullOrEmpty(current) &&
+                   string.Equals(current, bundled, StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsBundledRazorAvailable() =>
@@ -1305,10 +1658,12 @@ namespace ClassicUO.Launcher.Custom
                 _settings.ClearAssistantPathClearedFlag("Razor Enhanced");
             }
 
-            bool isBundledRazor = SelectedAssistant == "Razor Enhanced" && IsBundledRazorAvailable();
+            bool razorSelected = SelectedAssistant == "Razor Enhanced";
+            bool bundledRazorAvailable = razorSelected && IsBundledRazorAvailable();
+            bool showingBundledRazor = razorSelected && IsShowingBundledRazorPath();
             bool canDownload = hasAssistant &&
                 AssistantDownloader.SupportsDownload(SelectedAssistant) &&
-                !isBundledRazor;
+                !bundledRazorAvailable;
             bool installed = hasAssistant &&
                 AssistantDownloader.IsPluginValidAtPath(SelectedAssistant, _assistantPathBox.Text);
 
@@ -1317,11 +1672,12 @@ namespace ClassicUO.Launcher.Custom
             _assistantPathPanel.Visible = hasAssistant;
             _downloadAssistantButton.Visible = showDownload;
             _assistantActionPanel.Visible = hasAssistant && showDownload;
-            _assistantBrowseButton.Visible = hasAssistant && !isBundledRazor;
+            // Always allow browse (including Razor) so users can retarget after moving installs.
+            _assistantBrowseButton.Visible = hasAssistant;
             _assistantHintLabel.Visible = hasAssistant;
             _assistantTrashButton.Visible = hasAssistant &&
                 !string.IsNullOrWhiteSpace(_assistantPathBox.Text) &&
-                !isBundledRazor;
+                !showingBundledRazor;
 
             if (!hasAssistant)
             {
@@ -1336,7 +1692,7 @@ namespace ClassicUO.Launcher.Custom
             }
 
             bool showRazorBundledInfo = LauncherManifest.IsPvpEdition &&
-                SelectedAssistant == "Razor Enhanced" &&
+                razorSelected &&
                 installed;
             _assistantRazorInfoLabel.Visible = showRazorBundledInfo;
             _assistantRazorInfoLabel.Text = showRazorBundledInfo ? GetRazorBundledInfoText() : "";
@@ -1349,7 +1705,14 @@ namespace ClassicUO.Launcher.Custom
                     "✓ Assistant loaded successfully.");
                 _assistantHintLabel.ForeColor = Theme.SectionGreen;
             }
-            else if (isBundledRazor)
+            else if (!string.IsNullOrWhiteSpace(_assistantPathBox.Text) && !installed)
+            {
+                _assistantHintLabel.Text = Loc.S(
+                    "Percorso non valido — usa … per selezionare il file corretto.",
+                    "Invalid path — use … to select the correct file.");
+                _assistantHintLabel.ForeColor = Theme.TextMuted;
+            }
+            else if (bundledRazorAvailable)
             {
                 _assistantHintLabel.Text = Loc.S(
                     "Razor Enhanced incluso nel Launcher PVP.",
@@ -1366,6 +1729,9 @@ namespace ClassicUO.Launcher.Custom
                     "Orion" => Loc.S(
                         "Orion non trovato — scaricalo o seleziona la cartella con OrionLauncher64.exe.",
                         "Orion not found — download it or select the folder containing OrionLauncher64.exe."),
+                    "Razor Enhanced" => Loc.S(
+                        "Razor Enhanced non trovato — scaricalo o usa … per selezionare RazorEnhanced.exe.",
+                        "Razor Enhanced not found — download it or use … to select RazorEnhanced.exe."),
                     _ => Loc.S(
                         $"{SelectedAssistant} non trovato — scaricalo o seleziona il percorso del plugin.",
                         $"{SelectedAssistant} not found — download it or select the plugin path.")
@@ -1375,8 +1741,8 @@ namespace ClassicUO.Launcher.Custom
             else
             {
                 _assistantHintLabel.Text = Loc.S(
-                    "Seleziona il percorso dell'assistente.",
-                    "Select the assistant path.");
+                    "Seleziona il percorso dell'assistente (pulsante …).",
+                    "Select the assistant path (… button).");
                 _assistantHintLabel.ForeColor = Theme.TextMuted;
             }
 

@@ -62,6 +62,8 @@ namespace ClassicUO.Game.UI.Gumps
         private const int OptionsSearchToContentGap = 20;
         private const int OptionsSectionGap = 40;
         private const int OptionsSectionGapLarge = 60;
+        // Extra vertical breathing room above the "EnergyField auto-avoid" row in Mods -> Visual Helpers.
+        private const int VisualHelpersEnergyFieldTopGap = 12;
         private const int OptionsScrollContentPadding = 12;
         private const int OptionsTabStartY = 10;
         private const int OptionsScrollY = OptionsTabStartY + OptionsSearchRowHeight + OptionsSearchToContentGap;
@@ -84,7 +86,8 @@ namespace ClassicUO.Game.UI.Gumps
         private HSliderBar _containersScale;
         // grid container
         private Checkbox _gridContainerEnabled, _gridHideBorder, _gridContainerPreview;
-        private HSliderBar _gridColumns, _gridRows, _gridContainerScale, _gridContainerOpacity;
+        private HSliderBar _gridColumns, _gridRows, _gridContainerScale, _gridContainerOpacity, _gridBorderOpacity;
+        private ClickableColorBox _gridBorderHue, _gridContainerBorderHue;
         private Combobox _gridSearchMode;
         private Combobox _cotType;
         private DataBox _databox;
@@ -128,6 +131,7 @@ namespace ClassicUO.Game.UI.Gumps
                          _drawRoofs,
                          _treeToStumps,
                          _hideVegetation,
+                         _hideCarpets,
                          _noColorOutOfRangeObjects,
                          _useCircleOfTransparency,
                          _enableTopbar,
@@ -145,7 +149,8 @@ namespace ClassicUO.Game.UI.Gumps
         private Checkbox _ltHighlightRangeOnActivated, _ltHighlightRangeOnCast;
         private HSliderBar _ltHighlightRangeOnActivatedRange, _ltHighlightRangeOnCastRange, _ltHighlightRangeOutlinePixels;
         private ClickableColorBox _ltHighlightRangeOnActivatedHue, _ltHighlightRangeOnCastHue;
-        private Checkbox _highlightMirrorClones, _enableUoDreamsNetworkOptimizer, _enableFullSocketDrain;
+        private Checkbox _highlightMirrorClones, _enableUoDreamsNetworkOptimizer, _enableFullSocketDrain, _fastRotation, _showBandageRingTimer;
+        private InputField _bandageRingTimerX, _bandageRingTimerY;
         private ClickableColorBox _mirrorCloneHue;
         private static readonly string[] VisualHighlightModes = { "Off", "White", "Pink", "Ice", "Fire", "Custom" };
         private static readonly string[] VisualHighlightStateModes = { "Off", "White", "Pink", "Ice", "Fire", "Special", "Custom" };
@@ -164,6 +169,7 @@ namespace ClassicUO.Game.UI.Gumps
         private string _optionsSearchAppliedTerm = string.Empty;
         private readonly List<Control> _optionsSearchMatches = new List<Control>();
         private readonly HashSet<int> _optionsSearchPagesWithHits = new HashSet<int>();
+        private readonly Dictionary<Control, int> _optionsSearchSavedY = new Dictionary<Control, int>();
         private Checkbox _hidePersistentNPCNames, _nameOverheadAlwaysOn;
         private Checkbox _showAllLayersPaperdoll;
         private Checkbox _energyFieldWallOfStoneAutoAvoid;
@@ -705,6 +711,25 @@ namespace ClassicUO.Game.UI.Gumps
             bool filter = _optionsSearchAppliedTerm.Length >= 2;
             HashSet<Control> matches = filter ? new HashSet<Control>(_optionsSearchMatches) : null;
 
+            if (!filter)
+            {
+                RestoreOptionsSearchSavedPositions();
+            }
+            else if (_optionsSearchSavedY.Count == 0)
+            {
+                for (int i = 0; i < Children.Count; i++)
+                {
+                    Control pageChild = Children[i];
+
+                    if (pageChild.Page < 1 || pageChild.Page > 13)
+                    {
+                        continue;
+                    }
+
+                    SaveOptionsSearchPositions(pageChild);
+                }
+            }
+
             for (int i = 0; i < Children.Count; i++)
             {
                 Control pageChild = Children[i];
@@ -715,6 +740,280 @@ namespace ClassicUO.Game.UI.Gumps
                 }
 
                 ApplyOptionsSearchFilterToControl(pageChild, filter, matches);
+            }
+
+            if (filter)
+            {
+                for (int i = 0; i < Children.Count; i++)
+                {
+                    Control pageChild = Children[i];
+
+                    if (pageChild.Page < 1 || pageChild.Page > 13)
+                    {
+                        continue;
+                    }
+
+                    ReflowOptionsSearchLayout(pageChild);
+                }
+
+                ResetOptionsSearchScrollForActivePage();
+            }
+        }
+
+        private void SaveOptionsSearchPositions(Control root)
+        {
+            if (root == null || root.IsDisposed)
+            {
+                return;
+            }
+
+            if (root != this && !_optionsSearchSavedY.ContainsKey(root))
+            {
+                _optionsSearchSavedY[root] = root.Y;
+            }
+
+            for (int i = 0; i < root.Children.Count; i++)
+            {
+                SaveOptionsSearchPositions(root.Children[i]);
+            }
+        }
+
+        private void RestoreOptionsSearchSavedPositions()
+        {
+            foreach (KeyValuePair<Control, int> entry in _optionsSearchSavedY)
+            {
+                if (entry.Key != null && !entry.Key.IsDisposed)
+                {
+                    entry.Key.Y = entry.Value;
+                }
+            }
+
+            _optionsSearchSavedY.Clear();
+        }
+
+        private static int OptionsSearchOriginalY(Control c, Dictionary<Control, int> savedY)
+        {
+            return savedY.TryGetValue(c, out int y) ? y : c.Y;
+        }
+
+        private static bool DataBoxUsesRowLayout(DataBox box)
+        {
+            var ys = new HashSet<int>();
+
+            for (int i = 0; i < box.Children.Count; i++)
+            {
+                Control child = box.Children[i];
+
+                if (child == null || child.IsDisposed)
+                {
+                    continue;
+                }
+
+                if (!ys.Add(child.Y))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void ReflowOptionsSearchLayout(Control root)
+        {
+            if (root == null || root.IsDisposed)
+            {
+                return;
+            }
+
+            for (int i = 0; i < root.Children.Count; i++)
+            {
+                ReflowOptionsSearchLayout(root.Children[i]);
+            }
+
+            if (root is SettingsSection section)
+            {
+                section.SyncContentHeight();
+            }
+            else if (root is DataBox dataBox)
+            {
+                if (DataBoxUsesRowLayout(dataBox))
+                {
+                    ReflowDataBoxRows(dataBox);
+                }
+                else
+                {
+                    dataBox.ReArrangeChildren();
+                }
+            }
+            else if (root is ScrollArea scrollArea)
+            {
+                ReflowScrollAreaContent(scrollArea);
+            }
+        }
+
+        private void ReflowDataBoxRows(DataBox box)
+        {
+            var rowOriginalYs = new List<int>();
+
+            for (int i = 0; i < box.Children.Count; i++)
+            {
+                Control child = box.Children[i];
+
+                if (child == null || child.IsDisposed)
+                {
+                    continue;
+                }
+
+                int origY = OptionsSearchOriginalY(child, _optionsSearchSavedY);
+
+                if (!rowOriginalYs.Contains(origY))
+                {
+                    rowOriginalYs.Add(origY);
+                }
+            }
+
+            int nextY = 0;
+            const int rowGap = 2;
+
+            for (int r = 0; r < rowOriginalYs.Count; r++)
+            {
+                int origRowY = rowOriginalYs[r];
+                int rowHeight = 0;
+                bool anyVisible = false;
+
+                for (int i = 0; i < box.Children.Count; i++)
+                {
+                    Control child = box.Children[i];
+
+                    if (child == null || child.IsDisposed)
+                    {
+                        continue;
+                    }
+
+                    if (OptionsSearchOriginalY(child, _optionsSearchSavedY) != origRowY)
+                    {
+                        continue;
+                    }
+
+                    if (!child.IsVisible)
+                    {
+                        continue;
+                    }
+
+                    child.Y = nextY;
+                    rowHeight = Math.Max(rowHeight, child.Height);
+                    anyVisible = true;
+                }
+
+                if (anyVisible)
+                {
+                    nextY += rowHeight + rowGap;
+                }
+            }
+
+            box.WantUpdateSize = true;
+        }
+
+        private void ReflowScrollAreaContent(ScrollArea scrollArea)
+        {
+            var rowOriginalYs = new List<int>();
+
+            for (int i = 1; i < scrollArea.Children.Count; i++)
+            {
+                Control child = scrollArea.Children[i];
+
+                if (child == null || child.IsDisposed)
+                {
+                    continue;
+                }
+
+                int origY = OptionsSearchOriginalY(child, _optionsSearchSavedY);
+
+                if (!rowOriginalYs.Contains(origY))
+                {
+                    rowOriginalYs.Add(origY);
+                }
+            }
+
+            int nextY = OptionsScrollContentPadding;
+            const int rowGap = 2;
+
+            for (int r = 0; r < rowOriginalYs.Count; r++)
+            {
+                int origRowY = rowOriginalYs[r];
+                int rowHeight = 0;
+                bool anyVisible = false;
+
+                for (int i = 1; i < scrollArea.Children.Count; i++)
+                {
+                    Control child = scrollArea.Children[i];
+
+                    if (child == null || child.IsDisposed)
+                    {
+                        continue;
+                    }
+
+                    if (OptionsSearchOriginalY(child, _optionsSearchSavedY) != origRowY)
+                    {
+                        continue;
+                    }
+
+                    if (!child.IsVisible)
+                    {
+                        continue;
+                    }
+
+                    child.Y = nextY;
+                    rowHeight = Math.Max(rowHeight, child.Height);
+                    anyVisible = true;
+                }
+
+                if (anyVisible)
+                {
+                    nextY += rowHeight + rowGap;
+                }
+            }
+
+            scrollArea.WantUpdateSize = true;
+        }
+
+        private void ResetOptionsSearchScrollForActivePage()
+        {
+            if (ActivePage < 1 || ActivePage > 13)
+            {
+                return;
+            }
+
+            for (int i = 0; i < Children.Count; i++)
+            {
+                Control pageChild = Children[i];
+
+                if (pageChild.Page != ActivePage)
+                {
+                    continue;
+                }
+
+                ResetOptionsSearchScroll(pageChild);
+            }
+        }
+
+        private static void ResetOptionsSearchScroll(Control root)
+        {
+            if (root == null || root.IsDisposed)
+            {
+                return;
+            }
+
+            if (root is ScrollArea scrollArea
+                && scrollArea.Children.Count > 0
+                && scrollArea.Children[0] is ScrollBarBase scrollBar)
+            {
+                scrollBar.Value = scrollBar.MinValue;
+            }
+
+            for (int i = 0; i < root.Children.Count; i++)
+            {
+                ResetOptionsSearchScroll(root.Children[i]);
             }
         }
 
@@ -843,6 +1142,54 @@ namespace ClassicUO.Game.UI.Gumps
             combat.AddRight(_ltHighlightRangeOutlinePixels = AddHSlider(null, 1, 10, _currentProfile.LTHighlightRangeOutlinePixels, startX, startY, 150));
             combat.Add(_highlightMirrorClones = AddCheckBox(null, "Ghost mirror image clones", _currentProfile.HighlightMirrorImageClones, startX, startY));
             combat.AddRight(_mirrorCloneHue = AddColorBox(null, startX, startY, _currentProfile.MirrorImageCloneHue, string.Empty), 2);
+            combat.Add(_showBandageRingTimer = AddCheckBox(null, "Show Timer Countdown", _currentProfile.ShowBandageRingTimer, startX, startY));
+            combat.Add(AddLabel(null, "X", startX, startY));
+            combat.AddRight(
+                _bandageRingTimerX = AddInputField(
+                    null,
+                    startX,
+                    startY,
+                    50,
+                    TEXTBOX_HEIGHT,
+                    null,
+                    50,
+                    false,
+                    false
+                ),
+                4
+            );
+            _bandageRingTimerX.SetText(_currentProfile.BandageRingTimerX < 0 ? string.Empty : _currentProfile.BandageRingTimerX.ToString());
+            combat.AddRight(AddLabel(null, "Y", startX, startY), 2);
+            combat.AddRight(
+                _bandageRingTimerY = AddInputField(
+                    null,
+                    startX,
+                    startY,
+                    50,
+                    TEXTBOX_HEIGHT,
+                    null,
+                    50,
+                    false,
+                    false
+                )
+            );
+            _bandageRingTimerY.SetText(_currentProfile.BandageRingTimerY < 0 ? string.Empty : _currentProfile.BandageRingTimerY.ToString());
+            NiceButton resetTimerPosButton = new NiceButton(0, 0, 110, 22, ButtonAction.Activate, "Reset Position")
+            {
+                IsSelectable = false
+            };
+            resetTimerPosButton.MouseUp += (_, _) =>
+            {
+                _bandageRingTimerX?.SetText(string.Empty);
+                _bandageRingTimerY?.SetText(string.Empty);
+                if (_currentProfile != null)
+                {
+                    _currentProfile.BandageRingTimerX = -1;
+                    _currentProfile.BandageRingTimerY = -1;
+                }
+            };
+            combat.AddRight(resetTimerPosButton, 6);
+            combat.AddRight(AddLabel(null, "(under player)", startX, startY), 4);
 
             SettingsSection visualHelpers = AddSettingsSection(box, "Visual Helpers");
             visualHelpers.Y = combat.Bounds.Bottom + OptionsSectionGap;
@@ -895,10 +1242,24 @@ namespace ClassicUO.Game.UI.Gumps
                     startY
                 )
             );
+            // Extra breathing room above the Energy Field checkbox so it doesn't crowd the
+            // highlight rows above it.
+            _energyFieldWallOfStoneAutoAvoid.Y += VisualHelpersEnergyFieldTopGap;
+
+            visualHelpers.Add(
+                _hideCarpets = AddCheckBox(
+                    null,
+                    ResGumps.HideCarpets,
+                    _currentProfile.HideCarpets,
+                    startX,
+                    startY
+                )
+            );
             visualHelpers.SyncContentHeight();
 
             SettingsSection connections = AddSettingsSection(box, "Connections");
             connections.Y = visualHelpers.Bounds.Bottom + OptionsSectionGapLarge;
+            connections.Add(_fastRotation = AddCheckBox(null, "Fast Rotation", _currentProfile.FastRotation, startX, startY));
             connections.Add(AddLabel(null, "Movement turn delay (ms)", startX, startY));
             connections.AddRight
             (
@@ -907,7 +1268,7 @@ namespace ClassicUO.Game.UI.Gumps
                     null,
                     startX,
                     startY,
-                    60,
+                    70,
                     TEXTBOX_HEIGHT,
                     numbersOnly: true,
                     maxCharCount: 4
@@ -924,7 +1285,7 @@ namespace ClassicUO.Game.UI.Gumps
                     null,
                     startX,
                     startY,
-                    60,
+                    70,
                     TEXTBOX_HEIGHT,
                     numbersOnly: true,
                     maxCharCount: 4
@@ -941,7 +1302,7 @@ namespace ClassicUO.Game.UI.Gumps
                     null,
                     startX,
                     startY,
-                    60,
+                    70,
                     TEXTBOX_HEIGHT,
                     numbersOnly: true,
                     maxCharCount: 4
@@ -958,7 +1319,7 @@ namespace ClassicUO.Game.UI.Gumps
                     null,
                     startX,
                     startY,
-                    60,
+                    70,
                     TEXTBOX_HEIGHT,
                     numbersOnly: true,
                     maxCharCount: 4
@@ -967,6 +1328,9 @@ namespace ClassicUO.Game.UI.Gumps
             );
             _movementPlayerWalkingDelay.SetText(Math.Clamp(_currentProfile.MovementPlayerWalkingDelay, 40, 1000).ToString());
 
+            // Dust765-Light has no Connections presets; hardcoded Constants are 80/45/150/150.
+            // Balanced turn = 100 (full Dust / user request). Reset = Light Constants (80).
+            // Low Ping / High Jitter = UODreams PVP helpers only.
             NiceButton lowPingPresetButton = new NiceButton(startX, startY, 90, 22, ButtonAction.Activate, "Low Ping")
             {
                 IsSelectable = false
@@ -978,7 +1342,11 @@ namespace ClassicUO.Game.UI.Gumps
             {
                 IsSelectable = false
             };
-            balancedPresetButton.MouseUp += (_, _) => SetMovementDelayInputs(100, 45, 150, 150);
+            balancedPresetButton.MouseUp += (_, _) => SetMovementDelayInputs(
+                100,
+                Constants.TURN_DELAY_FAST,
+                Constants.WALKING_DELAY,
+                Constants.PLAYER_WALKING_DELAY);
             connections.Add(balancedPresetButton);
 
             NiceButton highJitterPresetButton = new NiceButton(0, 0, 100, 22, ButtonAction.Activate, "High Jitter")
@@ -992,7 +1360,11 @@ namespace ClassicUO.Game.UI.Gumps
             {
                 IsSelectable = false
             };
-            resetPresetButton.MouseUp += (_, _) => SetMovementDelayInputs(100, 45, 150, 150);
+            resetPresetButton.MouseUp += (_, _) => SetMovementDelayInputs(
+                Constants.TURN_DELAY,
+                Constants.TURN_DELAY_FAST,
+                Constants.WALKING_DELAY,
+                Constants.PLAYER_WALKING_DELAY);
             connections.Add(resetPresetButton);
 
             SettingsSection network = AddSettingsSection(box, "Network");
@@ -3923,7 +4295,19 @@ namespace ClassicUO.Game.UI.Gumps
 
             text = AddLabel(rightArea, "Search mode", startX, startY);
             _gridSearchMode = AddCombobox(rightArea, new[] { "Filter", "Highlight" }, _currentProfile.GridContainerSearchMode, startX + text.Width + 5, startY, 120);
-            startY += text.Height + 6;
+            startY += text.Height + 4;
+
+            text = AddLabel(rightArea, "Grid line intensity %", startX, startY);
+            _gridBorderOpacity = AddHSlider(rightArea, 0, 100, _currentProfile.GridBorderAlpha, startX + text.Width + 5, startY, 150);
+            startY += text.Height + 4;
+
+            text = AddLabel(rightArea, "Grid line color", startX, startY);
+            _gridBorderHue = AddColorBox(rightArea, startX + text.Width + 5, startY, _currentProfile.GridBorderHue, string.Empty);
+            startY += _gridBorderHue.Height + 4;
+
+            text = AddLabel(rightArea, "Container border color", startX, startY);
+            _gridContainerBorderHue = AddColorBox(rightArea, startX + text.Width + 5, startY, _currentProfile.GridContainerBorderHue, string.Empty);
+            startY += _gridContainerBorderHue.Height + 6;
 
             startX = 5;
 
@@ -4021,6 +4405,16 @@ namespace ClassicUO.Game.UI.Gumps
         }
 
 
+        public override void ChangePage(int pageIndex)
+        {
+            base.ChangePage(pageIndex);
+
+            if (_optionsSearchAppliedTerm.Length >= 2)
+            {
+                ResetOptionsSearchScrollForActivePage();
+            }
+        }
+
         public override void OnButtonClick(int buttonID)
         {
             if (buttonID == (int) Buttons.Last + 1)
@@ -4099,6 +4493,7 @@ namespace ClassicUO.Game.UI.Gumps
                     _enableCaveBorder.IsChecked = false;
                     _treeToStumps.IsChecked = false;
                     _hideVegetation.IsChecked = false;
+                    _hideCarpets.IsChecked = false;
                     _noColorOutOfRangeObjects.IsChecked = false;
                     _circleOfTranspRadius.Value = Constants.MIN_CIRCLE_OF_TRANSPARENCY_RADIUS;
                     _cotType.SelectedIndex = 0;
@@ -4281,6 +4676,9 @@ namespace ClassicUO.Game.UI.Gumps
                     _gridContainerScale.Value = 100;
                     _gridContainerOpacity.Value = 80;
                     _gridSearchMode.SelectedIndex = 0;
+                    _gridBorderOpacity.Value = 35;
+                    _gridBorderHue.Hue = 946;
+                    _gridContainerBorderHue.Hue = 946;
 
                     _containerDoubleClickToLoot.IsChecked = false;
                     _relativeDragAnDropItems.IsChecked = false;
@@ -4376,6 +4774,7 @@ namespace ClassicUO.Game.UI.Gumps
 
             _currentProfile.FieldsType = _fieldsType.SelectedIndex;
             _currentProfile.HideVegetation = _hideVegetation.IsChecked;
+            _currentProfile.HideCarpets = _hideCarpets.IsChecked;
 
             // Visual Helpers (Dust765) - Highlight tiles on range
             _currentProfile.LTHighlightRangeOnActivated = _ltHighlightRangeOnActivated.IsChecked;
@@ -4386,6 +4785,24 @@ namespace ClassicUO.Game.UI.Gumps
             _currentProfile.LTHighlightRangeOnCastHue = _ltHighlightRangeOnCastHue.Hue;
             _currentProfile.LTHighlightRangeOutlinePixels = _ltHighlightRangeOutlinePixels.Value;
             _currentProfile.HighlightMirrorImageClones = _highlightMirrorClones.IsChecked;
+            _currentProfile.ShowBandageRingTimer = _showBandageRingTimer.IsChecked;
+            if (string.IsNullOrWhiteSpace(_bandageRingTimerX?.Text))
+            {
+                _currentProfile.BandageRingTimerX = -1;
+            }
+            else if (int.TryParse(_bandageRingTimerX.Text, out int timerX))
+            {
+                _currentProfile.BandageRingTimerX = timerX;
+            }
+
+            if (string.IsNullOrWhiteSpace(_bandageRingTimerY?.Text))
+            {
+                _currentProfile.BandageRingTimerY = -1;
+            }
+            else if (int.TryParse(_bandageRingTimerY.Text, out int timerY))
+            {
+                _currentProfile.BandageRingTimerY = timerY;
+            }
             _currentProfile.MirrorImageCloneHue = _mirrorCloneHue.Hue;
             _currentProfile.GlowingWeaponsType = _glowingWeaponsType.SelectedIndex;
             _currentProfile.HighlightGlowingWeaponsTypeHue = _highlightGlowingWeaponsTypeHue.Hue;
@@ -4425,6 +4842,8 @@ namespace ClassicUO.Game.UI.Gumps
             _currentProfile.NameOverheadToggled = _nameOverheadAlwaysOn.IsChecked;
             _currentProfile.EnableUoDreamsNetworkOptimizer = _enableUoDreamsNetworkOptimizer.IsChecked;
             _currentProfile.EnableFullSocketDrain = _enableFullSocketDrain.IsChecked;
+            _currentProfile.FastRotation = _fastRotation.IsChecked;
+            MovementSpeed.FastRotation = _fastRotation.IsChecked;
 
             if (int.TryParse(_movementTurnDelay.Text, out int movementTurnDelay))
             {
@@ -4944,6 +5363,17 @@ namespace ClassicUO.Game.UI.Gumps
             _currentProfile.GridContainersScale = _gridContainerScale.Value;
             _currentProfile.ContainerOpacity = _gridContainerOpacity.Value;
             _currentProfile.GridContainerSearchMode = _gridSearchMode.SelectedIndex;
+            _currentProfile.GridBorderAlpha = _gridBorderOpacity.Value;
+            _currentProfile.GridBorderHue = _gridBorderHue.Hue;
+            _currentProfile.GridContainerBorderHue = _gridContainerBorderHue.Hue;
+
+            for (LinkedListNode<Gump> node = UIManager.Gumps.First; node != null; node = node.Next)
+            {
+                if (node.Value is GridContainer gridContainer && !gridContainer.IsDisposed)
+                {
+                    gridContainer.RefreshBorderOptions();
+                }
+            }
 
             _currentProfile.DoubleClickToLootInsideContainers = _containerDoubleClickToLoot.IsChecked;
             _currentProfile.RelativeDragAndDropItems = _relativeDragAnDropItems.IsChecked;
@@ -5416,6 +5846,7 @@ namespace ClassicUO.Game.UI.Gumps
                     }
 
                     _databox.WantUpdateSize = true;
+                    SyncContentHeight();
 
                     return;
                 }
@@ -5446,6 +5877,7 @@ namespace ClassicUO.Game.UI.Gumps
 
                 IsVisible = anyVisible;
                 _databox.WantUpdateSize = true;
+                SyncContentHeight();
             }
         }
 
@@ -5530,6 +5962,7 @@ namespace ClassicUO.Game.UI.Gumps
             )
             {
                 WantUpdateSize = false;
+                AcceptMouseInput = true;
 
                 Width = width;
                 Height = height;
@@ -5537,7 +5970,8 @@ namespace ClassicUO.Game.UI.Gumps
                 ResizePic background = new ResizePic(backgroundGraphic)
                 {
                     Width = width,
-                    Height = height
+                    Height = height,
+                    AcceptMouseInput = false
                 };
 
                 _textbox = new StbTextBox
@@ -5550,15 +5984,17 @@ namespace ClassicUO.Game.UI.Gumps
                     hue
                 )
                 {
-                    X = 4,
-                    Y = 4,
-                    Width = width - 8,
-                    Height = height - 8
+                    X = 2,
+                    Y = 2,
+                    Width = Math.Max(1, width - 4),
+                    Height = Math.Max(1, height - 4)
                 };
-
 
                 Add(background);
                 Add(_textbox);
+
+                // After _textbox exists: property getter/setter forwards to it.
+                AcceptKeyboardInput = true;
             }
 
             public override bool Draw(UltimaBatcher2D batcher, int x, int y)

@@ -346,6 +346,39 @@ namespace ClassicUO.Game.UI.Gumps
 
         public void AddLine(string text, byte font, ushort hue, bool isunicode)
         {
+            if (string.IsNullOrEmpty(text))
+            {
+                return;
+            }
+
+            // Merge identical system lines even when interleaved (frozen / already casting / …).
+            string baseText = StripRepeatPrefix(text.Trim(), out int incomingCount);
+            const int lookback = 24;
+            LinkedListNode<ChatLineTime> node = _textEntries.Last;
+            int looked = 0;
+
+            while (node != null && looked < lookback)
+            {
+                if (!node.Value.IsDisposed)
+                {
+                    string existingBase = StripRepeatPrefix(node.Value.Text, out int existingCount);
+
+                    if (string.Equals(existingBase, baseText, StringComparison.Ordinal) && node.Value.Hue == hue)
+                    {
+                        // Plain duplicate → +1; Razor "[Nx]" summary → take the larger total.
+                        int count = incomingCount > 1
+                            ? Math.Max(existingCount, incomingCount)
+                            : existingCount + 1;
+                        node.Value.SetText(count > 1 ? $"[{count}x] {baseText}" : baseText, font, isunicode, hue);
+
+                        return;
+                    }
+                }
+
+                node = node.Previous;
+                looked++;
+            }
+
             if (_textEntries.Count >= 30)
             {
                 LinkedListNode<ChatLineTime> lineToRemove = _textEntries.First;
@@ -353,7 +386,44 @@ namespace ClassicUO.Game.UI.Gumps
                 _textEntries.Remove(lineToRemove);
             }
 
-            _textEntries.AddLast(new ChatLineTime(text, font, isunicode, hue));
+            string initial = incomingCount > 1 ? $"[{incomingCount}x] {baseText}" : baseText;
+            _textEntries.AddLast(new ChatLineTime(initial, font, isunicode, hue));
+        }
+
+        private static string StripRepeatPrefix(string text, out int count)
+        {
+            count = 1;
+
+            if (string.IsNullOrEmpty(text))
+            {
+                return text ?? string.Empty;
+            }
+
+            // "[Nx] message"
+            if (text[0] == '[')
+            {
+                int xIdx = text.IndexOf("x] ", StringComparison.Ordinal);
+
+                if (xIdx > 1 && int.TryParse(text.AsSpan(1, xIdx - 1), out int parsed) && parsed >= 2)
+                {
+                    count = parsed;
+
+                    return text.Substring(xIdx + 3);
+                }
+            }
+
+            // Legacy Razor format: "message [N]"
+            int bracket = text.LastIndexOf(" [", StringComparison.Ordinal);
+
+            if (bracket > 0 && text.EndsWith("]", StringComparison.Ordinal)
+                && int.TryParse(text.AsSpan(bracket + 2, text.Length - bracket - 3), out int legacy) && legacy >= 2)
+            {
+                count = legacy;
+
+                return text.Substring(0, bracket);
+            }
+
+            return text;
         }
 
         internal void Resize()
@@ -887,9 +957,11 @@ namespace ClassicUO.Game.UI.Gumps
         {
             private uint _createdTime;
             private RenderedText _renderedText;
+            private ushort _hue;
 
             public ChatLineTime(string text, byte font, bool isunicode, ushort hue)
             {
+                _hue = hue;
                 _renderedText = RenderedText.Create
                 (
                     text,
@@ -902,11 +974,29 @@ namespace ClassicUO.Game.UI.Gumps
                 _createdTime = Time.Ticks + Constants.TIME_DISPLAY_SYSTEM_MESSAGE_TEXT;
             }
 
-            private string Text => _renderedText?.Text ?? string.Empty;
+            public string Text => _renderedText?.Text ?? string.Empty;
+
+            public ushort Hue => _hue;
 
             public bool IsDisposed => _renderedText == null || _renderedText.IsDestroyed;
 
             public int TextHeight => _renderedText?.Height ?? 0;
+
+            public void SetText(string text, byte font, bool isunicode, ushort hue)
+            {
+                _hue = hue;
+                _renderedText?.Destroy();
+                _renderedText = RenderedText.Create
+                (
+                    text,
+                    hue,
+                    font,
+                    isunicode,
+                    FontStyle.BlackBorder,
+                    maxWidth: 320
+                );
+                _createdTime = Time.Ticks + Constants.TIME_DISPLAY_SYSTEM_MESSAGE_TEXT;
+            }
 
             public void Update()
             {

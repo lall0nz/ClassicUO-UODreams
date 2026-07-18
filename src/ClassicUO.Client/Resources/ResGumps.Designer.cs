@@ -1799,6 +1799,15 @@ namespace ClassicUO.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Hide house carpets/rugs (client-side only, see Data/Client/carpets.txt).
+        /// </summary>
+        public static string HideCarpets {
+            get {
+                return ResourceManager.GetString("HideCarpets", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Highlight by state (poisoned, yellow hits, paralyzed).
         /// </summary>
         public static string HighlighState {

@@ -82,6 +82,7 @@ namespace ClassicUO.Game.Scenes
         private long _alphaTimer;
         private bool _forceStopScene;
         private HealthLinesManager _healthLinesManager;
+        private BandageRingTimer _bandageRingTimer;
 
         private Point _lastSelectedMultiPositionInHouseCustomization;
         private int _lightCount;
@@ -164,6 +165,7 @@ namespace ClassicUO.Game.Scenes
             _animatedStaticsManager.Initialize();
             _world.InfoBars.Load();
             _healthLinesManager = new HealthLinesManager(_world);
+            _bandageRingTimer = new BandageRingTimer(_world);
 
             _world.CommandManager.Initialize();
 
@@ -178,6 +180,7 @@ namespace ClassicUO.Game.Scenes
             NetClient.Socket.Disconnected += SocketOnDisconnected;
             _world.MessageManager.MessageReceived += ChatOnMessageReceived;
             UIManager.ContainerScale = ProfileManager.CurrentProfile.ContainersScale / 100f;
+            Data.MovementSpeed.FastRotation = ProfileManager.CurrentProfile.FastRotation;
 
             SDL.SDL_SetWindowMinimumSize(Client.Game.Window.Handle, 640, 480);
 
@@ -856,6 +859,7 @@ namespace ClassicUO.Game.Scenes
             _world.Player.Pathfinder.ProcessAutoWalk();
             _world.DelayedObjectClickManager.Update();
             DetectMirrorClones();
+            _bandageRingTimer?.Update();
 
             if (!MoveCharacterByMouseInput() && !currentProfile.DisableArrowBtn)
             {
@@ -1385,6 +1389,23 @@ namespace ClassicUO.Game.Scenes
             _world.WorldTextManager.Draw(batcher, Camera.Bounds.X, Camera.Bounds.Y);
         }
 
+        /// <summary>
+        /// Draws the "Show Timer Countdown" overlay (bandage/potion cooldown rings) in full
+        /// client-window screen space, on top of every gump. Must be called with the
+        /// GraphicsDevice.Viewport set to the full backbuffer (i.e. after UIManager.Draw), so the
+        /// overlay is not clipped to the game world viewport and can be positioned anywhere on
+        /// screen, including over the paperdoll/backpack/other UI panels.
+        /// </summary>
+        public void DrawTimerCountdown(UltimaBatcher2D batcher)
+        {
+            if (!_world.InGame)
+            {
+                return;
+            }
+
+            _bandageRingTimer?.Draw(batcher, Camera);
+        }
+
         private void DrawRangeRings(UltimaBatcher2D batcher)
         {
             Profile profile = ProfileManager.CurrentProfile;
@@ -1514,6 +1535,21 @@ namespace ClassicUO.Game.Scenes
             }
 
             return false;
+        }
+
+        public void NotifyBandageUsed()
+        {
+            _bandageRingTimer?.NotifyBandageUsed();
+        }
+
+        public void NotifyBandageBuffChanged(bool added)
+        {
+            _bandageRingTimer?.NotifyHealingBuffChanged(added);
+        }
+
+        public void ObserveOutgoingBandagePacket(ReadOnlySpan<byte> data)
+        {
+            _bandageRingTimer?.ObserveOutgoingPacket(data);
         }
 
         private void StopFollowing()

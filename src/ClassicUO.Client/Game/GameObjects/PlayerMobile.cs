@@ -87,6 +87,19 @@ namespace ClassicUO.Game.GameObjects
         public readonly HashSet<uint> AutoOpenedCorpses = new HashSet<uint>();
         public readonly HashSet<uint> ManualOpenedCorpses = new HashSet<uint>();
 
+        // Dust765-Light: last direction actually sent to the server via a walk packet.
+        private Direction _serverDirection;
+        private bool _serverDirectionInitialized;
+
+        /// <summary>
+        /// Resyncs the server-tracked direction after DenyWalk/resync.
+        /// </summary>
+        internal void SyncServerDirection()
+        {
+            _serverDirection = Direction;
+            _serverDirectionInitialized = true;
+        }
+
         public short ColdResistance;
         public short DamageIncrease;
         public short DamageMax;
@@ -1557,7 +1570,15 @@ namespace ClassicUO.Game.GameObjects
             int x = X;
             int y = Y;
             sbyte z = Z;
-            Direction oldDirection = Direction;
+
+            if (!_serverDirectionInitialized)
+            {
+                _serverDirection = Direction;
+                _serverDirectionInitialized = true;
+            }
+
+            // Dust765-Light: compare against last direction sent to the server (not local visual).
+            Direction oldDirection = _serverDirection;
 
             bool emptyStack = Steps.Count == 0;
 
@@ -1591,7 +1612,7 @@ namespace ClassicUO.Game.GameObjects
                         x = X;
                         y = Y;
                         z = Z;
-                        oldDirection = Direction;
+                        oldDirection = _serverDirection;
                         emptyStack = true;
                     }
                     else
@@ -1602,7 +1623,9 @@ namespace ClassicUO.Game.GameObjects
             }
 
             sbyte oldZ = z;
-            ushort walkTime = (ushort)MovementSpeed.TurnDelay;
+            int turnPacketDelay = MovementSpeed.GetTurnPacketDelay(Walker.UnacceptedPacketsCount);
+            ushort walkTime = (ushort) turnPacketDelay;
+            bool directionOnlyStep = true;
 
             if ((oldDirection & Direction.Mask) == (direction & Direction.Mask))
             {
@@ -1628,6 +1651,7 @@ namespace ClassicUO.Game.GameObjects
                     z = newZ;
 
                     walkTime = (ushort) MovementSpeed.TimeToCompleteMovement(run, IsMounted || SpeedMode == CharacterSpeedType.FastUnmount || SpeedMode == CharacterSpeedType.FastUnmountAndCantRun || IsFlying);
+                    directionOnlyStep = false;
                 }
             }
             else
@@ -1652,16 +1676,14 @@ namespace ClassicUO.Game.GameObjects
                     z = newZ;
 
                     walkTime = (ushort) MovementSpeed.TimeToCompleteMovement(run, IsMounted || SpeedMode == CharacterSpeedType.FastUnmount || SpeedMode == CharacterSpeedType.FastUnmountAndCantRun || IsFlying);
+                    directionOnlyStep = false;
                 }
 
                 direction = newDir;
             }
 
-            // Adaptive coalescing: suppress direction-only packets when the server
-            // is falling behind. Aggressive turn delays need a tighter threshold.
-            int coalesceThreshold = MovementSpeed.TurnDelay < 90 ? 2 : 3;
-
-            if (walkTime == (ushort)MovementSpeed.TurnDelay && Walker.UnacceptedPacketsCount >= coalesceThreshold)
+            // Dust765-Light: coalesce direction-only packets when the walk queue is deep.
+            if (directionOnlyStep && Walker.UnacceptedPacketsCount >= 3)
             {
                 Direction = direction;
                 Walker.LastStepRequestTime = Time.Ticks + walkTime;
@@ -1710,6 +1732,7 @@ namespace ClassicUO.Game.GameObjects
 
             NetClient.Socket.Send_WalkRequest(direction, Walker.WalkSequence, run, Walker.FastWalkStack.GetValue());
 
+            _serverDirection = direction;
 
             if (Walker.WalkSequence == 0xFF)
             {
@@ -1724,26 +1747,7 @@ namespace ClassicUO.Game.GameObjects
 
             AddToTile();
 
-            int nowDelta = 0;
-
-            //if (_lastDir == (int) direction && _lastMount == IsMounted && _lastRun == run)
-            //{
-            //    nowDelta = (int) (Time.Ticks - _lastStepTime - walkTime + _lastDelta);
-
-            //    if (Math.Abs(nowDelta) > 70)
-            //        nowDelta = 0;
-            //    _lastDelta = nowDelta;
-            //}
-            //else
-            //    _lastDelta = 0;
-
-            //_lastStepTime = (int) Time.Ticks;
-            //_lastRun = run;
-            //_lastMount = IsMounted;
-            //_lastDir = (int) direction;
-
-
-            Walker.LastStepRequestTime = Time.Ticks + walkTime - nowDelta;
+            Walker.LastStepRequestTime = Time.Ticks + walkTime;
             GetGroupForAnimation(this, 0, true);
 
             return true;

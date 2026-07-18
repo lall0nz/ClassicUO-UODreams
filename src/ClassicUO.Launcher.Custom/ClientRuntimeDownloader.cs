@@ -10,6 +10,8 @@ namespace ClassicUO.Launcher.Custom
 {
     internal static class ClientRuntimeDownloader
     {
+        public const string ClientVersionMarkerFileName = "uodreams-client.version";
+
         private static readonly string[] RazorUserDataFolders = { "Profiles", "Scripts", "Backup" };
 
         /// <summary>
@@ -46,6 +48,36 @@ namespace ClassicUO.Launcher.Custom
 
         public static string ClientDir =>
             Path.Combine(AppContext.BaseDirectory, "Client");
+
+        public static string? TryReadClientVersionMarker(string? installRoot = null)
+        {
+            installRoot ??= AppContext.BaseDirectory;
+            string path = Path.Combine(installRoot, "Client", ClientVersionMarkerFileName);
+            if (!File.Exists(path))
+            {
+                return null;
+            }
+
+            try
+            {
+                return LauncherUpdater.NormalizeVersion(File.ReadAllText(path).Trim());
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        public static void WriteClientVersionMarker(string version, string? installRoot = null)
+        {
+            installRoot ??= AppContext.BaseDirectory;
+            string clientDir = Path.Combine(installRoot, "Client");
+            Directory.CreateDirectory(clientDir);
+            File.WriteAllText(
+                Path.Combine(clientDir, ClientVersionMarkerFileName),
+                LauncherUpdater.NormalizeVersion(version)
+            );
+        }
 
         public static string BootstrapDir =>
             Path.Combine(ClientDir, "Bootstrap");
@@ -115,23 +147,29 @@ namespace ClassicUO.Launcher.Custom
             }
         }
 
-        public static bool IsInstalled()
+        public static bool IsInstalled(string? installRoot = null)
         {
-            if (HasUnifiedNativeClient())
+            installRoot ??= AppContext.BaseDirectory;
+            string clientDir = Path.Combine(installRoot, "Client");
+            string bootstrapDir = Path.Combine(clientDir, "Bootstrap");
+
+            string unifiedExe = Path.Combine(clientDir, "ClassicUO.exe");
+            string unifiedCuo = Path.Combine(clientDir, "cuo.dll");
+            if (File.Exists(unifiedExe) && IsNativeCuoDll(unifiedCuo))
             {
                 return true;
             }
 
             if (!LauncherManifest.IsPvpEdition)
             {
-                string cuoExe = Path.Combine(ClientDir, "cuo.exe");
-                string classicExe = Path.Combine(ClientDir, "ClassicUO.exe");
+                string cuoExe = Path.Combine(clientDir, "cuo.exe");
+                string classicExe = Path.Combine(clientDir, "ClassicUO.exe");
                 return File.Exists(cuoExe) || File.Exists(classicExe);
             }
 
-            string modded = Path.Combine(ClientDir, "cuo-modded.exe");
-            string bootstrap = Path.Combine(BootstrapDir, "ClassicUO.exe");
-            string nativeCuo = Path.Combine(BootstrapDir, "cuo.dll");
+            string modded = Path.Combine(clientDir, "cuo-modded.exe");
+            string bootstrap = Path.Combine(bootstrapDir, "ClassicUO.exe");
+            string nativeCuo = Path.Combine(bootstrapDir, "cuo.dll");
 
             return File.Exists(modded) && File.Exists(bootstrap) && File.Exists(nativeCuo);
         }
@@ -187,6 +225,10 @@ namespace ClassicUO.Launcher.Custom
                         : "Installazione incompleta: ClassicUO.exe + cuo.dll ufficiale non trovati nel pacchetto.";
                     throw new InvalidDataException(message);
                 }
+
+                string installedVersion = LauncherUpdater.ParseVersionFromPackageName(archiveName)
+                    ?? LauncherUpdater.NormalizeVersion(LauncherManifest.ClientRuntimeVersion);
+                WriteClientVersionMarker(installedVersion, installRoot);
 
                 progress?.Report(new DownloadProgressReport
                 {
@@ -333,12 +375,15 @@ namespace ClassicUO.Launcher.Custom
 
         private static void ExtractClientPackagePreservingUserData(string archivePath, string installRoot)
         {
+            using ZipArchive archive = ZipFile.OpenRead(archivePath);
+
+            // Never wipe existing Default PVP — preserve like any other profile.
+            // Package only installs it when missing (launcher UpdateAssistantFolder).
+
             List<(string Target, string Backup)> preserved = BackupUserData(installRoot);
 
             try
             {
-                using ZipArchive archive = ZipFile.OpenRead(archivePath);
-
                 foreach (ZipArchiveEntry entry in archive.Entries)
                 {
                     if (ShouldSkipZipEntry(entry.FullName))
@@ -372,6 +417,51 @@ namespace ClassicUO.Launcher.Custom
             finally
             {
                 RestoreUserData(preserved);
+            }
+        }
+
+        private static bool ArchiveContainsBundledPvpRazor(ZipArchive archive)
+        {
+            foreach (ZipArchiveEntry entry in archive.Entries)
+            {
+                if (IsBundledPvpRazorZipEntry(NormalizeZipEntryPath(entry.FullName)))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static void DeleteBundledPvpRazorProfiles(string installRoot)
+        {
+            foreach (string razorRoot in FindRazorRoots(installRoot))
+            {
+                foreach (string folder in new[] { "Profiles", "Backup" })
+                {
+                    string parent = Path.Combine(razorRoot, folder);
+                    if (!Directory.Exists(parent))
+                    {
+                        continue;
+                    }
+
+                    foreach (string dir in Directory.EnumerateDirectories(parent))
+                    {
+                        if (!LauncherUpdater.IsBundledPvpProfileName(Path.GetFileName(dir)))
+                        {
+                            continue;
+                        }
+
+                        try
+                        {
+                            Directory.Delete(dir, recursive: true);
+                        }
+                        catch
+                        {
+                            // Best-effort; launcher OTA / startup repair will reapply Default PVP.
+                        }
+                    }
+                }
             }
         }
 
@@ -436,6 +526,21 @@ namespace ClassicUO.Launcher.Custom
         {
             string normalized = NormalizeZipEntryPath(entryPath);
 
+            // Preserve all Razor profiles including Default PVP. Stock _bundled_default_pvp
+            // is still allowed through so repair source stays current.
+            if (IsBundledPvpRazorZipEntry(normalized))
+            {
+                // Only the pristine stock folder comes from the package; live Profiles/Backup stay preserved.
+                string stock = LauncherUpdater.BundledDefaultProfileFolder;
+                if (IsZipEntryUnderPath(normalized, $"Assistant/RazorEnhanced/{stock}") ||
+                    normalized.Equals($"Assistant/RazorEnhanced/{stock}", StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+
+                return true;
+            }
+
             foreach (string preservedDir in PreservedAssistantDirectoryPaths)
             {
                 if (IsZipEntryUnderPath(normalized, preservedDir))
@@ -475,6 +580,30 @@ namespace ClassicUO.Launcher.Custom
             return false;
         }
 
+        private static bool IsBundledPvpRazorZipEntry(string normalizedEntryPath)
+        {
+            string pvpName = LauncherUpdater.BundledPvpProfileName;
+            string stock = LauncherUpdater.BundledDefaultProfileFolder;
+
+            string[] prefixes =
+            {
+                $"Assistant/RazorEnhanced/Profiles/{pvpName}",
+                $"Assistant/RazorEnhanced/Backup/{pvpName}",
+                $"Assistant/RazorEnhanced/{stock}"
+            };
+
+            foreach (string prefix in prefixes)
+            {
+                if (IsZipEntryUnderPath(normalizedEntryPath, prefix) ||
+                    normalizedEntryPath.Equals(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private static bool IsRazorUserDataFolder(string name)
         {
             foreach (string folder in RazorUserDataFolders)
@@ -503,25 +632,36 @@ namespace ClassicUO.Launcher.Custom
 
             foreach (string razorRoot in FindRazorRoots(installRoot))
             {
-                foreach (string folder in RazorUserDataFolders)
-                {
-                    BackupDirectory(
-                        Path.Combine(razorRoot, folder),
-                        tempRoot,
-                        ref backupIndex,
-                        preserved
-                    );
-                }
-            }
-
-            foreach (string relativeDir in PreservedAssistantDirectoryPaths)
-            {
+                BackupRazorUserDataFolder(razorRoot, "Profiles", tempRoot, ref backupIndex, preserved);
+                BackupRazorUserDataFolder(razorRoot, "Backup", tempRoot, ref backupIndex, preserved);
                 BackupDirectory(
-                    Path.Combine(installRoot, relativeDir.Replace('/', Path.DirectorySeparatorChar)),
+                    Path.Combine(razorRoot, "Scripts"),
                     tempRoot,
                     ref backupIndex,
                     preserved
                 );
+            }
+
+            foreach (string relativeDir in PreservedAssistantDirectoryPaths)
+            {
+                string absoluteDir = Path.Combine(
+                    installRoot,
+                    relativeDir.Replace('/', Path.DirectorySeparatorChar)
+                );
+                if (relativeDir.EndsWith("/Profiles", StringComparison.OrdinalIgnoreCase) ||
+                    relativeDir.EndsWith("/Backup", StringComparison.OrdinalIgnoreCase))
+                {
+                    BackupRazorUserDataFolder(
+                        Path.GetDirectoryName(absoluteDir) ?? absoluteDir,
+                        Path.GetFileName(absoluteDir),
+                        tempRoot,
+                        ref backupIndex,
+                        preserved
+                    );
+                    continue;
+                }
+
+                BackupDirectory(absoluteDir, tempRoot, ref backupIndex, preserved);
             }
 
             foreach (string relativeDir in PreservedClientDirectoryPaths)
@@ -563,6 +703,31 @@ namespace ClassicUO.Launcher.Custom
             }
 
             return preserved;
+        }
+
+        private static void BackupRazorUserDataFolder(
+            string razorRoot,
+            string folderName,
+            string tempRoot,
+            ref int backupIndex,
+            List<(string Target, string Backup)> preserved)
+        {
+            string source = Path.Combine(razorRoot, folderName);
+            if (!Directory.Exists(source))
+            {
+                return;
+            }
+
+            foreach (string entry in Directory.EnumerateFileSystemEntries(source))
+            {
+                if (Directory.Exists(entry))
+                {
+                    BackupDirectory(entry, tempRoot, ref backupIndex, preserved);
+                    continue;
+                }
+
+                BackupFile(entry, tempRoot, ref backupIndex, preserved);
+            }
         }
 
         private static void BackupDirectory(

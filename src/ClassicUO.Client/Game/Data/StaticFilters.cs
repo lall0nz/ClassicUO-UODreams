@@ -48,7 +48,8 @@ namespace ClassicUO.Game.Data
         STFF_STUMP = 0x02,
         STFF_STUMP_HATCHED = 0x04,
         STFF_VEGETATION = 0x08,
-        STFF_WATER = 0x10
+        STFF_WATER = 0x10,
+        STFF_CARPET = 0x20
     }
 
     internal static class StaticFilters
@@ -70,6 +71,7 @@ namespace ClassicUO.Game.Data
             string cave = Path.Combine(path, "cave.txt");
             string vegetation = Path.Combine(path, "vegetation.txt");
             string trees = Path.Combine(path, "tree.txt");
+            string carpets = Path.Combine(path, "carpets.txt");
 
 
             if (!File.Exists(cave))
@@ -180,6 +182,49 @@ namespace ClassicUO.Game.Data
             }
 
 
+            if (!File.Exists(carpets))
+            {
+                using (StreamWriter writer = new StreamWriter(carpets))
+                {
+                    writer.WriteLine("# Client-side \"hide carpets\" filter list.");
+                    writer.WriteLine("# One graphic ID (decimal) per line. Lines starting with # or ; are ignored.");
+                    writer.WriteLine("# This does NOT remove items from the server - it only stops this client from");
+                    writer.WriteLine("# drawing them. Useful for houses overloaded with decorative rugs/goza mats");
+                    writer.WriteLine("# that can cause crashes/lag when too many are locked down in one place.");
+                    writer.WriteLine("# Enable in Options -> Terrain & Statics -> \"Hide house carpets/rugs\".");
+                    writer.WriteLine("# Add more IDs below (one per line, decimal) if you find other carpet variants.");
+                    writer.WriteLine();
+                    writer.WriteLine("# --- Decorative carpets/rugs (0x0AC8-0x0AEF range) ---");
+
+                    for (int i = 0x0AC8; i <= 0x0AEF; i++)
+                    {
+                        writer.WriteLine(i);
+                    }
+
+                    writer.WriteLine();
+                    writer.WriteLine("# --- Goza (tatami) mats (0x28A7-0x28AE range) ---");
+
+                    for (int i = 0x28A7; i <= 0x28AE; i++)
+                    {
+                        writer.WriteLine(i);
+                    }
+
+                    writer.WriteLine();
+                    writer.WriteLine("# --- Additional carpet variants (0x28A4-0x28A6) ---");
+
+                    for (int i = 0x28A4; i <= 0x28A6; i++)
+                    {
+                        writer.WriteLine(i);
+                    }
+
+                    writer.WriteLine();
+                    writer.WriteLine("# --- Extra explicit IDs reported by players ---");
+                    writer.WriteLine(0x0ABD); // decorative carpet
+                    writer.WriteLine(0x0AD1); // decorative carpet
+                }
+            }
+
+
             TextFileParser caveParser = new TextFileParser(File.ReadAllText(cave), new[] { ' ', '\t', ',' }, new[] { '#', ';' }, new[] { '"', '"' });
 
             while (!caveParser.IsEOF())
@@ -232,6 +277,22 @@ namespace ClassicUO.Game.Data
                     if (ushort.TryParse(ss[0], out ushort graphic))
                     {
                         _filteredTiles[graphic] |= STATIC_TILES_FILTER_FLAGS.STFF_VEGETATION;
+                    }
+                }
+            }
+
+
+            TextFileParser carpetsParser = new TextFileParser(File.ReadAllText(carpets), new[] { ' ', '\t', ',' }, new[] { '#', ';' }, new[] { '"', '"' });
+
+            while (!carpetsParser.IsEOF())
+            {
+                List<string> ss = carpetsParser.ReadTokens();
+
+                if (ss != null && ss.Count != 0)
+                {
+                    if (ushort.TryParse(ss[0], out ushort graphic))
+                    {
+                        _filteredTiles[graphic] |= STATIC_TILES_FILTER_FLAGS.STFF_CARPET;
                     }
                 }
             }
@@ -295,6 +356,12 @@ namespace ClassicUO.Game.Data
         public static bool IsVegetation(ushort g)
         {
             return (_filteredTiles[g] & STATIC_TILES_FILTER_FLAGS.STFF_VEGETATION) != 0;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool IsCarpet(ushort g)
+        {
+            return (_filteredTiles[g] & STATIC_TILES_FILTER_FLAGS.STFF_CARPET) != 0;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

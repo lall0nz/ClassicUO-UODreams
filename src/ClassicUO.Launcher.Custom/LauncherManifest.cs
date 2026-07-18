@@ -5,7 +5,12 @@ namespace ClassicUO.Launcher.Custom
 {
     internal static class LauncherManifest
     {
-#if LAUNCHER_EDITION_PVP
+#if LAUNCHER_EDITION_ONEUO
+        public const string Edition = "pvp";
+        public const string ProductTitle = "0nE UO Launcher";
+        public const string ReleaseTagPrefix = "pvp";
+        public const string AssetPrefix = "UODreams-PVP";
+#elif LAUNCHER_EDITION_PVP
         public const string Edition = "pvp";
         public const string ProductTitle = "UODreams PVP Launcher";
         public const string ReleaseTagPrefix = "pvp";
@@ -18,13 +23,14 @@ namespace ClassicUO.Launcher.Custom
 #endif
 
 #if LAUNCHER_EDITION_PVP
-        public const string LauncherVersion = "1.1.12";
-        public const string ClientRuntimeVersion = "1.1.12";
+        public const string LauncherVersion = "1.3.1";
+        public const string ClientRuntimeVersion = "1.3.1";
+        public const string GitHubRepo = "lall0nz/UODreams-PVP-Launcher";
 #else
         public const string LauncherVersion = "1.1.9";
         public const string ClientRuntimeVersion = "1.1.9";
-#endif
         public const string GitHubRepo = "lall0nz/ClassicUO-UODreams";
+#endif
 
         public static bool IsPvpEdition => Edition == "pvp";
 
@@ -53,6 +59,15 @@ namespace ClassicUO.Launcher.Custom
             }
         }
 
+#if LAUNCHER_EDITION_PVP
+        public static string ReleaseTag => $"v{LauncherVersion}";
+
+        public static string ClientPackageFileName =>
+            $"UODreams-PVP-by-lall0ne-Client-v{ClientRuntimeVersion}.zip";
+
+        public static string LauncherPackageFileName =>
+            $"UODreams-PVP-by-lall0ne-Launcher-v{LauncherVersion}.zip";
+#else
         public static string ReleaseTag => $"{ReleaseTagPrefix}-v{LauncherVersion}";
 
         public static string ClientPackageFileName =>
@@ -60,6 +75,7 @@ namespace ClassicUO.Launcher.Custom
 
         public static string LauncherPackageFileName =>
             $"{AssetPrefix}-Launcher-v{LauncherVersion}.zip";
+#endif
 
         public static string ClientPackageUrl =>
             $"https://github.com/{GitHubRepo}/releases/download/{ReleaseTag}/{ClientPackageFileName}";

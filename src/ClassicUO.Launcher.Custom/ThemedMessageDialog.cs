@@ -81,7 +81,7 @@ namespace ClassicUO.Launcher.Custom
                 ShowInTaskbar = false,
                 StartPosition = FormStartPosition.CenterParent,
                 ClientSize = new Size(DialogWidth, clientHeight),
-                BackColor = Theme.WindowBottom,
+                BackColor = Theme.DialogBackground,
                 ForeColor = Theme.Text,
                 Font = Theme.ComboFont
             };

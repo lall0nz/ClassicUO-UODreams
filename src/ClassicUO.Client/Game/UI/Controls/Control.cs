@@ -726,6 +726,10 @@ namespace ClassicUO.Game.UI.Controls
 
         protected virtual void OnDragEnd(int x, int y)
         {
+            if (ServerSerial != 0 && CanMove && !IsDisposed)
+            {
+                UIManager.SavePosition(ServerSerial, Location);
+            }
         }
 
         protected virtual void OnTextInput(string c)

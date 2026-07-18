@@ -25,6 +25,7 @@ namespace ClassicUO.Game.UI.Gumps
         #region CONSTANTS
         private const int X_SPACING = 1, Y_SPACING = 1;
         private const int TOP_BAR_HEIGHT = 20;
+        private const int TOP_BAR_ICON_SIZE = 20;
         #endregion
 
         #region private static vars
@@ -38,7 +39,7 @@ namespace ClassicUO.Game.UI.Gumps
         private readonly Label containerNameLabel;
         private readonly StbTextBox searchBox;
         private readonly GumpPic openRegularGump, sortContents;
-        private readonly StaticPic quickDropBackpack;
+        private readonly GridTopBarIcon quickDropBackpack;
         private readonly GumpPicTiled backgroundTexture;
         private readonly NiceButton setLootBag;
         private readonly bool isCorpse = false;
@@ -186,16 +187,14 @@ namespace ClassicUO.Game.UI.Gumps
             openRegularGump.SetTooltip("Open the original style container.\n\nCtrl+Click to lock item | Alt+Click quick move");
 
             Item backpack = World.Player.FindItemByLayer(Layer.Backpack);
-            quickDropBackpack = new StaticPic(backpack?.DisplayedGraphic ?? 0x0E75, 0)
+            quickDropBackpack = new GridTopBarIcon(backpack?.DisplayedGraphic ?? 0x0E75, TOP_BAR_ICON_SIZE)
             {
-                X = Width - openRegularGump.Width - 20 - borderWidth,
-                Y = borderWidth,
-                Width = 20,
-                Height = 20
+                X = borderWidth,
+                Y = borderWidth
             };
-            quickDropBackpack.MouseUp += (sender, e) =>
+            quickDropBackpack.Hit.MouseUp += (sender, e) =>
             {
-                if (e.Button == MouseButtonType.Left && quickDropBackpack.MouseIsOver)
+                if (e.Button == MouseButtonType.Left)
                 {
                     if (Client.Game.UO.GameCursor.ItemHold.Enabled)
                     {
@@ -215,11 +214,11 @@ namespace ClassicUO.Game.UI.Gumps
                     }
                 }
             };
-            quickDropBackpack.MouseEnter += (sender, e) => { quickDropBackpack.Hue = 0x34; };
-            quickDropBackpack.MouseExit += (sender, e) => { quickDropBackpack.Hue = 0; };
+            quickDropBackpack.Hit.MouseEnter += (sender, e) => { quickDropBackpack.Hue = 0x34; };
+            quickDropBackpack.Hit.MouseExit += (sender, e) => { quickDropBackpack.Hue = 0; };
             quickDropBackpack.SetTooltip(quickLootTooltip);
 
-            sortContents = new GumpPic(quickDropBackpack.X - 20, borderWidth, 1210, 0);
+            sortContents = new GumpPic(borderWidth, borderWidth, 1210, 0);
             sortContents.MouseUp += (sender, e) =>
             {
                 if (e.Button == MouseButtonType.Left && Keyboard.Alt)
@@ -286,6 +285,7 @@ namespace ClassicUO.Game.UI.Gumps
             }
 
             BuildBorder();
+            UpdateTopBarIconPositions();
             ResizeWindow(savedSize);
             OnResize();
             BringResizeButtonToFront();
@@ -339,9 +339,7 @@ namespace ClassicUO.Game.UI.Gumps
             background.Height = Height - (borderWidth * 2);
             scrollArea.Width = background.Width;
             scrollArea.Height = background.Height - (containerNameLabel.Height + 1);
-            sortContents.X = Width - openRegularGump.Width - 40 - borderWidth;
-            quickDropBackpack.X = Width - openRegularGump.Width - 20 - borderWidth;
-            openRegularGump.X = background.Width - 25 - borderWidth;
+            UpdateTopBarIconPositions();
             setLootBag.Y = Height - 20;
             BuildBorder();
             UpdateItems();
@@ -565,9 +563,23 @@ namespace ClassicUO.Game.UI.Gumps
                 containerNameLabel.Text = GetContainerName();
         }
 
+        private void UpdateTopBarIconPositions()
+        {
+            openRegularGump.X = background.Width - openRegularGump.Width - borderWidth;
+            quickDropBackpack.X = openRegularGump.X - TOP_BAR_ICON_SIZE;
+            sortContents.X = quickDropBackpack.X - TOP_BAR_ICON_SIZE;
+        }
+
+        internal void RefreshBorderOptions()
+        {
+            BuildBorder();
+        }
+
         private void BuildBorder()
         {
-            ShowBorder = !ProfileManager.CurrentProfile.Grid_HideBorder;
+            Profile profile = ProfileManager.CurrentProfile;
+            ShowBorder = profile == null || !profile.Grid_HideBorder;
+            BorderHue = profile?.GridContainerBorderHue ?? 946;
         }
 
         internal class GridSlotManager
@@ -1103,8 +1115,8 @@ namespace ClassicUO.Game.UI.Gumps
                 }
 
                 Profile borderProfile = ProfileManager.CurrentProfile;
-                ushort borderHue = borderProfile?.GridBorderHue ?? 0;
-                float borderAlpha = (borderProfile?.GridBorderAlpha ?? 100) / 100f;
+                ushort borderHue = borderProfile?.GridBorderHue ?? 946;
+                float borderAlpha = (borderProfile?.GridBorderAlpha ?? 35) / 100f;
                 if (ItemGridLocked)
                 {
                     borderHue = 0x2;
@@ -1116,14 +1128,17 @@ namespace ClassicUO.Game.UI.Gumps
                     borderAlpha = 1f;
                 }
 
-                Vector3 borderHueVector = ShaderHueTranslator.GetHueVector(borderHue, false, borderAlpha);
-
-                batcher.DrawRectangle(SolidColorTextureCache.GetTexture(Color.White), x, y, Width, Height, borderHueVector);
-
-                if (hit.MouseIsOver && item != null)
+                if (item != null)
                 {
-                    Vector3 hov = ShaderHueTranslator.GetHueVector(borderHue, false, 0.3f);
-                    batcher.Draw(SolidColorTextureCache.GetTexture(Color.White), new Rectangle(x + 1, y, Width - 1, Height), hov);
+                    Vector3 borderHueVector = ShaderHueTranslator.GetHueVector(borderHue, false, borderAlpha);
+
+                    batcher.DrawRectangle(SolidColorTextureCache.GetTexture(Color.White), x, y, Width, Height, borderHueVector);
+
+                    if (hit.MouseIsOver)
+                    {
+                        Vector3 hov = ShaderHueTranslator.GetHueVector(borderHue, false, 0.3f);
+                        batcher.Draw(SolidColorTextureCache.GetTexture(Color.White), new Rectangle(x + 1, y, Width - 1, Height), hov);
+                    }
                 }
 
                 return true;
@@ -1180,6 +1195,80 @@ namespace ClassicUO.Game.UI.Gumps
                 if (IsDisposed) return;
                 if (_container == null || _container.IsDestroyed || (_container.OnGround && _container.Distance > 3)) { Dispose(); return; }
                 base.Update();
+            }
+        }
+
+        private sealed class GridTopBarIcon : Control
+        {
+            private readonly HitBox _hit;
+            private readonly ushort _graphic;
+
+            internal GridTopBarIcon(ushort graphic, int size)
+            {
+                _graphic = graphic;
+                Width = Height = size;
+                WantUpdateSize = false;
+                AcceptMouseInput = true;
+                CanMove = false;
+
+                _hit = new HitBox(0, 0, size, size, null, 0f);
+                Add(_hit);
+            }
+
+            internal HitBox Hit => _hit;
+
+            public ushort Hue { get; set; }
+
+            internal void SetTooltip(string text) => _hit.SetTooltip(text);
+
+            public override bool Draw(UltimaBatcher2D batcher, int x, int y)
+            {
+                base.Draw(batcher, x, y);
+
+                ref readonly var artInfo = ref Client.Game.UO.Arts.GetArt(_graphic);
+
+                if (artInfo.Texture == null)
+                {
+                    return true;
+                }
+
+                int artW = artInfo.UV.Width;
+                int artH = artInfo.UV.Height;
+                Point originalSize = new Point(Width, Height);
+                Point point = new Point();
+
+                if (artW < Width)
+                {
+                    originalSize.X = artW;
+                    point.X = (Width >> 1) - (originalSize.X >> 1);
+                }
+                else if (artW > Width)
+                {
+                    originalSize.X = Width;
+                    point.X = 0;
+                }
+
+                if (artH < Height)
+                {
+                    originalSize.Y = artH;
+                    point.Y = (Height >> 1) - (originalSize.Y >> 1);
+                }
+                else if (artH > Height)
+                {
+                    originalSize.Y = Height;
+                    point.Y = 0;
+                }
+
+                Vector3 hueVector = ShaderHueTranslator.GetHueVector(Hue, false, 1f);
+
+                batcher.Draw(
+                    artInfo.Texture,
+                    new Rectangle(x + point.X, y + point.Y, originalSize.X, originalSize.Y),
+                    artInfo.UV,
+                    hueVector
+                );
+
+                return true;
             }
         }
 

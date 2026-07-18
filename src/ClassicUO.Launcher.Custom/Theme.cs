@@ -6,6 +6,8 @@ using System.Drawing.Drawing2D;
 
 using System.Drawing.Imaging;
 
+using System.Runtime.InteropServices;
+
 using System.Windows.Forms;
 
 
@@ -14,23 +16,47 @@ namespace ClassicUO.Launcher.Custom
 
 {
 
+    /// <summary>
+    /// Implemented by forms whose client background paints a vertical gradient (instead of a flat
+    /// color), so child controls hosted directly on the form can sample the exact backdrop color
+    /// behind them (see <see cref="Theme.GetSurfaceBrush"/>).
+    /// </summary>
+    internal interface IGradientBackgroundHost
+    {
+        Color GetBackgroundColorAt(int clientY, int clientHeight);
+    }
+
     // Palette modeled on the official ClassicUOLauncher (dark navy + blue/violet gradients).
+    // ONEUO edition can switch Window/Card colors at runtime via ApplyLauncherTheme.
 
     internal static class Theme
 
     {
 
-        public static readonly Color WindowTop = Color.FromArgb(23, 23, 38);
+        public static Color WindowTop { get; private set; } = Color.FromArgb(14, 14, 24);
 
-        public static readonly Color WindowBottom = Color.FromArgb(14, 14, 24);
+        public static Color WindowBottom { get; private set; } = Color.FromArgb(23, 23, 38);
 
-        public static readonly Color Card = Color.FromArgb(28, 28, 46);
+        /// <summary>
+        /// Flat background used by dialogs/panels that do NOT paint the main window's vertical
+        /// gradient (RegisterForm, ShardServerDialog, ThemedMessageDialog, DownloadProgressForm),
+        /// and as the fallback surface color for controls that aren't hosted on a gradient form.
+        /// Kept separate from <see cref="WindowBottom"/> so reversing the window gradient direction
+        /// never changes the look of those flat dialogs.
+        /// </summary>
+        public static Color DialogBackground { get; private set; } = Color.FromArgb(14, 14, 24);
 
-        public static readonly Color CardBorder = Color.FromArgb(46, 46, 74);
+        public static Color Card { get; private set; } = Color.FromArgb(28, 28, 46);
 
-        public static readonly Color Input = Color.FromArgb(38, 38, 58);
+        public static Color CardBorder { get; private set; } = Color.FromArgb(46, 46, 74);
 
-        public static readonly Color InputBorder = Color.FromArgb(58, 58, 88);
+        public static Color Input { get; private set; } = Color.FromArgb(38, 38, 58);
+
+        public static Color InputBorder { get; private set; } = Color.FromArgb(58, 58, 88);
+
+        public static Color ButtonNeutral { get; private set; } = Color.FromArgb(38, 38, 64);
+
+        public static Color ButtonNeutralHover { get; private set; } = Color.FromArgb(50, 50, 82);
 
         public static readonly Color Text = Color.FromArgb(235, 235, 245);
 
@@ -42,13 +68,9 @@ namespace ClassicUO.Launcher.Custom
 
         public static readonly Color SectionGreen = Color.FromArgb(38, 208, 124);
 
-        public static readonly Color GradientStart = Color.FromArgb(78, 107, 245);
+        public static Color GradientStart { get; private set; } = Color.FromArgb(78, 107, 245);
 
-        public static readonly Color GradientEnd = Color.FromArgb(138, 92, 246);
-
-        public static readonly Color ButtonNeutral = Color.FromArgb(38, 38, 64);
-
-        public static readonly Color ButtonNeutralHover = Color.FromArgb(50, 50, 82);
+        public static Color GradientEnd { get; private set; } = Color.FromArgb(138, 92, 246);
 
         public static readonly Color Error = Color.FromArgb(244, 105, 105);
 
@@ -57,8 +79,6 @@ namespace ClassicUO.Launcher.Custom
         public static readonly Color LinkHoverBorder = Color.FromArgb(78, 107, 245);
 
         public static readonly Color NeonNeutral = Color.FromArgb(175, 178, 195);
-
-
 
         // Assistant pill accent colors
 
@@ -82,6 +102,118 @@ namespace ClassicUO.Launcher.Custom
         public static readonly Color PillCoffeeText = Color.White;
         public static readonly Color PillCoffeeCupBrown = Color.FromArgb(139, 90, 43);
         public static readonly Color PillCoffeeCupWhite = Color.White;
+
+#if LAUNCHER_EDITION_ONEUO
+        public const string DefaultUiThemeId = "black-crimson";
+#else
+        public const string DefaultUiThemeId = "classic-navy";
+#endif
+
+        public readonly record struct LauncherThemePreset(
+            string Id,
+            string LabelIt,
+            string LabelEn,
+            Color Window,
+            Color Card,
+            Color CardBorder,
+            Color Input,
+            Color InputBorder,
+            Color Button,
+            Color ButtonHover,
+            Color GradientStart,
+            Color GradientEnd);
+
+        public static readonly LauncherThemePreset[] LauncherThemes =
+        {
+            new("black-navy", "Nero + blu", "Black + navy",
+                Color.Black, Color.FromArgb(28, 28, 46), Color.FromArgb(46, 46, 74),
+                Color.FromArgb(38, 38, 58), Color.FromArgb(58, 58, 88),
+                Color.FromArgb(38, 38, 64), Color.FromArgb(50, 50, 82),
+                Color.FromArgb(78, 107, 245), Color.FromArgb(138, 92, 246)),
+            new("black-crimson", "Nero + rosso scuro", "Black + dark red",
+                Color.Black, Color.FromArgb(48, 18, 22), Color.FromArgb(92, 36, 42),
+                Color.FromArgb(58, 24, 28), Color.FromArgb(110, 48, 54),
+                Color.FromArgb(52, 22, 26), Color.FromArgb(72, 30, 36),
+                Color.FromArgb(150, 32, 40), Color.FromArgb(214, 58, 68)),
+            new("black-blood", "Nero + blood", "Black + blood",
+                Color.Black, Color.FromArgb(36, 12, 14), Color.FromArgb(120, 28, 34),
+                Color.FromArgb(48, 16, 18), Color.FromArgb(140, 40, 48),
+                Color.FromArgb(40, 14, 16), Color.FromArgb(64, 22, 26),
+                Color.FromArgb(120, 20, 26), Color.FromArgb(198, 40, 46)),
+            new("black-bronze", "Nero + bronzo", "Black + bronze",
+                Color.Black, Color.FromArgb(42, 32, 18), Color.FromArgb(120, 92, 42),
+                Color.FromArgb(52, 40, 22), Color.FromArgb(140, 110, 55),
+                Color.FromArgb(46, 36, 20), Color.FromArgb(68, 52, 28),
+                Color.FromArgb(150, 110, 40), Color.FromArgb(212, 164, 64)),
+            new("charcoal-ember", "Antracite + ember", "Charcoal + ember",
+                Color.FromArgb(12, 12, 12), Color.FromArgb(54, 22, 16), Color.FromArgb(160, 72, 36),
+                Color.FromArgb(64, 28, 20), Color.FromArgb(180, 90, 48),
+                Color.FromArgb(48, 22, 16), Color.FromArgb(72, 34, 24),
+                Color.FromArgb(170, 80, 30), Color.FromArgb(230, 120, 40)),
+            new("black-emerald", "Nero + smeraldo", "Black + emerald",
+                Color.Black, Color.FromArgb(14, 36, 28), Color.FromArgb(32, 96, 68),
+                Color.FromArgb(18, 44, 34), Color.FromArgb(40, 120, 82),
+                Color.FromArgb(16, 40, 30), Color.FromArgb(28, 64, 48),
+                Color.FromArgb(28, 120, 86), Color.FromArgb(56, 176, 120)),
+            new("classic-navy", "Blu classic", "Classic navy",
+                Color.FromArgb(23, 23, 38), Color.FromArgb(28, 28, 46), Color.FromArgb(46, 46, 74),
+                Color.FromArgb(38, 38, 58), Color.FromArgb(58, 58, 88),
+                Color.FromArgb(38, 38, 64), Color.FromArgb(50, 50, 82),
+                Color.FromArgb(78, 107, 245), Color.FromArgb(138, 92, 246)),
+        };
+
+        public static string CurrentUiThemeId { get; private set; } = DefaultUiThemeId;
+
+        static Theme()
+        {
+            // ONEUO defaults to black-crimson (dark red cards); classic/PVP keep classic-navy.
+            ApplyLauncherTheme(DefaultUiThemeId);
+        }
+
+        public static string ThemeLabel(LauncherThemePreset preset) =>
+            Loc.IsEn ? preset.LabelEn : preset.LabelIt;
+
+        /// <summary>Linear interpolation between two colors (t=0 -> a, t=1 -> b).</summary>
+        private static Color Blend(Color a, Color b, float t)
+        {
+            t = Math.Clamp(t, 0f, 1f);
+            return Color.FromArgb(
+                a.R + (int)((b.R - a.R) * t),
+                a.G + (int)((b.G - a.G) * t),
+                a.B + (int)((b.B - a.B) * t));
+        }
+
+        /// <summary>Blends a color toward white by the given amount (0..1).</summary>
+        private static Color Lighten(Color c, float amount) => Blend(c, Color.White, amount);
+
+        public static void ApplyLauncherTheme(string? themeId)
+        {
+            LauncherThemePreset preset = LauncherThemes[0];
+            foreach (LauncherThemePreset candidate in LauncherThemes)
+            {
+                if (string.Equals(candidate.Id, themeId, StringComparison.OrdinalIgnoreCase))
+                {
+                    preset = candidate;
+                    break;
+                }
+            }
+
+            CurrentUiThemeId = preset.Id;
+            // Window always fades darker at the top -> lighter at the bottom, never a flat single
+            // color. Tint the lighter stop toward the preset's card hue so black-based presets
+            // (Window = pure black) still show a visible gradient instead of two identical stops.
+            DialogBackground = preset.Window;
+            WindowTop = preset.Window;
+            WindowBottom = Lighten(Blend(preset.Window, preset.Card, 0.6f), 0.10f);
+            Card = preset.Card;
+            CardBorder = preset.CardBorder;
+            Input = preset.Input;
+            InputBorder = preset.InputBorder;
+            ButtonNeutral = preset.Button;
+            ButtonNeutralHover = preset.ButtonHover;
+            GradientStart = preset.GradientStart;
+            GradientEnd = preset.GradientEnd;
+        }
 
         // Shared button metrics (DPI-safe layout constants)
         public const int PrimaryButtonHeight = 32;
@@ -201,24 +333,72 @@ namespace ClassicUO.Launcher.Custom
 
         public static Font ComboFont => _comboFont ??= new Font("Segoe UI", 9.5f, FontStyle.Regular);
 
-        internal static Color GetSurfaceBackground(Control? control)
+        /// <summary>
+        /// Brush that matches whatever visually sits behind <paramref name="control"/>, so painting
+        /// it into the rectangle behind a rounded-corner control (to clear the square corners before
+        /// the rounded shape is drawn on top) blends seamlessly instead of leaving mismatched flat
+        /// "corner triangles". Cards use the flat card color; controls sitting directly on a form
+        /// that implements <see cref="IGradientBackgroundHost"/> sample the exact vertical-gradient
+        /// slice behind their bounds; everything else falls back to the flat dialog background.
+        /// </summary>
+        internal static Brush GetSurfaceBrush(Control control, Rectangle localBounds)
         {
-            for (Control? parent = control; parent != null; parent = parent.Parent)
+            for (Control? parent = control.Parent; parent != null; parent = parent.Parent)
             {
                 if (parent is CardPanel)
                 {
-                    return Theme.Card;
+                    return new SolidBrush(Theme.Card);
                 }
             }
 
-            return Theme.WindowBottom;
+            if (control.FindForm() is IGradientBackgroundHost host && HasPaintableSize(localBounds))
+            {
+                var hostControl = (Control)host;
+                int formHeight = hostControl.ClientSize.Height;
+                if (formHeight > 0)
+                {
+                    Point topOnScreen = control.PointToScreen(new Point(localBounds.Left, localBounds.Top));
+                    Point formOriginOnScreen = hostControl.PointToScreen(Point.Empty);
+
+                    int yTop = topOnScreen.Y - formOriginOnScreen.Y;
+                    int yBottom = yTop + localBounds.Height;
+
+                    Color colorTop = host.GetBackgroundColorAt(yTop, formHeight);
+                    Color colorBottom = host.GetBackgroundColorAt(yBottom, formHeight);
+
+                    if (colorTop == colorBottom)
+                    {
+                        return new SolidBrush(colorTop);
+                    }
+
+                    var rect = new Rectangle(0, 0, Math.Max(1, localBounds.Width), Math.Max(1, localBounds.Height));
+                    return new LinearGradientBrush(rect, colorTop, colorBottom, LinearGradientMode.Vertical);
+                }
+            }
+
+            return new SolidBrush(Theme.DialogBackground);
+        }
+
+        /// <summary>Vertical position (0..1) of <paramref name="clientY"/> blended between WindowTop/WindowBottom.</summary>
+        internal static Color SampleWindowGradient(int clientY, int clientHeight)
+        {
+            if (clientHeight <= 0)
+            {
+                return WindowTop;
+            }
+
+            float t = Math.Clamp((float)clientY / clientHeight, 0f, 1f);
+            return Blend(WindowTop, WindowBottom, t);
         }
 
         public static GraphicsPath RoundedRect(Rectangle bounds, int radius)
-
         {
+            return RoundedRect(new RectangleF(bounds.X, bounds.Y, bounds.Width, bounds.Height), radius);
+        }
 
-            int d = radius * 2;
+        public static GraphicsPath RoundedRect(RectangleF bounds, float radius)
+        {
+            float d = radius * 2f;
 
             var path = new GraphicsPath();
 
@@ -234,6 +414,32 @@ namespace ClassicUO.Launcher.Custom
 
             return path;
 
+        }
+
+        /// <summary>
+        /// Standard high-quality paint setup for every rounded-corner control below. Anti-aliasing
+        /// alone still leaves a visible "staircase"/grainy edge on small-radius rounded rects unless
+        /// paired with a high-quality pixel offset (so the rasterizer samples pixel centers instead of
+        /// corners) and high-quality compositing (so translucent AA edge pixels blend smoothly instead
+        /// of banding). Call this once at the top of OnPaint before building any GraphicsPath.
+        /// </summary>
+        internal static void PrepareHighQualityPaint(Graphics g)
+        {
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            g.CompositingQuality = CompositingQuality.HighQuality;
+        }
+
+        /// <summary>
+        /// Border pen aligned fully *inside* the path (<see cref="PenAlignment.Inset"/>) instead of the
+        /// GDI+ default (<see cref="PenAlignment.Center"/>), which straddles the path outline half
+        /// inside/half outside. A straddling stroke on an anti-aliased rounded rect bleeds a half-pixel
+        /// ring past the fill, which is what produces the grainy/jagged double-edge look on button
+        /// borders. Inset keeps the stroke crisp and fully contained within the filled shape.
+        /// </summary>
+        internal static Pen CreateInsetPen(Color color, float width = 1f)
+        {
+            return new Pen(color, width) { Alignment = PenAlignment.Inset, LineJoin = LineJoin.Round };
         }
 
         internal static bool HasPaintableSize(int width, int height) => width > 0 && height > 0;
@@ -332,6 +538,49 @@ namespace ClassicUO.Launcher.Custom
 
     // Rounded card panel with border, like the settings cards of the official launcher.
 
+    /// <summary>
+    /// Scales an image to cover the control (fill width+height, crop overflow) — no letterboxing.
+    /// </summary>
+    internal sealed class CoverPictureBox : Panel
+    {
+        private Image? _image;
+
+        public Image? Image
+        {
+            get => _image;
+            set
+            {
+                _image = value;
+                Invalidate();
+            }
+        }
+
+        public CoverPictureBox()
+        {
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer, true);
+            BackColor = Color.Black;
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            e.Graphics.Clear(BackColor);
+            if (_image == null || Width <= 0 || Height <= 0)
+            {
+                return;
+            }
+
+            e.Graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            e.Graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+            float scale = Math.Max((float)Width / _image.Width, (float)Height / _image.Height);
+            int drawW = (int)Math.Ceiling(_image.Width * scale);
+            int drawH = (int)Math.Ceiling(_image.Height * scale);
+            int x = (Width - drawW) / 2;
+            int y = (Height - drawH) / 2;
+            e.Graphics.DrawImage(_image, new Rectangle(x, y, drawW, drawH));
+        }
+    }
+
     internal sealed class CardPanel : Panel
 
     {
@@ -361,7 +610,7 @@ namespace ClassicUO.Launcher.Custom
                 return;
             }
 
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            Theme.PrepareHighQualityPaint(e.Graphics);
 
             var rect = new Rectangle(0, 0, Width - 1, Height - 1);
 
@@ -369,7 +618,7 @@ namespace ClassicUO.Launcher.Custom
 
             using var fill = new SolidBrush(Theme.Card);
 
-            using var pen = new Pen(Theme.CardBorder);
+            using var pen = Theme.CreateInsetPen(Theme.CardBorder);
 
             e.Graphics.FillPath(fill, path);
 
@@ -410,19 +659,26 @@ namespace ClassicUO.Launcher.Custom
                 return;
             }
 
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            Theme.PrepareHighQualityPaint(e.Graphics);
 
-            var rect = new Rectangle(0, 0, Width - 1, Height - 1);
+            using var bg = Theme.GetSurfaceBrush(this, ClientRectangle);
+            e.Graphics.FillRectangle(bg, ClientRectangle);
 
-            using var path = Theme.RoundedRect(rect, 8);
+            var fillBounds = new RectangleF(0f, 0f, Width, Height);
+
+            var strokeBounds = new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f);
+
+            using var fillPath = Theme.RoundedRect(fillBounds, 8);
+
+            using var strokePath = Theme.RoundedRect(strokeBounds, 8);
 
             using var fill = new SolidBrush(Theme.Input);
 
-            using var pen = new Pen(Theme.InputBorder);
+            using var pen = Theme.CreateInsetPen(Theme.InputBorder);
 
-            e.Graphics.FillPath(fill, path);
+            e.Graphics.FillPath(fill, fillPath);
 
-            e.Graphics.DrawPath(pen, path);
+            e.Graphics.DrawPath(pen, strokePath);
 
         }
 
@@ -440,11 +696,27 @@ namespace ClassicUO.Launcher.Custom
 
         private bool _down;
 
+        private bool _highlightAsUpdate;
+
 
 
         public bool UseGradient { get; set; }
 
-        public bool HighlightAsUpdate { get; set; }
+        /// <summary>Static (non-animated) highlight tint, e.g. to flag "update available".</summary>
+        public bool HighlightAsUpdate
+        {
+            get => _highlightAsUpdate;
+            set
+            {
+                if (_highlightAsUpdate == value)
+                {
+                    return;
+                }
+
+                _highlightAsUpdate = value;
+                Invalidate();
+            }
+        }
 
         public int CornerRadius { get; set; } = 10;
 
@@ -533,13 +805,14 @@ namespace ClassicUO.Launcher.Custom
                 return;
             }
 
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            Theme.PrepareHighQualityPaint(e.Graphics);
 
 
 
-            // repaint parent background behind our rounded corners
+            // Repaint whatever actually sits behind our rounded corners (gradient slice, card color,
+            // or flat dialog background) so the square corners never show as a mismatched patch.
 
-            using var bg = new SolidBrush(Theme.GetSurfaceBackground(Parent));
+            using var bg = Theme.GetSurfaceBrush(this, ClientRectangle);
             e.Graphics.FillRectangle(bg, ClientRectangle);
 
             var rect = new Rectangle(0, 0, Width - 1, Height - 1);
@@ -556,6 +829,7 @@ namespace ClassicUO.Launcher.Custom
 
             {
 
+                // Static highlight (no animation) to flag "update available".
                 Color fillColor = Theme.SectionGreen;
 
                 if (_hover) fillColor = ControlPaint.Light(fillColor, 0.15f);
@@ -616,7 +890,7 @@ namespace ClassicUO.Launcher.Custom
 
                 using var brush = new SolidBrush(fillColor);
 
-                using var pen = new Pen(Theme.InputBorder);
+                using var pen = Theme.CreateInsetPen(Theme.InputBorder);
 
                 e.Graphics.FillPath(brush, path);
 
@@ -754,9 +1028,16 @@ namespace ClassicUO.Launcher.Custom
                 return;
             }
 
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            Theme.PrepareHighQualityPaint(e.Graphics);
 
 
+
+            // BUG FIX: this control never cleared the square corners behind its rounded path, so
+            // whatever the native double-buffer left underneath (typically black) showed through as
+            // dark rectangular corner artifacts. Every other rounded control in this file (ThemedButton,
+            // PillButton, OutlineAssistantButton, ...) does this same fill first — this one was missing it.
+            using var bg = Theme.GetSurfaceBrush(this, ClientRectangle);
+            e.Graphics.FillRectangle(bg, ClientRectangle);
 
             var rect = new Rectangle(0, 0, Width - 1, Height - 1);
 
@@ -784,7 +1065,7 @@ namespace ClassicUO.Launcher.Custom
 
                 e.Graphics.FillPath(brush, path);
 
-            using (var pen = new Pen(borderColor))
+            using (var pen = Theme.CreateInsetPen(borderColor))
 
                 e.Graphics.DrawPath(pen, path);
 
@@ -949,10 +1230,10 @@ namespace ClassicUO.Launcher.Custom
                 return;
             }
 
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            Theme.PrepareHighQualityPaint(e.Graphics);
             e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
-            using var bg = new SolidBrush(Theme.GetSurfaceBackground(Parent));
+            using var bg = Theme.GetSurfaceBrush(this, ClientRectangle);
             e.Graphics.FillRectangle(bg, ClientRectangle);
 
             var rect = new Rectangle(0, 0, Width - 1, Height - 1);
@@ -967,7 +1248,7 @@ namespace ClassicUO.Launcher.Custom
 
             float borderWidth = _isSelected || _hover ? 1.5f : 1f;
             int borderAlpha = _down ? 180 : _isSelected ? 255 : _hover ? 230 : 160;
-            using (var pen = new Pen(Color.FromArgb(borderAlpha, AccentColor), borderWidth))
+            using (var pen = Theme.CreateInsetPen(Color.FromArgb(borderAlpha, AccentColor), borderWidth))
             {
                 e.Graphics.DrawPath(pen, path);
             }
@@ -976,7 +1257,7 @@ namespace ClassicUO.Launcher.Custom
             {
                 var focusRect = Rectangle.Inflate(rect, -2, -2);
                 using var focusPath = Theme.RoundedRect(focusRect, Theme.OutlineAssistantRadius - 1);
-                using var focusPen = new Pen(Color.FromArgb(120, AccentColor), 1f);
+                using var focusPen = Theme.CreateInsetPen(Color.FromArgb(120, AccentColor), 1f);
                 e.Graphics.DrawPath(focusPen, focusPath);
             }
 
@@ -1165,7 +1446,7 @@ namespace ClassicUO.Launcher.Custom
                 return;
             }
 
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            Theme.PrepareHighQualityPaint(e.Graphics);
 
             e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
@@ -1175,8 +1456,7 @@ namespace ClassicUO.Launcher.Custom
 
             {
 
-                using var bg = new SolidBrush(Parent is CardPanel ? Theme.Card : Theme.WindowBottom);
-
+                using var bg = Theme.GetSurfaceBrush(this, ClientRectangle);
                 e.Graphics.FillRectangle(bg, ClientRectangle);
 
             }
@@ -1203,7 +1483,7 @@ namespace ClassicUO.Launcher.Custom
 
             float borderWidth = _hover || _isSelected ? 1.5f : 1f;
 
-            using (var pen = new Pen(Color.FromArgb(borderAlpha, AccentColor), borderWidth))
+            using (var pen = Theme.CreateInsetPen(Color.FromArgb(borderAlpha, AccentColor), borderWidth))
 
             {
 
@@ -1323,11 +1603,11 @@ namespace ClassicUO.Launcher.Custom
                 return;
             }
 
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            Theme.PrepareHighQualityPaint(e.Graphics);
 
 
 
-            using var bg = new SolidBrush(Theme.GetSurfaceBackground(Parent));
+            using var bg = Theme.GetSurfaceBrush(this, ClientRectangle);
             e.Graphics.FillRectangle(bg, ClientRectangle);
 
             var rect = new Rectangle(0, 0, Width - 1, Height - 1);
@@ -1342,7 +1622,7 @@ namespace ClassicUO.Launcher.Custom
 
                 e.Graphics.FillPath(brush, path);
 
-            using (var pen = new Pen(_hover ? Theme.SectionGreen : Theme.InputBorder))
+            using (var pen = Theme.CreateInsetPen(_hover ? Theme.SectionGreen : Theme.InputBorder))
 
                 e.Graphics.DrawPath(pen, path);
 
@@ -1413,11 +1693,11 @@ namespace ClassicUO.Launcher.Custom
                 return;
             }
 
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            Theme.PrepareHighQualityPaint(e.Graphics);
 
 
 
-            using var bg = new SolidBrush(Theme.GetSurfaceBackground(Parent));
+            using var bg = Theme.GetSurfaceBrush(this, ClientRectangle);
             e.Graphics.FillRectangle(bg, ClientRectangle);
 
             var rect = new Rectangle(0, 0, Width - 1, Height - 1);
@@ -1432,7 +1712,7 @@ namespace ClassicUO.Launcher.Custom
 
                 e.Graphics.FillPath(brush, path);
 
-            using (var pen = new Pen(_hover ? Theme.Error : Theme.InputBorder))
+            using (var pen = Theme.CreateInsetPen(_hover ? Theme.Error : Theme.InputBorder))
 
                 e.Graphics.DrawPath(pen, path);
 
@@ -1460,9 +1740,17 @@ namespace ClassicUO.Launcher.Custom
 
         private const int WM_PAINT = 0x000F;
 
+        private const int WM_ERASEBKGND = 0x0014;
+
         private const int ArrowWidth = 28;
 
         private const int CornerRadius = 8;
+
+
+
+        [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)]
+
+        private static extern int SetWindowTheme(IntPtr hWnd, string pszSubAppName, string pszSubIdList);
 
 
 
@@ -1490,6 +1778,26 @@ namespace ClassicUO.Launcher.Custom
 
             Font = Theme.ComboFont;
 
+            SetStyle(ControlStyles.ResizeRedraw, true);
+
+        }
+
+
+
+        protected override void OnHandleCreated(EventArgs e)
+
+        {
+
+            base.OnHandleCreated(e);
+
+            if (Handle != IntPtr.Zero)
+
+            {
+
+                SetWindowTheme(Handle, " ", " ");
+
+            }
+
         }
 
 
@@ -1510,9 +1818,21 @@ namespace ClassicUO.Launcher.Custom
 
         {
 
+            if (m.Msg == WM_ERASEBKGND)
+
+            {
+
+                m.Result = (IntPtr)1;
+
+                return;
+
+            }
+
+
+
             base.WndProc(ref m);
 
-            if (m.Msg == WM_PAINT && IsHandleCreated && Width > 0 && Height > 0)
+            if (m.Msg == WM_PAINT && IsHandleCreated && Theme.HasPaintableSize(Width, Height))
 
             {
 
@@ -1588,27 +1908,37 @@ namespace ClassicUO.Launcher.Custom
 
 
 
-            g.SmoothingMode = SmoothingMode.AntiAlias;
+            Theme.PrepareHighQualityPaint(g);
 
-            var rect = new Rectangle(0, 0, Width - 1, Height - 1);
+            var clientRect = ClientRectangle;
 
-            using var path = Theme.RoundedRect(rect, CornerRadius);
+            using var bg = Theme.GetSurfaceBrush(this, clientRect);
+
+            g.FillRectangle(bg, clientRect);
+
+            var fillBounds = new RectangleF(0f, 0f, Width, Height);
+
+            var strokeBounds = new RectangleF(0.5f, 0.5f, Width - 1f, Height - 1f);
+
+            using var fillPath = Theme.RoundedRect(fillBounds, CornerRadius);
+
+            using var strokePath = Theme.RoundedRect(strokeBounds, CornerRadius);
 
             using (var fill = new SolidBrush(Theme.Input))
 
             {
 
-                g.FillPath(fill, path);
+                g.FillPath(fill, fillPath);
 
             }
 
 
 
-            using (var pen = new Pen(Theme.InputBorder))
+            using (var pen = Theme.CreateInsetPen(Theme.InputBorder))
 
             {
 
-                g.DrawPath(pen, path);
+                g.DrawPath(pen, strokePath);
 
             }
 
