@@ -35,6 +35,7 @@ using System.Collections.Generic;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.GameObjects;
+using ClassicUO.Input;
 using ClassicUO.Renderer;
 using ClassicUO.Utility;
 using Microsoft.Xna.Framework;
@@ -74,7 +75,10 @@ namespace ClassicUO.Game.Managers
         private const int ARC_SEGMENTS = 48;
         private const int OLD_BAR_HEIGHT = 4;
         private const int BAR_HEIGHT_HALF = 4;
+        /// <summary>Extra gap below status bars for default auto anchor (~1cm / 76px).</summary>
+        private const float DEFAULT_ANCHOR_EXTRA_Y = 76f;
         private const long PENDING_TIMEOUT_MS = 8000;
+        private const float HIT_RADIUS = 28f;
 
         private static Texture2D _circleTexture;
 
@@ -83,6 +87,8 @@ namespace ClassicUO.Game.Managers
         private bool _pendingBandageUse;
         private long _pendingUntil;
         private bool _hadHealingBuff;
+        private bool _dragging;
+        private Point _dragGrabOffset;
 
         public BandageRingTimer(World world)
         {
@@ -221,29 +227,16 @@ namespace ClassicUO.Game.Managers
                 return;
             }
 
-            List<int> active = new List<int>(4);
-
-            for (int i = 0; i < _slots.Length; i++)
-            {
-                if (_slots[i].Active)
-                {
-                    active.Add(i);
-                }
-            }
-
-            if (active.Count == 0)
+            if (!TryGetLayout(camera, out Vector2 anchor, out int activeCount, out float startX))
             {
                 return;
             }
 
             EnsureCircleTexture(batcher.GraphicsDevice);
-            Vector2 anchor = GetTimerAnchor(camera);
-            float totalWidth = (active.Count - 1) * SLOT_SPACING;
-            float startX = anchor.X - totalWidth * 0.5f;
 
-            for (int i = 0; i < active.Count; i++)
+            for (int i = 0; i < activeCount; i++)
             {
-                int idx = active[i];
+                int idx = GetActiveSlotIndex(i);
                 Slot slot = _slots[idx];
                 float remainingMs = slot.EndTicks - Time.Ticks;
 
@@ -260,6 +253,160 @@ namespace ClassicUO.Game.Managers
                 DrawIcon(batcher, center, slot.IconGraphic, slot.IconHue, slot.IconPartialHue);
                 DrawRing(batcher, center, progress, slot.RingHue);
                 DrawSeconds(batcher, center, secondsLeft);
+            }
+        }
+
+        /// <summary>
+        /// Invisible hit area for drag repositioning (no visible frame). Returns true when consumed.
+        /// </summary>
+        public bool OnMouseDown(MouseButtonType button)
+        {
+            if (button != MouseButtonType.Left)
+            {
+                return false;
+            }
+
+            Profile profile = ProfileManager.CurrentProfile;
+
+            if (profile == null || !profile.ShowBandageRingTimer || profile.BandageRingTimerLocked || _world.Player == null)
+            {
+                return false;
+            }
+
+            if (!TryGetHitBounds(Client.Game.Scene.Camera, out Rectangle bounds))
+            {
+                return false;
+            }
+
+            if (!bounds.Contains(Mouse.Position))
+            {
+                return false;
+            }
+
+            Vector2 anchor = GetTimerAnchor(Client.Game.Scene.Camera);
+            EnsureManualAnchor(profile, anchor);
+
+            _dragging = true;
+            _dragGrabOffset = new Point(
+                Mouse.Position.X - profile.BandageRingTimerX,
+                Mouse.Position.Y - profile.BandageRingTimerY
+            );
+
+            return true;
+        }
+
+        public bool OnMouseDragging()
+        {
+            if (!_dragging)
+            {
+                return false;
+            }
+
+            Profile profile = ProfileManager.CurrentProfile;
+
+            if (profile == null || profile.BandageRingTimerLocked)
+            {
+                _dragging = false;
+
+                return false;
+            }
+
+            profile.BandageRingTimerX = Mouse.Position.X - _dragGrabOffset.X;
+            profile.BandageRingTimerY = Mouse.Position.Y - _dragGrabOffset.Y;
+
+            return true;
+        }
+
+        public bool OnMouseUp(MouseButtonType button)
+        {
+            if (button != MouseButtonType.Left || !_dragging)
+            {
+                return false;
+            }
+
+            _dragging = false;
+
+            return true;
+        }
+
+        private bool TryGetLayout(Camera camera, out Vector2 anchor, out int activeCount, out float startX)
+        {
+            anchor = default;
+            activeCount = 0;
+            startX = 0f;
+
+            for (int i = 0; i < _slots.Length; i++)
+            {
+                if (_slots[i].Active)
+                {
+                    activeCount++;
+                }
+            }
+
+            if (activeCount == 0)
+            {
+                return false;
+            }
+
+            anchor = GetTimerAnchor(camera);
+            float totalWidth = (activeCount - 1) * SLOT_SPACING;
+            startX = anchor.X - totalWidth * 0.5f;
+
+            return true;
+        }
+
+        private int GetActiveSlotIndex(int visibleIndex)
+        {
+            int seen = 0;
+
+            for (int i = 0; i < _slots.Length; i++)
+            {
+                if (!_slots[i].Active)
+                {
+                    continue;
+                }
+
+                if (seen == visibleIndex)
+                {
+                    return i;
+                }
+
+                seen++;
+            }
+
+            return 0;
+        }
+
+        private bool TryGetHitBounds(Camera camera, out Rectangle bounds)
+        {
+            bounds = Rectangle.Empty;
+
+            if (!TryGetLayout(camera, out Vector2 anchor, out int activeCount, out float startX))
+            {
+                return false;
+            }
+
+            float minX = startX - HIT_RADIUS;
+            float maxX = startX + (activeCount - 1) * SLOT_SPACING + HIT_RADIUS;
+            float minY = anchor.Y - HIT_RADIUS;
+            float maxY = anchor.Y + HIT_RADIUS + 18f;
+
+            bounds = new Rectangle(
+                (int)MathF.Floor(minX),
+                (int)MathF.Floor(minY),
+                (int)MathF.Ceiling(maxX - minX),
+                (int)MathF.Ceiling(maxY - minY)
+            );
+
+            return true;
+        }
+
+        private static void EnsureManualAnchor(Profile profile, Vector2 anchor)
+        {
+            if (profile.BandageRingTimerX < 0 || profile.BandageRingTimerY < 0)
+            {
+                profile.BandageRingTimerX = (int)MathF.Round(anchor.X);
+                profile.BandageRingTimerY = (int)MathF.Round(anchor.Y);
             }
         }
 
@@ -476,7 +623,7 @@ namespace ClassicUO.Game.Managers
             p.Y += camera.Bounds.Y;
 
             int barsBottom = p.Y - BAR_HEIGHT_HALF + (OLD_BAR_HEIGHT + 1) * 3;
-            float y = barsBottom + RING_RADIUS + 10f;
+            float y = barsBottom + RING_RADIUS + 10f + DEFAULT_ANCHOR_EXTRA_Y;
 
             return new Vector2(p.X, y);
         }

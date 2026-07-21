@@ -66,10 +66,44 @@ namespace ClassicUO.Game.Scenes
             _selectionEnd;
         private int AnchorOffset => ProfileManager.CurrentProfile.DragSelectAsAnchor ? 0 : 2;
 
+        private bool IsSwingMicroFreezeActive()
+        {
+            return SwingTimerService.IsMicroFreezeActive();
+        }
+
+        private void ProcessSwingReadyMicroFreeze()
+        {
+            Profile profile = ProfileManager.CurrentProfile;
+
+            if (profile == null || !profile.SwingReadyMicroFreezeEnabled || _world.Player == null)
+            {
+                return;
+            }
+
+            if (
+                SwingTimerService.JustBecameReady
+                && !SwingTimerService.IsMovingShotActive(_world.Player)
+                && (
+                    _world.Player.IsRunning
+                    || _rightMousePressed
+                    || _continueRunning
+                    || _world.Player.Pathfinder.AutoWalking
+                )
+            )
+            {
+                SwingTimerService.ArmMicroFreeze();
+            }
+        }
+
         private bool MoveCharacterByMouseInput()
         {
             if ((_rightMousePressed || _continueRunning) && _world.InGame) // && !Pathfinder.AutoWalking)
             {
+                if (IsSwingMicroFreezeActive())
+                {
+                    return true;
+                }
+
                 if (_world.Player.Pathfinder.AutoWalking)
                 {
                     _world.Player.Pathfinder.StopAutoWalk();
@@ -305,6 +339,11 @@ namespace ClassicUO.Game.Scenes
 
         internal override bool OnMouseDown(MouseButtonType button)
         {
+            if (_bandageRingTimer?.OnMouseDown(button) == true)
+            {
+                return true;
+            }
+
             switch (button)
             {
                 case MouseButtonType.Left:
@@ -409,6 +448,11 @@ namespace ClassicUO.Game.Scenes
 
         private bool OnLeftMouseUp()
         {
+            if (_bandageRingTimer?.OnMouseUp(MouseButtonType.Left) == true)
+            {
+                return true;
+            }
+
             if (
                 UIManager.PopupMenu != null
                 && !UIManager.PopupMenu.Bounds.Contains(Mouse.Position.X, Mouse.Position.Y)
@@ -1057,6 +1101,11 @@ namespace ClassicUO.Game.Scenes
 
         internal override bool OnMouseDragging()
         {
+            if (_bandageRingTimer?.OnMouseDragging() == true)
+            {
+                return true;
+            }
+
             if (!UIManager.IsMouseOverWorld)
             {
                 return false;

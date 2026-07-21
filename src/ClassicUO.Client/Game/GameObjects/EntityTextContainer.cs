@@ -35,6 +35,7 @@ using ClassicUO.Configuration;
 using ClassicUO.Renderer;
 using ClassicUO.Utility.Collections;
 using Microsoft.Xna.Framework;
+using System;
 
 namespace ClassicUO.Game.GameObjects
 {
@@ -104,20 +105,16 @@ namespace ClassicUO.Game.GameObjects
         {
             TextObject text_obj = TextObject.Create(_world);
 
-            byte font = 3;
-            bool isunicode = false;
-
             Profile profile = ProfileManager.CurrentProfile;
+            DamageNumberFontSettings.GetActiveFont(profile, out byte font, out bool isunicode);
 
-            if (profile != null && profile.OverrideAllFonts)
-            {
-                font = profile.ChatFont;
-                isunicode = profile.OverrideAllFontsIsUnicode;
-            }
+            ushort hue = ReferenceEquals(Parent, _world.Player)
+                ? profile?.DamageReceivedHue ?? 0x0034
+                : profile?.DamageDealtHue ?? 0x0021;
 
             text_obj.RenderedText = RenderedText.Create(
                 damage.ToString(),
-                (ushort)(ReferenceEquals(Parent, _world.Player) ? 0x0034 : 0x0021),
+                hue,
                 font,
                 isunicode
             );

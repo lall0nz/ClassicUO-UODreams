@@ -32,6 +32,7 @@
 
 using System;
 using System.IO;
+using ClassicUO.Assets;
 using ClassicUO.Utility;
 using Microsoft.Xna.Framework;
 
@@ -101,12 +102,115 @@ namespace ClassicUO.Configuration
                 profile.WindowClientBounds = new Point(profile.WindowClientBounds.X, 480);
             }
 
-            profile.LTHighlightRangeOutlinePixels = Math.Clamp(profile.LTHighlightRangeOutlinePixels, 1, 10);
+            profile.LTHighlightRangeOutlinePixels = Math.Clamp(profile.LTHighlightRangeOutlinePixels, 1, 20);
+            int microFreezeMs = Math.Clamp(profile.SwingReadyMicroFreezeDurationMs, 200, 800);
+            profile.SwingReadyMicroFreezeDurationMs = 200 + Math.Clamp((microFreezeMs - 200 + 25) / 50, 0, 12) * 50;
+            DamageNumberFontSettings.Normalize(profile);
         }
 
         public static void UnLoadProfile()
         {
             CurrentProfile = null;
+        }
+    }
+
+    internal static class DamageNumberFontSettings
+    {
+        // Matches pre-selection effective default: OverrideAllFonts + ChatFont (1) + Unicode.
+        internal const byte OriginalFontId = 1;
+        internal const bool OriginalIsUnicode = true;
+        internal const byte OldSchoolFontId = 3;
+        internal const bool OldSchoolIsUnicode = false;
+
+        internal static byte GetOldSchoolFontId() => OldSchoolFontId;
+
+        internal static bool IsOldSchoolFont(byte font, bool isUnicode)
+        {
+            return font == OldSchoolFontId && isUnicode == OldSchoolIsUnicode;
+        }
+
+        internal static bool IsLegacyUnicodeOldSchoolFont(byte font)
+        {
+            int count = 0;
+
+            for (byte i = 0; i < 20; i++)
+            {
+                if (FontsLoader.Instance.UnicodeFontExists(i))
+                {
+                    count++;
+
+                    if (count == 3)
+                    {
+                        return font == i;
+                    }
+                }
+            }
+
+            return font == 2;
+        }
+
+        internal static bool UsesOldSchoolFont(Profile profile)
+        {
+            return profile != null && IsOldSchoolFont(profile.DamageNumberFont, profile.DamageNumberFontIsUnicode);
+        }
+
+        internal static void ApplyPreset(Profile profile, bool useOldSchoolFont)
+        {
+            if (useOldSchoolFont)
+            {
+                profile.DamageNumberFont = GetOldSchoolFontId();
+                profile.DamageNumberFontIsUnicode = OldSchoolIsUnicode;
+            }
+            else
+            {
+                profile.DamageNumberFont = OriginalFontId;
+                profile.DamageNumberFontIsUnicode = OriginalIsUnicode;
+            }
+        }
+
+        internal static void Normalize(Profile profile)
+        {
+            if (profile == null)
+            {
+                return;
+            }
+
+            if (UsesOldSchoolFont(profile))
+            {
+                ApplyPreset(profile, true);
+                return;
+            }
+
+            // Migrate profiles saved with the previous Unicode "Old School" preset (typically font 2).
+            if (profile.DamageNumberFontIsUnicode && IsLegacyUnicodeOldSchoolFont(profile.DamageNumberFont))
+            {
+                ApplyPreset(profile, true);
+                return;
+            }
+
+            if (
+                profile.DamageNumberFont == OriginalFontId
+                && profile.DamageNumberFontIsUnicode == OriginalIsUnicode
+            )
+            {
+                return;
+            }
+
+            ApplyPreset(profile, false);
+        }
+
+        internal static void GetActiveFont(Profile profile, out byte font, out bool isUnicode)
+        {
+            if (profile != null && UsesOldSchoolFont(profile))
+            {
+                font = GetOldSchoolFontId();
+                isUnicode = OldSchoolIsUnicode;
+            }
+            else
+            {
+                font = OriginalFontId;
+                isUnicode = OriginalIsUnicode;
+            }
         }
     }
 }

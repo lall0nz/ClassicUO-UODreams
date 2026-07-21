@@ -317,36 +317,54 @@ namespace ClassicUO.Game.Managers
             float alpha = passive ? 0.5f : 1.0f;
             Vector3 hueVec = ShaderHueTranslator.GetHueVector(0, false, alpha);
 
-            // Only the local player keeps the celeste (light blue) bar. Every other
-            // mobile/player (enemies, innocents, allies, party) renders a WHITE base
-            // bar so it stands out against grass instead of the purple/violet tint.
+            // Local player keeps celeste (light blue). Every other mobile uses a WHITE
+            // fill by default; poison → green, mortal (YellowHits) → dark orange.
             bool isLocalPlayer = mobile != null && mobile == _world.Player;
 
             Color hpColor;
+            Color barBackground;
 
-            if (mobile != null && mobile.IsParalyzed)
+            if (isLocalPlayer)
             {
-                hpColor = Color.AliceBlue;
-            }
-            else if (mobile != null && mobile.IsYellowHits)
-            {
-                hpColor = Color.Orange;
-            }
-            else if (mobile != null && mobile.IsPoisoned)
-            {
-                hpColor = Color.LimeGreen;
-            }
-            else if (isLocalPlayer)
-            {
-                hpColor = Color.CornflowerBlue;
+                if (mobile.IsParalyzed)
+                {
+                    hpColor = Color.AliceBlue;
+                }
+                else if (mobile.IsPoisoned)
+                {
+                    hpColor = Color.LimeGreen;
+                }
+                else if (mobile.IsYellowHits)
+                {
+                    hpColor = Color.Yellow;
+                }
+                else
+                {
+                    hpColor = Color.CornflowerBlue;
+                }
+
+                barBackground = Color.Red;
             }
             else
             {
-                hpColor = Color.White;
+                if (mobile != null && mobile.IsPoisoned)
+                {
+                    hpColor = Color.LimeGreen;
+                }
+                else if (mobile != null && mobile.IsYellowHits)
+                {
+                    hpColor = new Color(204, 85, 0); // dark orange (mortal)
+                }
+                else
+                {
+                    hpColor = Color.White;
+                }
+
+                barBackground = Color.Black;
             }
 
             int hpWidth = CalcBarWidth(entity.Hits, entity.HitsMax, BAR_WIDTH);
-            DrawOldBar(batcher, x, y, BAR_WIDTH, OLD_BAR_HEIGHT, hpWidth, hpColor, hueVec);
+            DrawOldBar(batcher, x, y, BAR_WIDTH, OLD_BAR_HEIGHT, hpWidth, hpColor, hueVec, barBackground);
 
             bool showAll = mobile != null && (mobile == _world.Player || _world.Party.Contains(mobile.Serial));
 
@@ -355,8 +373,8 @@ namespace ClassicUO.Game.Managers
                 int manaWidth = CalcBarWidth(mobile.Mana, mobile.ManaMax, BAR_WIDTH);
                 int stamWidth = CalcBarWidth(mobile.Stamina, mobile.StaminaMax, BAR_WIDTH);
 
-                DrawOldBar(batcher, x, y + OLD_BAR_HEIGHT + 1, BAR_WIDTH, OLD_BAR_HEIGHT, manaWidth, Color.CornflowerBlue, hueVec);
-                DrawOldBar(batcher, x, y + (OLD_BAR_HEIGHT + 1) * 2, BAR_WIDTH, OLD_BAR_HEIGHT, stamWidth, Color.CornflowerBlue, hueVec);
+                DrawOldBar(batcher, x, y + OLD_BAR_HEIGHT + 1, BAR_WIDTH, OLD_BAR_HEIGHT, manaWidth, Color.CornflowerBlue, hueVec, Color.Red);
+                DrawOldBar(batcher, x, y + (OLD_BAR_HEIGHT + 1) * 2, BAR_WIDTH, OLD_BAR_HEIGHT, stamWidth, Color.CornflowerBlue, hueVec, Color.Red);
             }
         }
 
@@ -389,7 +407,8 @@ namespace ClassicUO.Game.Managers
             int height,
             int filled,
             Color fill,
-            Vector3 hueVec
+            Vector3 hueVec,
+            Color background
         )
         {
             batcher.Draw(
@@ -399,7 +418,7 @@ namespace ClassicUO.Game.Managers
             );
 
             batcher.Draw(
-                SolidColorTextureCache.GetTexture(Color.Red),
+                SolidColorTextureCache.GetTexture(background),
                 new Rectangle(x, y, width, height),
                 hueVec
             );

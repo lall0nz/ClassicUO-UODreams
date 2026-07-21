@@ -83,15 +83,18 @@ namespace ClassicUO.Game.GameObjects
 
             if (World.AuraManager.IsEnabled)
             {
-                World.AuraManager.Draw(
-                    batcher,
-                    drawX,
-                    drawY,
+                ushort auraHue =
                     ProfileManager.CurrentProfile.PartyAura && World.Party.Contains(this)
                         ? ProfileManager.CurrentProfile.PartyAuraHue
-                        : Notoriety.GetHue(NotorietyFlag),
-                    depth + 1f
-                );
+                        : Notoriety.GetHue(NotorietyFlag);
+
+                // Friend/guild Mods color overrides notoriety on the aura (including red murderers).
+                if (VisualHighlightHelper.TryGetFriendsGuildHighlightHue(World, this, out ushort friendAuraHue))
+                {
+                    auraHue = friendAuraHue;
+                }
+
+                World.AuraManager.Draw(batcher, drawX, drawY, auraHue, depth + 1f);
             }
 
             bool isHuman = IsHuman;
@@ -142,40 +145,13 @@ namespace ClassicUO.Game.GameObjects
                         overridedHue = 0x0386;
                     }
                 }
-                else
-                {
-                    if (ProfileManager.CurrentProfile.HighlightMobilesByPoisoned)
-                    {
-                        if (IsPoisoned)
-                        {
-                            overridedHue = ProfileManager.CurrentProfile.PoisonHue;
-                        }
-                    }
-                    if (ProfileManager.CurrentProfile.HighlightMobilesByParalize)
-                    {
-                        if (IsParalyzed && NotorietyFlag != NotorietyFlag.Invulnerable)
-                        {
-                            overridedHue = ProfileManager.CurrentProfile.ParalyzedHue;
-                        }
-                    }
-                    if (ProfileManager.CurrentProfile.HighlightMobilesByInvul)
-                    {
-                        if (NotorietyFlag != NotorietyFlag.Invulnerable && IsYellowHits)
-                        {
-                            overridedHue = ProfileManager.CurrentProfile.InvulnerableHue;
-                        }
-                    }
-
-                    if (ProfileManager.CurrentProfile.HighlightMirrorImageClones && IsMirrorClone)
-                    {
-                        overridedHue = ProfileManager.CurrentProfile.MirrorImageCloneHue;
-                    }
-                }
+                // Poison / paral / mortal / mirror are applied below so they win over notoriety.
             }
 
             bool isAttack = Serial == World.TargetManager.LastAttack;
             bool isUnderMouse =
                 World.TargetManager.IsTargeting && ReferenceEquals(SelectedObject.Object, this);
+            bool isLastTarget = World.Get(World.TargetManager.LastTargetInfo.Serial) == this;
 
             if (Serial != World.Player.Serial)
             {
@@ -185,12 +161,31 @@ namespace ClassicUO.Game.GameObjects
                 }
             }
 
-            bool isLastTarget = World.Get(World.TargetManager.LastTargetInfo.Serial) == this;
-
-            if (ProfileManager.CurrentProfile.HighlighFriendsGuildType != 0)
+            // Friend/guild Mods color overrides notoriety for everyone except self (incl. red friends).
+            if (
+                ProfileManager.CurrentProfile.HighlighFriendsGuildType != 0
+                && Serial != World.Player.Serial
+            )
             {
+                ushort previousHue = overridedHue;
                 overridedHue = VisualHighlightHelper.LastFriendHue(World, this, overridedHue);
-                hueVec.Y = 1;
+
+                if (overridedHue != previousHue)
+                {
+                    hueVec.Y = 1;
+                }
+            }
+
+            // Poison / paral / mortal / mirror win over notoriety (and show on top of friend tint).
+            if (!IsHidden && !IsDead)
+            {
+                ushort beforeStatus = overridedHue;
+                overridedHue = VisualHighlightHelper.ApplyStatusHighlights(this, overridedHue);
+
+                if (overridedHue != beforeStatus)
+                {
+                    hueVec.Y = 1;
+                }
             }
 
             if (isLastTarget || isAttack)
@@ -200,8 +195,9 @@ namespace ClassicUO.Game.GameObjects
                     overridedHue = VisualHighlightHelper.LastTargetHue(this, overridedHue);
                     hueVec.Y = 1;
                 }
-                else
+                else if (overridedHue == 0)
                 {
+                    // Only fall back to notoriety when no Mods highlight (friend/paral/etc.) is active.
                     overridedHue = Notoriety.GetHue(NotorietyFlag);
                     hueVec.Y = 1;
                 }

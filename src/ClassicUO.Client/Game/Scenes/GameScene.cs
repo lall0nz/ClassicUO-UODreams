@@ -98,6 +98,7 @@ namespace ClassicUO.Game.Scenes
         private readonly bool _use_render_target = false;
         private readonly UseItemQueue _useItemQueue;
         private bool _useObjectHandles;
+        private bool _nameOverheadFilterMenu;
         private RenderTarget2D _world_render_target, _lightRenderTarget;
         private AnimatedStaticsManager _animatedStaticsManager;
 
@@ -176,6 +177,8 @@ namespace ClassicUO.Game.Scenes
             {
                 TopBarGump.Create(_world);
             }
+
+            UOClassicCombatSwingGump.RefreshOpenGump(_world);
 
             NetClient.Socket.Disconnected += SocketOnDisconnected;
             _world.MessageManager.MessageReceived += ChatOnMessageReceived;
@@ -647,11 +650,16 @@ namespace ClassicUO.Game.Scenes
 
             GetViewPort();
 
-            var useObjectHandles = _world.NameOverHeadManager.IsToggled || Keyboard.Ctrl && Keyboard.Shift;
-            if (useObjectHandles != _useObjectHandles)
+            // Ctrl+Shift: temporary overheads per TypeAllowed + filter menu (All / Mobiles / Items / ...).
+            // "Always show name overheads" (IsToggled): mobile/player names only — no filter gump.
+            bool ctrlShift = Keyboard.Ctrl && Keyboard.Shift;
+            _world.NameOverHeadManager.IsFilterModeActive = ctrlShift;
+
+            if (ctrlShift != _nameOverheadFilterMenu)
             {
-                _useObjectHandles = useObjectHandles;
-                if (_useObjectHandles)
+                _nameOverheadFilterMenu = ctrlShift;
+
+                if (ctrlShift)
                 {
                     _world.NameOverHeadManager.Open();
                 }
@@ -659,6 +667,12 @@ namespace ClassicUO.Game.Scenes
                 {
                     _world.NameOverHeadManager.Close();
                 }
+            }
+
+            var useObjectHandles = _world.NameOverHeadManager.IsToggled || ctrlShift;
+            if (useObjectHandles != _useObjectHandles)
+            {
+                _useObjectHandles = useObjectHandles;
             }
 
             _rectanglePlayer.X = (int)(
@@ -856,6 +870,7 @@ namespace ClassicUO.Game.Scenes
             _world.Update();
             _animatedStaticsManager.Process();
             _world.BoatMovingManager.Update();
+            ProcessSwingReadyMicroFreeze();
             _world.Player.Pathfinder.ProcessAutoWalk();
             _world.DelayedObjectClickManager.Update();
             DetectMirrorClones();
@@ -870,9 +885,10 @@ namespace ClassicUO.Game.Scenes
                     _flags[3]
                 );
 
-                if (_world.InGame && !_world.Player.Pathfinder.AutoWalking && dir != Direction.NONE)
+                if (_world.InGame && !_world.Player.Pathfinder.AutoWalking && dir != Direction.NONE && !IsSwingMicroFreezeActive())
                 {
-                    _world.Player.Walk(dir, currentProfile.AlwaysRun);
+                    bool run = currentProfile.AlwaysRun;
+                    _world.Player.Walk(dir, run);
                 }
             }
 
@@ -1446,7 +1462,7 @@ namespace ClassicUO.Game.Scenes
         private static void DrawRingDiamond(UltimaBatcher2D batcher, Vector2 center, int range, ushort hue, int outlinePixels, float zoom)
         {
             float scale = 1f / Math.Max(zoom, 0.01f);
-            float stroke = Math.Clamp(outlinePixels, 1, 10) * scale;
+            float stroke = Math.Clamp(outlinePixels, 1, 20) * scale;
             float ext = range * 44f * scale;
 
             Vector2 n = new Vector2(center.X, center.Y - ext);

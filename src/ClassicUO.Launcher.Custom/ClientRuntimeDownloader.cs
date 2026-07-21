@@ -178,7 +178,8 @@ namespace ClassicUO.Launcher.Custom
             IProgress<DownloadProgressReport>? progress,
             CancellationToken cancellationToken = default,
             string? packageUrl = null,
-            string? packageFileName = null)
+            string? packageFileName = null,
+            string? expectedSha256 = null)
         {
             string installRoot = AppContext.BaseDirectory;
             string tempDir = Path.Combine(Path.GetTempPath(), "UODreamsLauncher", Guid.NewGuid().ToString("N"));
@@ -201,6 +202,8 @@ namespace ClassicUO.Launcher.Custom
                     progress,
                     cancellationToken
                 ).ConfigureAwait(false);
+
+                LauncherUpdater.VerifyDownloadedSha256(archivePath, expectedSha256);
 
                 progress?.Report(new DownloadProgressReport
                 {

@@ -191,7 +191,7 @@ namespace ClassicUO.Game.Data
                     writer.WriteLine("# This does NOT remove items from the server - it only stops this client from");
                     writer.WriteLine("# drawing them. Useful for houses overloaded with decorative rugs/goza mats");
                     writer.WriteLine("# that can cause crashes/lag when too many are locked down in one place.");
-                    writer.WriteLine("# Enable in Options -> Terrain & Statics -> \"Hide house carpets/rugs\".");
+                    writer.WriteLine("# Enable in Options -> Terrain & Statics -> \"Hide Carpets / Tappeti\".");
                     writer.WriteLine("# Add more IDs below (one per line, decimal) if you find other carpet variants.");
                     writer.WriteLine();
                     writer.WriteLine("# --- Decorative carpets/rugs (0x0AC8-0x0AEF range) ---");

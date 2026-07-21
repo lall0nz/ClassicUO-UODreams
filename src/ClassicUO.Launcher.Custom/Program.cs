@@ -30,9 +30,9 @@ namespace ClassicUO.Launcher.Custom
                 }
 
                 ResetSettingsAfterCleanInstall();
-                TryCreateDesktopShortcutOnce();
             }
 
+            EnsureDesktopShortcut();
             Application.Run(new MainForm());
         }
 
@@ -50,23 +50,27 @@ namespace ClassicUO.Launcher.Custom
             }
         }
 
-        private static void TryCreateDesktopShortcutOnce()
+        private static void EnsureDesktopShortcut()
         {
             try
             {
                 var settings = LauncherSettings.Load();
-                if (settings.DesktopShortcutCreated)
+                if (!DesktopShortcut.NeedsRefresh(settings.DesktopShortcutRevision) &&
+                    settings.DesktopShortcutCreated)
                 {
                     return;
                 }
 
-                DesktopShortcut.TryCreate();
-                settings.DesktopShortcutCreated = true;
-                settings.Save();
+                if (DesktopShortcut.TryEnsureCurrent())
+                {
+                    settings.DesktopShortcutCreated = true;
+                    settings.DesktopShortcutRevision = DesktopShortcut.CurrentRevision;
+                    settings.Save();
+                }
             }
             catch
             {
-                // shortcut creation is best-effort
+                // shortcut refresh is best-effort
             }
         }
     }

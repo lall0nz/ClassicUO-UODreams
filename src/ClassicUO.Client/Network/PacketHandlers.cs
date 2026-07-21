@@ -1941,6 +1941,8 @@ namespace ClassicUO.Network
                 return;
             }
 
+            UOClassicCombatSwingGump.NotifyPlayerSwing(world);
+
             uint defenders = p.ReadUInt32BE();
 
             const int TIME_TURN_TO_LASTTARGET = 2000;
@@ -2481,6 +2483,11 @@ namespace ClassicUO.Network
                 forward,
                 true
             );
+
+            if (mobile == world.Player)
+            {
+                UOClassicCombatSwingGump.NotifyPlayerAnimation(world, action);
+            }
         }
 
         private static void GraphicEffect(World world, ref StackDataReader p)
@@ -5702,6 +5709,11 @@ namespace ClassicUO.Network
                 forward: true,
                 fromServer: true
             );
+
+            if (mobile == world.Player)
+            {
+                UOClassicCombatSwingGump.NotifyPlayerNewAnimation(world, type, action);
+            }
         }
 
         private static void KREncryptionResponse(World world, ref StackDataReader p) { }

@@ -67,6 +67,12 @@ namespace ClassicUO.Game.Managers
             set => ProfileManager.CurrentProfile.NameOverheadToggled = value;
         }
 
+        /// <summary>
+        /// True while Ctrl+Shift is held (filter gump active). When false and IsToggled is on,
+        /// only mobile/player names are shown — not items.
+        /// </summary>
+        public bool IsFilterModeActive { get; set; }
+
         public bool IsAllowed(Entity serial)
         {
             if (serial == null)
@@ -87,22 +93,30 @@ namespace ClassicUO.Game.Managers
                 return false;
             }
 
-            if (TypeAllowed == NameOverheadTypeAllowed.All)
+            NameOverheadTypeAllowed typeAllowed = TypeAllowed;
+
+            // Visual Helpers "Always show name overheads": mobile names only, not items.
+            if (IsToggled && !IsFilterModeActive)
+            {
+                typeAllowed = NameOverheadTypeAllowed.Mobiles;
+            }
+
+            if (typeAllowed == NameOverheadTypeAllowed.All)
             {
                 return true;
             }
 
-            if (SerialHelper.IsItem(serial.Serial) && TypeAllowed == NameOverheadTypeAllowed.Items)
+            if (SerialHelper.IsItem(serial.Serial) && typeAllowed == NameOverheadTypeAllowed.Items)
             {
                 return true;
             }
 
-            if (SerialHelper.IsMobile(serial.Serial) && TypeAllowed.HasFlag(NameOverheadTypeAllowed.Mobiles))
+            if (SerialHelper.IsMobile(serial.Serial) && typeAllowed.HasFlag(NameOverheadTypeAllowed.Mobiles))
             {
                 return true;
             }
 
-            if (TypeAllowed.HasFlag(NameOverheadTypeAllowed.Corpses) && SerialHelper.IsItem(serial.Serial) && _world.Items.Get(serial)?.IsCorpse == true)
+            if (typeAllowed.HasFlag(NameOverheadTypeAllowed.Corpses) && SerialHelper.IsItem(serial.Serial) && _world.Items.Get(serial)?.IsCorpse == true)
             {
                 return true;
             }
@@ -112,14 +126,14 @@ namespace ClassicUO.Game.Managers
 
         public void Open()
         {
-            // Custom UODreams: do not auto-show the NameOverHeadHandler filter gump
-            // (All / Mobiles only / Items only / ...). Name overheads still work via
-            // IsToggled / Ctrl+Shift; the last TypeAllowed stays in the profile.
-            if (_gump != null && !_gump.IsDisposed)
+            if (_gump == null || _gump.IsDisposed)
             {
-                _gump.Dispose();
-                _gump = null;
+                _gump = new NameOverHeadHandlerGump(_world);
+                UIManager.Add(_gump);
             }
+
+            _gump.IsEnabled = true;
+            _gump.IsVisible = true;
         }
 
         public void Close()

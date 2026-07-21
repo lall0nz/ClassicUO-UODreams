@@ -226,7 +226,7 @@
     <value>Hide vegetation</value>
   </data>
   <data name="HideCarpets" xml:space="preserve">
-    <value>Hide house carpets/rugs (client-side only, see Data/Client/carpets.txt)</value>
+    <value>Hide Carpets / Tappeti</value>
   </data>
   <data name="HighlighState" xml:space="preserve">
     <value>Highlight by state (poisoned, yellow hits, paralyzed)</value>

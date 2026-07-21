@@ -1,0 +1,36 @@
+# 0nE UO Launcher v1.3.5 by lall0ne
+
+## Novita' v1.3.5
+
+### Client ClassicUO — Name Overheads
+- **Ctrl+Shift**: menu filtro NameOverhead visibile **solo mentre i tasti sono premuti** (non piu' sempre a schermo)
+- **Always show name overheads**: mostra nomi **solo mobile/giocatori** — non tutti gli oggetti a terra
+- **Larghezza overhead**: ~50 caratteri (``OBJECT_HANDLES_GUMP_WIDTH`` **450**, era 100 / ~11 caratteri)
+
+### Baseline v1.3.4 (invariato)
+- **Hide Carpets / Tappeti**: opzione rinominata; filtro attivo di default con IDs ``0x28A4``-``0x28A6`` in ``carpets.txt``
+- **Profilo predefinito PVP**: font Unicode override, journal Unicode, hide carpets, auto-avoid energy field, fast rotation, turn delay **100/45/150/150**
+- HP **Both + Smart**, always run, porte/cadaveri automatici, terreno PVP, barre HP classiche, highlight spell range **10**, ghost clone mirror, bandage timer countdown
+- **NetClient**: buffer lettura/invio **4096**; NativeAOT ``cuo.dll`` ricompilato; SDL2/OpenGL only
+
+### Razor Enhanced / OTA (invariato da v1.3.4)
+- **OTA aggiorna sempre** gli eseguibili/DLL/plugin Razor in ``Assistant`` ad ogni Update
+- Profilo **Default PVP**: copiato **solo se mancante** — mai sovrascritto se gia' presente
+- Profilo stock ``default`` **mai** toccato da OTA
+- Bundle Razor allineato al brand-test Desktop ``0nE-UO-Launcher-v1.2.8-brand-test``
+
+### Packaging
+- Zip launcher con ``0nE UO Launcher.exe`` e ``UODreams Launcher.exe``
+- Client zip: ``UODreams-PVP-by-lall0ne-Client-v1.3.5.zip`` (naming corretto)
+- Client e launcher **virgin** (niente settings utente, log, bak)
+- Shortcut Desktop 0nE refresh automatico dopo OTA
+
+## Download
+
+| File | Descrizione |
+|------|-------------|
+| ``UODreams-PVP-by-lall0ne-Launcher-v1.3.5.zip`` | **0nE UO Launcher** + Razor modded |
+| ``UODreams-PVP-by-lall0ne-Client-v1.3.5.zip`` | Client ClassicUO modded (virgin) |
+| ``UODreams-PVP-by-lall0ne-Source-v1.3.5.zip`` | Codice sorgente |
+
+Server: ``login.uodreams.com:2593``

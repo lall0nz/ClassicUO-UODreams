@@ -54,6 +54,7 @@ namespace ClassicUO.Game.UI.Controls
         private int _sliderX;
         private readonly HSliderBarStyle _style;
         private readonly RenderedText _text;
+        private Func<int, string> _valueFormatter;
         private int _value = -1;
 
         public HSliderBar(
@@ -108,6 +109,16 @@ namespace ClassicUO.Game.UI.Controls
 
         public int BarWidth { get; set; }
 
+        public Func<int, string> ValueFormatter
+        {
+            get => _valueFormatter;
+            set
+            {
+                _valueFormatter = value;
+                UpdateValueText();
+            }
+        }
+
         public float Percents { get; private set; }
 
         public int Value
@@ -132,10 +143,7 @@ namespace ClassicUO.Game.UI.Controls
                         _value = MaxValue;
                     }
 
-                    if (_text != null)
-                    {
-                        _text.Text = Value.ToString();
-                    }
+                    UpdateValueText();
 
                     if (_value != oldValue)
                     {
@@ -230,15 +238,21 @@ namespace ClassicUO.Game.UI.Controls
             return base.Draw(batcher, x, y);
         }
 
+        private void UpdateValueText()
+        {
+            if (_text == null)
+            {
+                return;
+            }
+
+            _text.Text = _valueFormatter != null ? _valueFormatter(Value) : Value.ToString();
+        }
+
         private void InternalSetValue(int value)
         {
             _value = value;
             CalculateOffset();
-
-            if (_text != null)
-            {
-                _text.Text = Value.ToString();
-            }
+            UpdateValueText();
         }
 
         protected override void OnMouseDown(int x, int y, MouseButtonType button)

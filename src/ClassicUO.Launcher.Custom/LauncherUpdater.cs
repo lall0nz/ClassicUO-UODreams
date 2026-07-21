@@ -5,6 +5,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -17,14 +18,35 @@ namespace ClassicUO.Launcher.Custom
     {
         public string LatestVersion { get; init; } = "";
         public string ReleaseNotes { get; init; } = "";
+        public bool UsesManifest { get; init; }
         public bool NeedsClientUpdate { get; init; }
         public bool NeedsLauncherUpdate { get; init; }
+        public bool NeedsRazorUpdate { get; init; }
         public string? ClientDownloadUrl { get; init; }
         public string? LauncherDownloadUrl { get; init; }
+        public string? RazorDownloadUrl { get; init; }
         public string? ClientPackageFileName { get; init; }
         public string? LauncherPackageFileName { get; init; }
+        public string? RazorPackageFileName { get; init; }
+        public string? ClientRemoteVersion { get; init; }
+        public string? LauncherRemoteVersion { get; init; }
+        public string? RazorRemoteVersion { get; init; }
+        public string LocalClientVersion { get; init; } = "";
+        public string LocalLauncherVersion { get; init; } = "";
+        public string LocalRazorVersion { get; init; } = "";
+        public string? ClientSha256 { get; init; }
+        public string? LauncherSha256 { get; init; }
+        public string? RazorSha256 { get; init; }
+        public long ClientSizeBytes { get; init; }
+        public long LauncherSizeBytes { get; init; }
+        public long RazorSizeBytes { get; init; }
 
-        public bool HasAnyUpdate => NeedsClientUpdate || NeedsLauncherUpdate;
+        public bool HasAnyUpdate => NeedsClientUpdate || NeedsLauncherUpdate || NeedsRazorUpdate;
+
+        public long TotalDownloadBytes =>
+            (NeedsClientUpdate ? ClientSizeBytes : 0) +
+            (NeedsLauncherUpdate ? LauncherSizeBytes : 0) +
+            (NeedsRazorUpdate ? RazorSizeBytes : 0);
     }
 
     internal static class LauncherUpdater
@@ -39,18 +61,12 @@ namespace ClassicUO.Launcher.Custom
             Http.DefaultRequestHeaders.UserAgent.ParseAdd("UODreamsLauncher");
         }
 
+        public const string RazorVersionMarkerFileName = "uodreams-razor.version";
+
         public static async Task<UpdateCheckResult?> CheckForUpdatesAsync(
             string? localClientVersion = null,
             CancellationToken cancellationToken = default)
         {
-            string? latestTag = null;
-            string? releaseNotes = null;
-            string? clientUrl = null;
-            string? launcherUrl = null;
-            string? clientFile = null;
-            string? launcherFile = null;
-            string bestVersion = "";
-
             string apiUrl = $"https://api.github.com/repos/{LauncherManifest.GitHubRepo}/releases?per_page=30";
             using var response = await Http.GetAsync(apiUrl, cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
@@ -60,6 +76,10 @@ namespace ClassicUO.Launcher.Custom
 
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
             using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            string effectiveClientVersion = ResolveEffectiveClientVersion(localClientVersion);
+            string localLauncherVersion = LauncherManifest.RuntimeLauncherVersion;
+            string localRazorVersion = ResolveEffectiveRazorVersion();
 
             foreach (JsonElement release in doc.RootElement.EnumerateArray())
             {
@@ -79,98 +99,464 @@ namespace ClassicUO.Launcher.Custom
                     continue;
                 }
 
-                string? version = ParseVersionFromTag(tag);
-                if (string.IsNullOrWhiteSpace(version))
+                UpdateManifest? manifest = await TryLoadManifestForReleaseAsync(release, tag, cancellationToken)
+                    .ConfigureAwait(false);
+                if (manifest != null)
                 {
-                    continue;
-                }
-
-                if (!string.IsNullOrWhiteSpace(bestVersion) &&
-                    CompareVersions(version, bestVersion) <= 0)
-                {
-                    continue;
-                }
-
-                string? candidateClientUrl = null;
-                string? candidateLauncherUrl = null;
-                string? candidateClientFile = null;
-                string? candidateLauncherFile = null;
-
-                foreach (JsonElement asset in release.GetProperty("assets").EnumerateArray())
-                {
-                    string name = asset.GetProperty("name").GetString() ?? "";
-                    string url = asset.GetProperty("browser_download_url").GetString() ?? "";
-                    if (IsClientPackage(name))
+                    UpdateCheckResult? manifestResult = BuildManifestUpdateResult(
+                        manifest,
+                        effectiveClientVersion,
+                        localLauncherVersion,
+                        localRazorVersion);
+                    if (manifestResult != null)
                     {
-                        candidateClientUrl = url;
-                        candidateClientFile = name;
-                    }
-                    else if (IsLauncherPackage(name))
-                    {
-                        candidateLauncherUrl = url;
-                        candidateLauncherFile = name;
+                        return manifestResult;
                     }
                 }
 
-                if (candidateClientUrl == null && candidateLauncherUrl == null)
+                UpdateCheckResult? legacyResult = BuildLegacyUpdateResult(
+                    release,
+                    tag,
+                    effectiveClientVersion,
+                    localLauncherVersion);
+                if (legacyResult != null)
                 {
-                    continue;
+                    return legacyResult;
                 }
-
-                bestVersion = version;
-                latestTag = tag;
-                releaseNotes = release.TryGetProperty("body", out JsonElement bodyEl)
-                    ? bodyEl.GetString() ?? ""
-                    : "";
-                clientUrl = candidateClientUrl;
-                launcherUrl = candidateLauncherUrl;
-                clientFile = candidateClientFile;
-                launcherFile = candidateLauncherFile;
             }
 
-            if (string.IsNullOrWhiteSpace(bestVersion) || latestTag == null)
+            return null;
+        }
+
+        public static string? TryReadRazorVersionMarker(string? installRoot = null)
+        {
+            installRoot ??= AppContext.BaseDirectory;
+            string path = Path.Combine(installRoot, "Assistant", "RazorEnhanced", RazorVersionMarkerFileName);
+            if (!File.Exists(path))
             {
                 return null;
             }
 
-            string effectiveClientVersion = ResolveEffectiveClientVersion(localClientVersion);
+            try
+            {
+                return NormalizeVersion(File.ReadAllText(path).Trim());
+            }
+            catch
+            {
+                return null;
+            }
+        }
 
-            bool needsClient = NeedsComponentUpdate(bestVersion, effectiveClientVersion, clientUrl != null);
-            bool needsLauncher = NeedsComponentUpdate(bestVersion, LauncherManifest.RuntimeLauncherVersion, launcherUrl != null);
+        public static void WriteRazorVersionMarker(string version, string? installRoot = null)
+        {
+            installRoot ??= AppContext.BaseDirectory;
+            string razorDir = Path.Combine(installRoot, "Assistant", "RazorEnhanced");
+            Directory.CreateDirectory(razorDir);
+            File.WriteAllText(
+                Path.Combine(razorDir, RazorVersionMarkerFileName),
+                NormalizeVersion(version)
+            );
+        }
+
+        internal static string ResolveEffectiveRazorVersion(string? installRoot = null)
+        {
+            string? markerVersion = TryReadRazorVersionMarker(installRoot);
+            if (!string.IsNullOrWhiteSpace(markerVersion))
+            {
+                return markerVersion;
+            }
+
+            string razorExe = Path.Combine(
+                installRoot ?? AppContext.BaseDirectory,
+                "Assistant",
+                "RazorEnhanced",
+                "RazorEnhanced.exe");
+            if (File.Exists(razorExe))
+            {
+                // Pre-marker installs bundled with the launcher zip.
+                return "0.0.0";
+            }
+
+            return "0.0.0";
+        }
+
+        public static async Task ApplyRazorUpdateAsync(
+            string downloadUrl,
+            string packageFileName,
+            string? expectedSha256,
+            IProgress<DownloadProgressReport>? progress,
+            CancellationToken cancellationToken = default)
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), "UODreamsLauncher", "razor-update", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+
+            string archivePath = Path.Combine(tempDir, packageFileName);
+            string extractDir = Path.Combine(tempDir, "extract");
+            Directory.CreateDirectory(extractDir);
+
+            try
+            {
+                progress?.Report(new DownloadProgressReport
+                {
+                    Status = Loc.S("Download Razor Enhanced…", "Downloading Razor Enhanced…")
+                });
+
+                await UoClientDownloader.DownloadFileFromUrlAsync(
+                    downloadUrl,
+                    archivePath,
+                    progress,
+                    cancellationToken
+                ).ConfigureAwait(false);
+
+                VerifyDownloadedSha256(archivePath, expectedSha256);
+
+                progress?.Report(new DownloadProgressReport
+                {
+                    Status = Loc.S("Estrazione Razor Enhanced…", "Extracting Razor Enhanced…"),
+                    BytesReceived = 1,
+                    TotalBytes = 1
+                });
+
+                ZipFile.ExtractToDirectory(archivePath, extractDir, overwriteFiles: true);
+
+                string installRoot = AppContext.BaseDirectory;
+                string? sourceAssistant = ResolveAssistantSourceRoot(extractDir);
+                if (sourceAssistant == null)
+                {
+                    throw new InvalidDataException(Loc.S(
+                        "Pacchetto Razor non valido (cartella Assistant mancante).",
+                        "Invalid Razor package (Assistant folder missing)."));
+                }
+
+                UpdateAssistantFolder(sourceAssistant, Path.Combine(installRoot, "Assistant"));
+
+                string? razorVersion = ParseVersionFromPackageName(packageFileName);
+                if (!string.IsNullOrWhiteSpace(razorVersion))
+                {
+                    WriteRazorVersionMarker(razorVersion, installRoot);
+                }
+
+                progress?.Report(new DownloadProgressReport
+                {
+                    Status = Loc.S("Razor Enhanced aggiornato.", "Razor Enhanced updated."),
+                    BytesReceived = 1,
+                    TotalBytes = 1
+                });
+            }
+            finally
+            {
+                try
+                {
+                    if (Directory.Exists(tempDir))
+                    {
+                        Directory.Delete(tempDir, recursive: true);
+                    }
+                }
+                catch
+                {
+                    // temp cleanup is best-effort
+                }
+            }
+        }
+
+        internal static void VerifyDownloadedSha256(string filePath, string? expectedSha256)
+        {
+            if (string.IsNullOrWhiteSpace(expectedSha256))
+            {
+                return;
+            }
+
+            string actual = ComputeSha256Hex(filePath);
+            if (!actual.Equals(expectedSha256.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException(Loc.S(
+                    "Verifica SHA256 fallita: il pacchetto scaricato non corrisponde al manifest.",
+                    "SHA256 verification failed: downloaded package does not match the manifest."));
+            }
+        }
+
+        internal static string ComputeSha256Hex(string filePath)
+        {
+            using var stream = File.OpenRead(filePath);
+            byte[] hash = SHA256.HashData(stream);
+            return Convert.ToHexString(hash).ToLowerInvariant();
+        }
+
+        private static async Task<UpdateManifest?> TryLoadManifestForReleaseAsync(
+            JsonElement release,
+            string releaseTag,
+            CancellationToken cancellationToken)
+        {
+            if (!release.TryGetProperty("assets", out JsonElement assetsEl))
+            {
+                return null;
+            }
+
+            string? manifestUrl = null;
+            foreach (JsonElement asset in assetsEl.EnumerateArray())
+            {
+                string name = asset.GetProperty("name").GetString() ?? "";
+                if (name.Equals(UpdateManifest.ManifestFileName, StringComparison.OrdinalIgnoreCase))
+                {
+                    manifestUrl = asset.GetProperty("browser_download_url").GetString();
+                    break;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(manifestUrl))
+            {
+                return null;
+            }
+
+            try
+            {
+                using var response = await Http.GetAsync(manifestUrl, cancellationToken).ConfigureAwait(false);
+                if (!response.IsSuccessStatusCode)
+                {
+                    return null;
+                }
+
+                string json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                UpdateManifest? manifest = UpdateManifest.TryParse(json);
+                if (manifest == null || !manifest.IsSupportedForCurrentEdition())
+                {
+                    return null;
+                }
+
+                if (!string.IsNullOrWhiteSpace(manifest.ReleaseTag) &&
+                    !manifest.ReleaseTag.Equals(releaseTag, StringComparison.OrdinalIgnoreCase))
+                {
+                    return null;
+                }
+
+                return manifest;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static UpdateCheckResult? BuildManifestUpdateResult(
+            UpdateManifest manifest,
+            string localClientVersion,
+            string localLauncherVersion,
+            string localRazorVersion)
+        {
+            UpdateManifestComponent? launcherComponent = manifest.GetComponent("launcher");
+            UpdateManifestComponent? clientComponent = manifest.GetComponent("client");
+            UpdateManifestComponent? razorComponent = manifest.GetComponent("razor");
+
+            if (launcherComponent == null && clientComponent == null && razorComponent == null)
+            {
+                return null;
+            }
+
+            string releaseTag = string.IsNullOrWhiteSpace(manifest.ReleaseTag)
+                ? $"v{LauncherManifest.LauncherVersion}"
+                : manifest.ReleaseTag;
+
+            bool needsLauncher = launcherComponent != null &&
+                NeedsComponentUpdate(launcherComponent.Version, localLauncherVersion, true);
+            bool needsClient = clientComponent != null &&
+                NeedsComponentUpdate(clientComponent.Version, localClientVersion, true);
+            bool needsRazor = razorComponent != null &&
+                NeedsComponentUpdate(razorComponent.Version, localRazorVersion, true);
+
+            string latestVersion = MaxVersion(
+                MaxVersion(
+                    launcherComponent?.Version,
+                    clientComponent?.Version),
+                razorComponent?.Version);
+
+            if (string.IsNullOrWhiteSpace(latestVersion))
+            {
+                latestVersion = ParseVersionFromTag(releaseTag) ?? localLauncherVersion;
+            }
+
+            string releaseNotes = manifest.GetLocalizedNotes();
+            if (string.IsNullOrWhiteSpace(releaseNotes))
+            {
+                releaseNotes = BuildManifestComponentNotes(clientComponent, razorComponent, launcherComponent);
+            }
+
+            return new UpdateCheckResult
+            {
+                LatestVersion = latestVersion,
+                ReleaseNotes = releaseNotes,
+                UsesManifest = true,
+                NeedsClientUpdate = needsClient,
+                NeedsLauncherUpdate = needsLauncher,
+                NeedsRazorUpdate = needsRazor,
+                ClientDownloadUrl = clientComponent?.BuildDownloadUrl(releaseTag),
+                LauncherDownloadUrl = launcherComponent?.BuildDownloadUrl(releaseTag),
+                RazorDownloadUrl = razorComponent?.BuildDownloadUrl(releaseTag),
+                ClientPackageFileName = clientComponent?.Asset,
+                LauncherPackageFileName = launcherComponent?.Asset,
+                RazorPackageFileName = razorComponent?.Asset,
+                ClientRemoteVersion = clientComponent?.Version,
+                LauncherRemoteVersion = launcherComponent?.Version,
+                RazorRemoteVersion = razorComponent?.Version,
+                LocalClientVersion = localClientVersion,
+                LocalLauncherVersion = localLauncherVersion,
+                LocalRazorVersion = localRazorVersion,
+                ClientSha256 = clientComponent?.Sha256,
+                LauncherSha256 = launcherComponent?.Sha256,
+                RazorSha256 = razorComponent?.Sha256,
+                ClientSizeBytes = clientComponent?.SizeBytes ?? 0,
+                LauncherSizeBytes = launcherComponent?.SizeBytes ?? 0,
+                RazorSizeBytes = razorComponent?.SizeBytes ?? 0
+            };
+        }
+
+        private static string BuildManifestComponentNotes(
+            UpdateManifestComponent? clientComponent,
+            UpdateManifestComponent? razorComponent,
+            UpdateManifestComponent? launcherComponent)
+        {
+            var lines = new List<string>();
+            foreach (UpdateManifestComponent? component in new[] { clientComponent, razorComponent, launcherComponent })
+            {
+                if (component == null)
+                {
+                    continue;
+                }
+
+                string note = component.GetLocalizedNotes();
+                if (!string.IsNullOrWhiteSpace(note))
+                {
+                    lines.Add("• " + note);
+                }
+            }
+
+            return string.Join(Environment.NewLine, lines);
+        }
+
+        private static UpdateCheckResult? BuildLegacyUpdateResult(
+            JsonElement release,
+            string tag,
+            string effectiveClientVersion,
+            string localLauncherVersion)
+        {
+            string? version = ParseVersionFromTag(tag);
+            if (string.IsNullOrWhiteSpace(version))
+            {
+                return null;
+            }
+
+            string? clientUrl = null;
+            string? launcherUrl = null;
+            string? clientFile = null;
+            string? launcherFile = null;
+
+            foreach (JsonElement asset in release.GetProperty("assets").EnumerateArray())
+            {
+                string name = asset.GetProperty("name").GetString() ?? "";
+                string url = asset.GetProperty("browser_download_url").GetString() ?? "";
+                if (IsClientPackage(name))
+                {
+                    clientUrl = url;
+                    clientFile = name;
+                }
+                else if (IsLauncherPackage(name))
+                {
+                    launcherUrl = url;
+                    launcherFile = name;
+                }
+            }
+
+            if (clientUrl == null && launcherUrl == null)
+            {
+                return null;
+            }
+
+            string releaseNotes = release.TryGetProperty("body", out JsonElement bodyEl)
+                ? bodyEl.GetString() ?? ""
+                : "";
+
+            bool needsClient = NeedsComponentUpdate(version, effectiveClientVersion, clientUrl != null);
+            bool needsLauncher = NeedsComponentUpdate(version, localLauncherVersion, launcherUrl != null);
 
             if (!needsClient &&
                 clientUrl != null &&
-                CompareVersions(LauncherManifest.RuntimeLauncherVersion, effectiveClientVersion) > 0 &&
-                CompareVersions(bestVersion, effectiveClientVersion) >= 0)
+                CompareVersions(localLauncherVersion, effectiveClientVersion) > 0 &&
+                CompareVersions(version, effectiveClientVersion) >= 0)
             {
-                // Launcher was updated in-place but client files/settings lag behind the same release.
                 needsClient = true;
             }
 
             if (!needsClient && needsLauncher && clientUrl != null)
             {
-                // Always refresh client binaries when the launcher updates to a new release.
                 needsClient = true;
+            }
+
+            if (needsClient && !needsLauncher && launcherUrl != null)
+            {
+                needsLauncher = true;
             }
 
             return new UpdateCheckResult
             {
-                LatestVersion = bestVersion,
-                ReleaseNotes = FormatReleaseNotes(releaseNotes ?? ""),
+                LatestVersion = version,
+                ReleaseNotes = FormatReleaseNotes(releaseNotes),
+                UsesManifest = false,
                 NeedsClientUpdate = needsClient,
                 NeedsLauncherUpdate = needsLauncher,
+                NeedsRazorUpdate = false,
                 ClientDownloadUrl = clientUrl,
                 LauncherDownloadUrl = launcherUrl,
                 ClientPackageFileName = clientFile,
-                LauncherPackageFileName = launcherFile
+                LauncherPackageFileName = launcherFile,
+                LocalClientVersion = effectiveClientVersion,
+                LocalLauncherVersion = localLauncherVersion,
+                LocalRazorVersion = ResolveEffectiveRazorVersion()
             };
+        }
+
+        private static string? ResolveAssistantSourceRoot(string extractDir)
+        {
+            string direct = Path.Combine(extractDir, "Assistant");
+            if (Directory.Exists(direct))
+            {
+                return direct;
+            }
+
+            foreach (string dir in Directory.EnumerateDirectories(extractDir, "Assistant", SearchOption.AllDirectories))
+            {
+                return dir;
+            }
+
+            string razorDirect = Path.Combine(extractDir, "RazorEnhanced");
+            if (Directory.Exists(razorDirect))
+            {
+                return Path.GetDirectoryName(razorDirect);
+            }
+
+            foreach (string file in Directory.EnumerateFiles(extractDir, "RazorEnhanced.exe", SearchOption.AllDirectories))
+            {
+                string? razorDir = Path.GetDirectoryName(file);
+                if (razorDir == null)
+                {
+                    continue;
+                }
+
+                string? assistantDir = Path.GetDirectoryName(razorDir);
+                if (assistantDir != null && Path.GetFileName(razorDir)
+                    .Equals("RazorEnhanced", StringComparison.OrdinalIgnoreCase))
+                {
+                    return assistantDir;
+                }
+            }
+
+            return null;
         }
 
         public static async Task ApplyLauncherUpdateAsync(
             string downloadUrl,
             string packageFileName,
             IProgress<DownloadProgressReport>? progress,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            string? expectedSha256 = null)
         {
             string tempDir = Path.Combine(Path.GetTempPath(), "UODreamsLauncher", "launcher-update", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(tempDir);
@@ -190,6 +576,8 @@ namespace ClassicUO.Launcher.Custom
                     cancellationToken
                 ).ConfigureAwait(false);
 
+                VerifyDownloadedSha256(archivePath, expectedSha256);
+
                 progress?.Report(new DownloadProgressReport
                 {
                     Status = Loc.S("Estrazione launcher…", "Extracting launcher…"),
@@ -203,8 +591,8 @@ namespace ClassicUO.Launcher.Custom
                 if (newExe == null)
                 {
                     throw new InvalidDataException(Loc.S(
-                        "Pacchetto launcher non valido (UODreams Launcher.exe mancante).",
-                        "Invalid launcher package (UODreams Launcher.exe missing)."));
+                        "Pacchetto launcher non valido (eseguibile launcher mancante).",
+                        "Invalid launcher package (launcher executable missing)."));
                 }
 
                 string installRoot = AppContext.BaseDirectory;
@@ -232,7 +620,18 @@ namespace ClassicUO.Launcher.Custom
 
                 if (sourceAssistant != null)
                 {
+                    // Always overwrite Razor program files (exes/dlls/plugins); profiles guarded inside.
                     UpdateAssistantFolder(sourceAssistant, Path.Combine(installRoot, "Assistant"));
+                    string? razorVersion = ParseVersionFromPackageName(packageFileName);
+                    if (string.IsNullOrWhiteSpace(razorVersion))
+                    {
+                        razorVersion = ParseVersionFromPackageName(Path.GetFileName(downloadUrl));
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(razorVersion))
+                    {
+                        WriteRazorVersionMarker(razorVersion, installRoot);
+                    }
                 }
 
                 string currentExe = Environment.ProcessPath
@@ -376,6 +775,17 @@ namespace ClassicUO.Launcher.Custom
             }
 
             return name.StartsWith($"{LauncherManifest.AssetPrefix}-Launcher-v", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsRazorPackage(string name)
+        {
+            if (!name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            return name.StartsWith("UODreams-PVP-by-lall0ne-Assistant-Razor-v", StringComparison.OrdinalIgnoreCase) ||
+                   name.StartsWith($"{LauncherManifest.AssetPrefix}-Assistant-Razor-v", StringComparison.OrdinalIgnoreCase);
         }
 
         private static string FormatReleaseNotes(string markdown)

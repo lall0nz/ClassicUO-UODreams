@@ -8,6 +8,7 @@ param(
     [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path,
     [string]$DesktopDir = "$env:USERPROFILE\Desktop\0nE-UO-Launcher-v1.2.8-brand-test",
     [string]$TemplateDir = "$env:USERPROFILE\Downloads\UODreams-PVP-by-lall0ne-Launcher-v1.2.8",
+    [string]$BrandTestClientVersion = "1.3.9",
     [switch]$SkipClientRebuild
 )
 
@@ -105,6 +106,9 @@ if (-not $SkipClientRebuild) {
     if (-not (Test-NativeCuoDll (Join-Path $clientDir "cuo.dll"))) { throw "Injected cuo.dll is not native AOT" }
     if (Test-Path (Join-Path $clientDir "SDL3.dll")) { throw "SDL3.dll must not be present (SDL2-only stack)" }
 }
+
+Set-Content -Path (Join-Path $clientDir "uodreams-client.version") -Value $BrandTestClientVersion -Encoding ASCII -NoNewline
+Write-Host "Client version marker: $BrandTestClientVersion (ahead of GitHub 1.3.5 for local dev)" -ForegroundColor DarkGray
 
 # Regenerate carpets.txt so the new default IDs (0x28A4-0x28A6) are included even if an older
 # generated file was copied from the template (StaticFilters only writes it if missing).

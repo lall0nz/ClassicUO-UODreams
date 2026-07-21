@@ -55,6 +55,8 @@ namespace ClassicUO.Game.UI.Gumps
     {
         private const byte FONT = 0xFF;
         private const ushort HUE_FONT = 0xFFFF;
+        private const ushort PureBlackHue = 0x0001;
+        private const ushort PureWhiteHue = 0x0481;
         private const int WIDTH = 700;
         private const int HEIGHT = 500;
         private const int TEXTBOX_HEIGHT = 25;
@@ -87,7 +89,7 @@ namespace ClassicUO.Game.UI.Gumps
         // grid container
         private Checkbox _gridContainerEnabled, _gridHideBorder, _gridContainerPreview;
         private HSliderBar _gridColumns, _gridRows, _gridContainerScale, _gridContainerOpacity, _gridBorderOpacity;
-        private ClickableColorBox _gridBorderHue, _gridContainerBorderHue;
+        private ClickableColorBox _gridBorderHue, _gridContainerBorderHue, _gridContainerBackgroundHue;
         private Combobox _gridSearchMode;
         private Combobox _cotType;
         private DataBox _databox;
@@ -149,8 +151,7 @@ namespace ClassicUO.Game.UI.Gumps
         private Checkbox _ltHighlightRangeOnActivated, _ltHighlightRangeOnCast;
         private HSliderBar _ltHighlightRangeOnActivatedRange, _ltHighlightRangeOnCastRange, _ltHighlightRangeOutlinePixels;
         private ClickableColorBox _ltHighlightRangeOnActivatedHue, _ltHighlightRangeOnCastHue;
-        private Checkbox _highlightMirrorClones, _enableUoDreamsNetworkOptimizer, _enableFullSocketDrain, _fastRotation, _showBandageRingTimer;
-        private InputField _bandageRingTimerX, _bandageRingTimerY;
+        private Checkbox _highlightMirrorClones, _enableUoDreamsNetworkOptimizer, _enableFullSocketDrain, _fastRotation, _showBandageRingTimer, _bandageRingTimerLocked;
         private ClickableColorBox _mirrorCloneHue;
         private static readonly string[] VisualHighlightModes = { "Off", "White", "Pink", "Ice", "Fire", "Custom" };
         private static readonly string[] VisualHighlightStateModes = { "Off", "White", "Pink", "Ice", "Fire", "Special", "Custom" };
@@ -170,7 +171,8 @@ namespace ClassicUO.Game.UI.Gumps
         private readonly List<Control> _optionsSearchMatches = new List<Control>();
         private readonly HashSet<int> _optionsSearchPagesWithHits = new HashSet<int>();
         private readonly Dictionary<Control, int> _optionsSearchSavedY = new Dictionary<Control, int>();
-        private Checkbox _hidePersistentNPCNames, _nameOverheadAlwaysOn;
+        private Checkbox _hidePersistentNPCNames, _nameOverheadAlwaysOn, _showSwingTimerBar, _swingTimerBarLocked, _swingReadyMicroFreezeEnabled;
+        private HSliderBar _swingMicroFreezeDuration;
         private Checkbox _showAllLayersPaperdoll;
         private Checkbox _energyFieldWallOfStoneAutoAvoid;
 
@@ -179,7 +181,8 @@ namespace ClassicUO.Game.UI.Gumps
         private Combobox _infoBarHighlightType;
 
         // combat & spells
-        private ClickableColorBox _innocentColorPickerBox, _friendColorPickerBox, _crimialColorPickerBox, _canAttackColorPickerBox, _enemyColorPickerBox, _murdererColorPickerBox, _neutralColorPickerBox, _beneficColorPickerBox, _harmfulColorPickerBox;
+        private ClickableColorBox _innocentColorPickerBox, _friendColorPickerBox, _crimialColorPickerBox, _canAttackColorPickerBox, _enemyColorPickerBox, _murdererColorPickerBox, _neutralColorPickerBox, _beneficColorPickerBox, _harmfulColorPickerBox, _damageReceivedColorPickerBox, _damageDealtColorPickerBox;
+        private Combobox _damageNumberFontCombo;
         private HSliderBar _lightBar;
         private Checkbox _buffBarTime, _uiButtonsSingleClick, _queryBeforAttackCheckbox, _queryBeforeBeneficialCheckbox, _spellColoringCheckbox, _spellFormatCheckbox, _enableFastSpellsAssign;
 
@@ -600,6 +603,25 @@ namespace ClassicUO.Game.UI.Gumps
             return string.Equals(Settings.GlobalSettings.Language, "ITA", StringComparison.OrdinalIgnoreCase)
                 ? italian
                 : english;
+        }
+
+        private static string FormatSwingMicroFreezeDurationSeconds(int index)
+        {
+            return $"{(200 + index * 50) / 1000.0:0.00}";
+        }
+
+        private static string[] GetDamageFontLabels()
+        {
+            return new[]
+            {
+                OptionsLocalizedLabel("Originale", "Original"),
+                OptionsLocalizedLabel("Old School", "Old School")
+            };
+        }
+
+        private int GetDamageFontComboIndex()
+        {
+            return DamageNumberFontSettings.UsesOldSchoolFont(_currentProfile) ? 1 : 0;
         }
 
         private static void GetControlPositionInOptionsGump(OptionsGump gump, Control c, out int gx, out int gy)
@@ -1133,103 +1155,145 @@ namespace ClassicUO.Game.UI.Gumps
             combat.AddRight(_ltHighlightRangeOnActivatedRange = AddHSlider(null, 1, 18, _currentProfile.LTHighlightRangeOnActivatedRange, startX, startY, 150));
             combat.Add(AddLabel(null, "Tile color", startX, startY));
             combat.AddRight(_ltHighlightRangeOnActivatedHue = AddColorBox(null, startX, startY, _currentProfile.LTHighlightRangeOnActivatedHue, string.Empty), 2);
+            AddBlackWhiteButtons(combat, _ltHighlightRangeOnActivatedHue);
             combat.Add(_ltHighlightRangeOnCast = AddCheckBox(null, "Highlight tiles on range for spells", _currentProfile.LTHighlightRangeOnCast, startX, startY));
             combat.Add(AddLabel(null, "Range", startX, startY));
             combat.AddRight(_ltHighlightRangeOnCastRange = AddHSlider(null, 1, 18, _currentProfile.LTHighlightRangeOnCastRange, startX, startY, 150));
             combat.Add(AddLabel(null, "Tile color", startX, startY));
             combat.AddRight(_ltHighlightRangeOnCastHue = AddColorBox(null, startX, startY, _currentProfile.LTHighlightRangeOnCastHue, string.Empty), 2);
+            AddBlackWhiteButtons(combat, _ltHighlightRangeOnCastHue);
             combat.Add(AddLabel(null, "Outline width (pixels)", startX, startY));
-            combat.AddRight(_ltHighlightRangeOutlinePixels = AddHSlider(null, 1, 10, _currentProfile.LTHighlightRangeOutlinePixels, startX, startY, 150));
+            combat.AddRight(_ltHighlightRangeOutlinePixels = AddHSlider(null, 1, 20, _currentProfile.LTHighlightRangeOutlinePixels, startX, startY, 150));
             combat.Add(_highlightMirrorClones = AddCheckBox(null, "Ghost mirror image clones", _currentProfile.HighlightMirrorImageClones, startX, startY));
             combat.AddRight(_mirrorCloneHue = AddColorBox(null, startX, startY, _currentProfile.MirrorImageCloneHue, string.Empty), 2);
+            AddBlackWhiteButtons(combat, _mirrorCloneHue);
             combat.Add(_showBandageRingTimer = AddCheckBox(null, "Show Timer Countdown", _currentProfile.ShowBandageRingTimer, startX, startY));
-            combat.Add(AddLabel(null, "X", startX, startY));
-            combat.AddRight(
-                _bandageRingTimerX = AddInputField(
+            combat.Add(
+                _bandageRingTimerLocked = AddCheckBox(
                     null,
+                    OptionsLocalizedLabel("Blocca timer countdown", "Lock timer countdown"),
+                    _currentProfile.BandageRingTimerLocked,
                     startX,
-                    startY,
-                    50,
-                    TEXTBOX_HEIGHT,
-                    null,
-                    50,
-                    false,
-                    false
-                ),
-                4
-            );
-            _bandageRingTimerX.SetText(_currentProfile.BandageRingTimerX < 0 ? string.Empty : _currentProfile.BandageRingTimerX.ToString());
-            combat.AddRight(AddLabel(null, "Y", startX, startY), 2);
-            combat.AddRight(
-                _bandageRingTimerY = AddInputField(
-                    null,
-                    startX,
-                    startY,
-                    50,
-                    TEXTBOX_HEIGHT,
-                    null,
-                    50,
-                    false,
-                    false
+                    startY
                 )
             );
-            _bandageRingTimerY.SetText(_currentProfile.BandageRingTimerY < 0 ? string.Empty : _currentProfile.BandageRingTimerY.ToString());
-            NiceButton resetTimerPosButton = new NiceButton(0, 0, 110, 22, ButtonAction.Activate, "Reset Position")
-            {
-                IsSelectable = false
-            };
-            resetTimerPosButton.MouseUp += (_, _) =>
-            {
-                _bandageRingTimerX?.SetText(string.Empty);
-                _bandageRingTimerY?.SetText(string.Empty);
-                if (_currentProfile != null)
-                {
-                    _currentProfile.BandageRingTimerX = -1;
-                    _currentProfile.BandageRingTimerY = -1;
-                }
-            };
-            combat.AddRight(resetTimerPosButton, 6);
-            combat.AddRight(AddLabel(null, "(under player)", startX, startY), 4);
+
+            SettingsSection swingAssistant = AddSettingsSection(box, "Swing Assistant");
+            swingAssistant.Y = combat.Bounds.Bottom + OptionsSectionGap;
+
+            swingAssistant.Add(
+                _showSwingTimerBar = AddCheckBox(
+                    null,
+                    OptionsLocalizedLabel("Mostra barra swing (timer)", "Show swing timer bar"),
+                    _currentProfile.ShowSwingTimerBar,
+                    startX,
+                    startY
+                )
+            );
+            swingAssistant.Add(
+                _swingTimerBarLocked = AddCheckBox(
+                    null,
+                    OptionsLocalizedLabel("Blocca barra swing", "Lock swing bar"),
+                    _currentProfile.SwingTimerBarLocked,
+                    startX,
+                    startY
+                )
+            );
+            swingAssistant.Add(
+                _swingReadyMicroFreezeEnabled = AddCheckBox(
+                    null,
+                    OptionsLocalizedLabel(
+                        "Micro-freeze quando swing pronta",
+                        "Micro-freeze when swing ready"
+                    ),
+                    _currentProfile.SwingReadyMicroFreezeEnabled,
+                    startX,
+                    startY
+                )
+            );
+            swingAssistant.Add(
+                AddLabel(
+                    null,
+                    OptionsLocalizedLabel(
+                        "Durata micro-freeze (0,2–0,8 s)",
+                        "Micro-freeze duration (0.2–0.8 s)"
+                    ),
+                    startX,
+                    startY
+                )
+            );
+            swingAssistant.AddRight(
+                _swingMicroFreezeDuration = AddHSlider(
+                    null,
+                    0,
+                    12,
+                    Math.Clamp((_currentProfile.SwingReadyMicroFreezeDurationMs - 200 + 25) / 50, 0, 12),
+                    startX,
+                    startY,
+                    150
+                ),
+                2
+            );
+            _swingMicroFreezeDuration.ValueFormatter = FormatSwingMicroFreezeDurationSeconds;
+            swingAssistant.Add(
+                AddLabel(
+                    null,
+                    OptionsLocalizedLabel(
+                        "(non funziona con moving shot ovviamente)",
+                        "(does not work with moving shot, obviously)"
+                    ),
+                    startX,
+                    startY
+                )
+            );
+            swingAssistant.SyncContentHeight();
 
             SettingsSection visualHelpers = AddSettingsSection(box, "Visual Helpers");
-            visualHelpers.Y = combat.Bounds.Bottom + OptionsSectionGap;
+            visualHelpers.Y = swingAssistant.Bounds.Bottom + OptionsSectionGap;
 
-            visualHelpers.Add(_nameOverheadAlwaysOn = AddCheckBox(null, "Always show name overheads", _currentProfile.NameOverheadToggled, startX, startY));
+            visualHelpers.Add(_nameOverheadAlwaysOn = AddCheckBox(null, "Always show name overheads (mobiles only)", _currentProfile.NameOverheadToggled, startX, startY));
 
             visualHelpers.Add(AddLabel(null, "Glowing Weapons", startX, startY));
             visualHelpers.AddRight(_glowingWeaponsType = AddCombobox(null, VisualHighlightModes, _currentProfile.GlowingWeaponsType, startX, startY, 100), 2);
             visualHelpers.Add(AddLabel(null, "Custom color", startX, startY));
             visualHelpers.AddRight(_highlightGlowingWeaponsTypeHue = AddColorBox(null, startX, startY, _currentProfile.HighlightGlowingWeaponsTypeHue, string.Empty), 2);
+            AddBlackWhiteButtons(visualHelpers, _highlightGlowingWeaponsTypeHue);
 
             visualHelpers.Add(AddLabel(null, "Highlight lasttarget", startX, startY));
             visualHelpers.AddRight(_highlightLastTargetType = AddCombobox(null, VisualHighlightModes, _currentProfile.HighlightLastTargetType, startX, startY, 100), 2);
             visualHelpers.Add(AddLabel(null, "Custom color", startX, startY));
             visualHelpers.AddRight(_highlightLastTargetTypeHue = AddColorBox(null, startX, startY, _currentProfile.HighlightLastTargetTypeHue, string.Empty), 2);
+            AddBlackWhiteButtons(visualHelpers, _highlightLastTargetTypeHue);
 
             visualHelpers.Add(AddLabel(null, "Highlight Friends Guild Mobiles", startX, startY));
             visualHelpers.AddRight(_highlighFriendsGuildType = AddCombobox(null, VisualHighlightModes, _currentProfile.HighlighFriendsGuildType, startX, startY, 100), 2);
             visualHelpers.Add(AddLabel(null, "Custom color", startX, startY));
             visualHelpers.AddRight(_highlighFriendsGuildTypeHue = AddColorBox(null, startX, startY, _currentProfile.HighlighFriendsGuildTypeHue, string.Empty), 2);
+            AddBlackWhiteButtons(visualHelpers, _highlighFriendsGuildTypeHue);
 
             visualHelpers.Add(AddLabel(null, "Highlight lasttarget poisoned", startX, startY));
             visualHelpers.AddRight(_highlightLastTargetTypePoison = AddCombobox(null, VisualHighlightStateModes, _currentProfile.HighlightLastTargetTypePoison, startX, startY, 100), 2);
             visualHelpers.Add(AddLabel(null, "Custom color", startX, startY));
             visualHelpers.AddRight(_highlightLastTargetTypePoisonHue = AddColorBox(null, startX, startY, _currentProfile.HighlightLastTargetTypePoisonHue, string.Empty), 2);
+            AddBlackWhiteButtons(visualHelpers, _highlightLastTargetTypePoisonHue);
 
             visualHelpers.Add(AddLabel(null, "Highlight lasttarget paralyzed", startX, startY));
             visualHelpers.AddRight(_highlightLastTargetTypePara = AddCombobox(null, VisualHighlightStateModes, _currentProfile.HighlightLastTargetTypePara, startX, startY, 100), 2);
             visualHelpers.Add(AddLabel(null, "Custom color", startX, startY));
             visualHelpers.AddRight(_highlightLastTargetTypeParaHue = AddColorBox(null, startX, startY, _currentProfile.HighlightLastTargetTypeParaHue, string.Empty), 2);
+            AddBlackWhiteButtons(visualHelpers, _highlightLastTargetTypeParaHue);
 
             visualHelpers.Add(AddLabel(null, "Highlight lasttarget stunned", startX, startY));
             visualHelpers.AddRight(_highlightLastTargetTypeStunned = AddCombobox(null, VisualHighlightStateModes, _currentProfile.HighlightLastTargetTypeStunned, startX, startY, 100), 2);
             visualHelpers.Add(AddLabel(null, "Custom color", startX, startY));
             visualHelpers.AddRight(_highlightLastTargetTypeStunnedHue = AddColorBox(null, startX, startY, _currentProfile.HighlightLastTargetTypeStunnedHue, string.Empty), 2);
+            AddBlackWhiteButtons(visualHelpers, _highlightLastTargetTypeStunnedHue);
 
             visualHelpers.Add(AddLabel(null, "Highlight lasttarget mortalled (yellow hits)", startX, startY));
             visualHelpers.AddRight(_highlightLastTargetTypeMortalled = AddCombobox(null, VisualHighlightStateModes, _currentProfile.HighlightLastTargetTypeMortalled, startX, startY, 100), 2);
             visualHelpers.Add(AddLabel(null, "Custom color", startX, startY));
             visualHelpers.AddRight(_highlightLastTargetTypeMortalledHue = AddColorBox(null, startX, startY, _currentProfile.HighlightLastTargetTypeMortalledHue, string.Empty), 2);
+            AddBlackWhiteButtons(visualHelpers, _highlightLastTargetTypeMortalledHue);
             visualHelpers.Add(
                 _energyFieldWallOfStoneAutoAvoid = AddCheckBox(
                     null,
@@ -3757,8 +3821,50 @@ namespace ClassicUO.Game.UI.Gumps
 
             startY += _neutralColorPickerBox.Height + 2;
 
+            _damageReceivedColorPickerBox = AddColorBox
+            (
+                rightArea,
+                startX,
+                startY,
+                _currentProfile.DamageReceivedHue,
+                OptionsLocalizedLabel("Danno Ricevuto", "Damage Received")
+            );
+
+            startY += _damageReceivedColorPickerBox.Height + 2;
+
+            _damageDealtColorPickerBox = AddColorBox
+            (
+                rightArea,
+                startX,
+                startY,
+                _currentProfile.DamageDealtHue,
+                OptionsLocalizedLabel("Danno Effettuato", "Damage Dealt")
+            );
+
+            startY += _damageDealtColorPickerBox.Height + 2;
+
+            Label damageFontLabel = AddLabel
+            (
+                rightArea,
+                OptionsLocalizedLabel("Font danni", "Damage font"),
+                startX,
+                startY
+            );
+
+            _damageNumberFontCombo = AddCombobox
+            (
+                rightArea,
+                GetDamageFontLabels(),
+                GetDamageFontComboIndex(),
+                startX + damageFontLabel.Width + 8,
+                startY,
+                160
+            );
+
+            startY += damageFontLabel.Height + 2;
+
             startX = 5;
-            startY += (_neutralColorPickerBox.Height + 2) * 4;
+            startY += (_neutralColorPickerBox.Height + 2) * 2;
 
             _spellFormatBox = AddInputField
             (
@@ -4293,6 +4399,11 @@ namespace ClassicUO.Game.UI.Gumps
             _gridContainerOpacity = AddHSlider(rightArea, 0, 100, _currentProfile.ContainerOpacity, startX + text.Width + 5, startY, 150);
             startY += text.Height + 4;
 
+            text = AddLabel(rightArea, "Background color", startX, startY);
+            _gridContainerBackgroundHue = AddColorBox(rightArea, startX + text.Width + 5, startY, _currentProfile.AltGridContainerBackgroundHue, string.Empty);
+            AddBlackWhiteButtonsBeside(rightArea, _gridContainerBackgroundHue);
+            startY += _gridContainerBackgroundHue.Height + 4;
+
             text = AddLabel(rightArea, "Search mode", startX, startY);
             _gridSearchMode = AddCombobox(rightArea, new[] { "Filter", "Highlight" }, _currentProfile.GridContainerSearchMode, startX + text.Width + 5, startY, 120);
             startY += text.Height + 4;
@@ -4303,10 +4414,12 @@ namespace ClassicUO.Game.UI.Gumps
 
             text = AddLabel(rightArea, "Grid line color", startX, startY);
             _gridBorderHue = AddColorBox(rightArea, startX + text.Width + 5, startY, _currentProfile.GridBorderHue, string.Empty);
+            AddBlackWhiteButtonsBeside(rightArea, _gridBorderHue);
             startY += _gridBorderHue.Height + 4;
 
             text = AddLabel(rightArea, "Container border color", startX, startY);
             _gridContainerBorderHue = AddColorBox(rightArea, startX + text.Width + 5, startY, _currentProfile.GridContainerBorderHue, string.Empty);
+            AddBlackWhiteButtonsBeside(rightArea, _gridContainerBorderHue);
             startY += _gridContainerBorderHue.Height + 6;
 
             startX = 5;
@@ -4675,6 +4788,7 @@ namespace ClassicUO.Game.UI.Gumps
                     _gridRows.Value = 4;
                     _gridContainerScale.Value = 100;
                     _gridContainerOpacity.Value = 80;
+                    _gridContainerBackgroundHue.Hue = 0;
                     _gridSearchMode.SelectedIndex = 0;
                     _gridBorderOpacity.Value = 35;
                     _gridBorderHue.Hue = 946;
@@ -4786,23 +4900,7 @@ namespace ClassicUO.Game.UI.Gumps
             _currentProfile.LTHighlightRangeOutlinePixels = _ltHighlightRangeOutlinePixels.Value;
             _currentProfile.HighlightMirrorImageClones = _highlightMirrorClones.IsChecked;
             _currentProfile.ShowBandageRingTimer = _showBandageRingTimer.IsChecked;
-            if (string.IsNullOrWhiteSpace(_bandageRingTimerX?.Text))
-            {
-                _currentProfile.BandageRingTimerX = -1;
-            }
-            else if (int.TryParse(_bandageRingTimerX.Text, out int timerX))
-            {
-                _currentProfile.BandageRingTimerX = timerX;
-            }
-
-            if (string.IsNullOrWhiteSpace(_bandageRingTimerY?.Text))
-            {
-                _currentProfile.BandageRingTimerY = -1;
-            }
-            else if (int.TryParse(_bandageRingTimerY.Text, out int timerY))
-            {
-                _currentProfile.BandageRingTimerY = timerY;
-            }
+            _currentProfile.BandageRingTimerLocked = _bandageRingTimerLocked?.IsChecked ?? _currentProfile.BandageRingTimerLocked;
             _currentProfile.MirrorImageCloneHue = _mirrorCloneHue.Hue;
             _currentProfile.GlowingWeaponsType = _glowingWeaponsType.SelectedIndex;
             _currentProfile.HighlightGlowingWeaponsTypeHue = _highlightGlowingWeaponsTypeHue.Hue;
@@ -4818,6 +4916,10 @@ namespace ClassicUO.Game.UI.Gumps
             _currentProfile.HighlightLastTargetTypeParaHue = _highlightLastTargetTypeParaHue.Hue;
             _currentProfile.HighlightLastTargetTypeStunnedHue = _highlightLastTargetTypeStunnedHue.Hue;
             _currentProfile.HighlightLastTargetTypeMortalledHue = _highlightLastTargetTypeMortalledHue.Hue;
+            _currentProfile.ShowSwingTimerBar = _showSwingTimerBar?.IsChecked ?? _currentProfile.ShowSwingTimerBar;
+            _currentProfile.SwingTimerBarLocked = _swingTimerBarLocked?.IsChecked ?? _currentProfile.SwingTimerBarLocked;
+            _currentProfile.SwingReadyMicroFreezeEnabled = _swingReadyMicroFreezeEnabled?.IsChecked ?? _currentProfile.SwingReadyMicroFreezeEnabled;
+            _currentProfile.SwingReadyMicroFreezeDurationMs = 200 + (_swingMicroFreezeDuration?.Value ?? Math.Clamp((_currentProfile.SwingReadyMicroFreezeDurationMs - 200 + 25) / 50, 0, 12)) * 50;
             bool energyFieldAutoAvoid = _energyFieldWallOfStoneAutoAvoid.IsChecked;
             _currentProfile.BlockEnergyFArtForceAoS = energyFieldAutoAvoid;
 
@@ -5133,6 +5235,12 @@ namespace ClassicUO.Game.UI.Gumps
             _currentProfile.BeneficHue = _beneficColorPickerBox.Hue;
             _currentProfile.HarmfulHue = _harmfulColorPickerBox.Hue;
             _currentProfile.NeutralHue = _neutralColorPickerBox.Hue;
+            _currentProfile.DamageReceivedHue = _damageReceivedColorPickerBox.Hue;
+            _currentProfile.DamageDealtHue = _damageDealtColorPickerBox.Hue;
+            DamageNumberFontSettings.ApplyPreset(
+                _currentProfile,
+                (_damageNumberFontCombo?.SelectedIndex ?? 0) == 1
+            );
             _currentProfile.EnabledSpellHue = _spellColoringCheckbox.IsChecked;
             _currentProfile.EnabledSpellFormat = _spellFormatCheckbox.IsChecked;
             _currentProfile.SpellDisplayFormat = _spellFormatBox.Text;
@@ -5362,6 +5470,7 @@ namespace ClassicUO.Game.UI.Gumps
             _currentProfile.Grid_DefaultRows = _gridRows.Value;
             _currentProfile.GridContainersScale = _gridContainerScale.Value;
             _currentProfile.ContainerOpacity = _gridContainerOpacity.Value;
+            _currentProfile.AltGridContainerBackgroundHue = _gridContainerBackgroundHue.Hue;
             _currentProfile.GridContainerSearchMode = _gridSearchMode.SelectedIndex;
             _currentProfile.GridBorderAlpha = _gridBorderOpacity.Value;
             _currentProfile.GridBorderHue = _gridBorderHue.Hue;
@@ -5398,6 +5507,8 @@ namespace ClassicUO.Game.UI.Gumps
             _currentProfile.TooltipFont = _tooltip_font_selector.GetSelectedFont();
 
             _currentProfile?.Save(World, ProfileManager.ProfilePath);
+
+            UOClassicCombatSwingGump.RefreshOpenGump(World);
         }
 
         internal void UpdateVideo()
@@ -5661,6 +5772,53 @@ namespace ClassicUO.Game.UI.Gumps
             );
 
             return box;
+        }
+
+        private void AddBlackWhiteButtons(SettingsSection section, ClickableColorBox colorBox)
+        {
+            if (section == null || colorBox == null)
+            {
+                return;
+            }
+
+            section.AddRight(CreateHuePresetButton(OptionsLocalizedLabel("Nero", "Black"), colorBox, PureBlackHue), 4);
+            section.AddRight(CreateHuePresetButton(OptionsLocalizedLabel("Bianco", "White"), colorBox, PureWhiteHue), 2);
+        }
+
+        private void AddBlackWhiteButtonsBeside(ScrollArea area, ClickableColorBox colorBox)
+        {
+            if (area == null || colorBox == null)
+            {
+                return;
+            }
+
+            NiceButton black = CreateHuePresetButton(OptionsLocalizedLabel("Nero", "Black"), colorBox, PureBlackHue);
+            black.X = colorBox.X + colorBox.Width + 4;
+            black.Y = colorBox.Y;
+            area.Add(black);
+
+            NiceButton white = CreateHuePresetButton(OptionsLocalizedLabel("Bianco", "White"), colorBox, PureWhiteHue);
+            white.X = black.X + black.Width + 2;
+            white.Y = colorBox.Y;
+            area.Add(white);
+        }
+
+        private NiceButton CreateHuePresetButton(string label, ClickableColorBox colorBox, ushort hue)
+        {
+            NiceButton button = new NiceButton(0, 0, 48, 20, ButtonAction.Activate, label)
+            {
+                ButtonParameter = (int)Buttons.Disabled
+            };
+
+            button.MouseUp += (_, e) =>
+            {
+                if (e.Button == MouseButtonType.Left)
+                {
+                    colorBox.Hue = hue;
+                }
+            };
+
+            return button;
         }
 
         private SettingsSection AddSettingsSection(DataBox area, string label)

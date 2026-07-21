@@ -28,6 +28,10 @@ namespace ClassicUO.Launcher.Custom
         public int ShardPort { get; set; } = 2593;
         public int Encryption { get; set; } = 0;
         public bool DesktopShortcutCreated { get; set; } = false;
+        /// <summary>
+        /// Tracks desktop shortcut branding refresh (e.g. oneuo-1 after 0nE rebrand).
+        /// </summary>
+        public string DesktopShortcutRevision { get; set; } = "";
         public bool FirstRunCompleted { get; set; } = false;
         public string Language { get; set; } = "en"; // it | en
         public string InstalledClientVersion { get; set; } = "";

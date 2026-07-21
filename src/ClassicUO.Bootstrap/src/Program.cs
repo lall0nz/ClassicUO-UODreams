@@ -3,6 +3,7 @@ using CUO_API;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -98,6 +99,9 @@ sealed class ClassicUOHost : IPluginHandler
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     delegate void dOnPluginCommandList(out IntPtr list, out int len);
 
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    delegate bool dIsFriend(int serial);
+
 
     private readonly FuncPointer<dOnPluginLoad> _loadPluginDel;
     private readonly FuncPointer<dOnPluginBindCuoFunctions> _initCuoFunctionsDel;
@@ -111,6 +115,10 @@ sealed class ClassicUOHost : IPluginHandler
     private readonly FuncPointer<dOnPluginFocusWindow> _focusGainedDel, _focusLostDel;
     private readonly FuncPointer<dOnPluginSdlEvent> _sdlEventDel;
     private readonly FuncPointer<dOnPluginCommandList> _cmdListDel;
+    private readonly FuncPointer<dIsFriend> _isFriendDel;
+
+    private static Func<int, bool> _razorIsFriend;
+    private static bool _razorIsFriendResolveAttempted;
     
 
     public ClassicUOHost()
@@ -130,6 +138,7 @@ sealed class ClassicUOHost : IPluginHandler
         _focusLostDel = new FuncPointer<dOnPluginFocusWindow>(FocusLost);
         _sdlEventDel = new FuncPointer<dOnPluginSdlEvent>(SdlEvent);
         _cmdListDel = new FuncPointer<dOnPluginCommandList>(GetCommandList);
+        _isFriendDel = new FuncPointer<dIsFriend>(IsRazorFriend);
     }
 
     public void Run(string[] args)
@@ -179,6 +188,7 @@ sealed class ClassicUOHost : IPluginHandler
             hostSetup.ConnectedFn = _connectedDel.Pointer;
             hostSetup.DisconnectedFn = _disconnectedDel.Pointer;
             hostSetup.CmdListFn = _cmdListDel.Pointer;
+            hostSetup.IsFriendFn = _isFriendDel.Pointer;
 
             initializeMethod(argv, args.Length, mem);
 
@@ -343,6 +353,73 @@ sealed class ClassicUOHost : IPluginHandler
             plugin.GetCommandList(out data, out len);
     }
 
+    /// <summary>
+    /// Called from NativeAOT cuo.dll. RazorEnhanced lives in this net472 AppDomain only.
+    /// </summary>
+    bool IsRazorFriend(int serial)
+    {
+        try
+        {
+            if (_razorIsFriend == null)
+            {
+                if (!_razorIsFriendResolveAttempted)
+                {
+                    _razorIsFriendResolveAttempted = true;
+                    TryResolveRazorIsFriend();
+                }
+
+                if (_razorIsFriend == null)
+                {
+                    // Plugin may not be loaded yet — allow retry next call.
+                    _razorIsFriendResolveAttempted = false;
+                    return false;
+                }
+            }
+
+            return _razorIsFriend(serial);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    static void TryResolveRazorIsFriend()
+    {
+        try
+        {
+            foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                Type type = asm.GetType("RazorEnhanced.Friend");
+
+                if (type == null)
+                {
+                    continue;
+                }
+
+                MethodInfo method = type.GetMethod(
+                    "IsFriend",
+                    BindingFlags.Public | BindingFlags.Static,
+                    binder: null,
+                    types: new[] { typeof(int) },
+                    modifiers: null
+                );
+
+                if (method == null)
+                {
+                    continue;
+                }
+
+                _razorIsFriend = (Func<int, bool>)Delegate.CreateDelegate(typeof(Func<int, bool>), method);
+                return;
+            }
+        }
+        catch
+        {
+            _razorIsFriend = null;
+        }
+    }
+
 
     public unsafe void ReflectionUsePrimaryAbility()
     {
@@ -482,6 +559,7 @@ unsafe struct HostBindings
     public IntPtr /*delegate*<int, int, int, void>*/ UpdatePlayerPosFn;
     public IntPtr PacketInFn;
     public IntPtr PacketOutFn;
+    public IntPtr /*delegate*<int, bool>*/ IsFriendFn;
 }
 
 [StructLayout(LayoutKind.Sequential)]

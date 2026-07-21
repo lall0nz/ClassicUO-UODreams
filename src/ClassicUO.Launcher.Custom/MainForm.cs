@@ -885,18 +885,52 @@ namespace ClassicUO.Launcher.Custom
 
             if (info.NeedsLauncherUpdate)
             {
-                lines.AppendLine(Loc.S("• Aggiornamento launcher", "• Launcher update"));
+                lines.AppendLine(FormatComponentUpdateLine(
+                    Loc.S("Launcher", "Launcher"),
+                    info.LocalLauncherVersion,
+                    info.LauncherRemoteVersion ?? info.LatestVersion,
+                    info.LauncherSizeBytes));
             }
 
             if (info.NeedsClientUpdate)
             {
-                lines.AppendLine(Loc.S("• Aggiornamento client ClassicUO", "• ClassicUO client update"));
+                lines.AppendLine(FormatComponentUpdateLine(
+                    Loc.S("Client ClassicUO", "ClassicUO client"),
+                    info.LocalClientVersion,
+                    info.ClientRemoteVersion ?? info.LatestVersion,
+                    info.ClientSizeBytes));
             }
+
+            if (info.NeedsRazorUpdate)
+            {
+                lines.AppendLine(FormatComponentUpdateLine(
+                    Loc.S("Razor Enhanced", "Razor Enhanced"),
+                    info.LocalRazorVersion,
+                    info.RazorRemoteVersion ?? info.LatestVersion,
+                    info.RazorSizeBytes));
+            }
+
+            if (info.UsesManifest)
+            {
+                lines.AppendLine();
+                lines.AppendLine(Loc.S(
+                    "Il profilo \"Default PVP\" non verra' sovrascritto se gia' presente.",
+                    "The \"Default PVP\" profile will not be overwritten if already present."));
+            }
+
             if (!string.IsNullOrWhiteSpace(info.ReleaseNotes))
             {
                 lines.AppendLine();
-                lines.AppendLine(Loc.S("Novità:", "What's new:"));
+                lines.AppendLine(Loc.S("Novita':", "What's new:"));
                 lines.AppendLine(info.ReleaseNotes);
+            }
+
+            if (info.TotalDownloadBytes > 0)
+            {
+                lines.AppendLine();
+                lines.AppendLine(Loc.S(
+                    $"Download totale stimato: {UoClientDownloader.FormatBytes(info.TotalDownloadBytes)}.",
+                    $"Estimated total download: {UoClientDownloader.FormatBytes(info.TotalDownloadBytes)}."));
             }
 
             lines.AppendLine();
@@ -905,6 +939,27 @@ namespace ClassicUO.Launcher.Custom
                 "Proceed with download and installation?"));
 
             return lines.ToString().TrimEnd();
+        }
+
+        private static string FormatComponentUpdateLine(
+            string label,
+            string localVersion,
+            string remoteVersion,
+            long sizeBytes)
+        {
+            string local = string.IsNullOrWhiteSpace(localVersion) ? "0.0.0" : localVersion;
+            string remote = string.IsNullOrWhiteSpace(remoteVersion) ? "?" : remoteVersion;
+            string sizeSuffix = sizeBytes > 0
+                ? $"  (~{UoClientDownloader.FormatBytes(sizeBytes)})"
+                : "";
+            return Loc.S(
+                $"• {label}  v{local} -> v{remote}{sizeSuffix}",
+                $"• {label}  v{local} -> v{remote}{sizeSuffix}");
+        }
+
+        private void MarkRazorUpdated(string version)
+        {
+            LauncherUpdater.WriteRazorVersionMarker(version);
         }
 
         private void MarkClientUpdated(string version)
@@ -2372,16 +2427,17 @@ namespace ClassicUO.Launcher.Custom
                     SetUpdateAvailable(false);
                     string launcherVer = LauncherManifest.RuntimeLauncherVersion;
                     string clientVer = _settings.EffectiveClientVersion;
+                    string razorVer = LauncherUpdater.ResolveEffectiveRazorVersion();
                     _statusLabel.ForeColor = Theme.SectionGreen;
                     _statusLabel.Text = Loc.S(
-                        $"Sei già aggiornato (launcher v{launcherVer}, client v{clientVer}).",
-                        $"You are up to date (launcher v{launcherVer}, client v{clientVer}).");
+                        $"Sei gia' aggiornato (launcher v{launcherVer}, client v{clientVer}, Razor v{razorVer}).",
+                        $"You are up to date (launcher v{launcherVer}, client v{clientVer}, Razor v{razorVer}).");
                     ThemedMessageDialog.ShowInfo(
                         this,
                         Loc.S("Aggiornamento", "Update"),
                         Loc.S(
-                            $"Launcher e client sono aggiornati (launcher v{launcherVer}, client v{clientVer}).",
-                            $"Launcher and client are up to date (launcher v{launcherVer}, client v{clientVer})."));
+                            $"Launcher, client e Razor sono aggiornati (launcher v{launcherVer}, client v{clientVer}, Razor v{razorVer}).",
+                            $"Launcher, client, and Razor are up to date (launcher v{launcherVer}, client v{clientVer}, Razor v{razorVer})."));
                     return;
                 }
 
@@ -2398,24 +2454,48 @@ namespace ClassicUO.Launcher.Custom
                     return;
                 }
 
-                // Client first: launcher update restarts the process and would skip client otherwise.
+                // Client first: launcher update restarts the process and would skip later steps otherwise.
                 if (info.NeedsClientUpdate &&
                     !string.IsNullOrEmpty(info.ClientDownloadUrl) &&
                     !string.IsNullOrEmpty(info.ClientPackageFileName))
                 {
                     using var clientForm = DownloadProgressForm.ForClientRuntimeUpdate(
                         info.ClientDownloadUrl,
-                        info.ClientPackageFileName);
+                        info.ClientPackageFileName,
+                        info.ClientSha256);
                     if (clientForm.ShowDialog(this) != DialogResult.OK)
                     {
                         ShowError(Loc.S("Aggiornamento client non riuscito.", "Client update failed."));
                         return;
                     }
 
-                    string? clientVersion = LauncherUpdater.ParseVersionFromPackageName(info.ClientPackageFileName)
+                    string? clientVersion = info.ClientRemoteVersion
+                        ?? LauncherUpdater.ParseVersionFromPackageName(info.ClientPackageFileName)
                         ?? info.LatestVersion;
                     MarkClientUpdated(clientVersion);
                     _clientPathBox.Text = DetectDefaultClient();
+                    UpdateAssistantUi();
+                }
+
+                if (info.NeedsRazorUpdate &&
+                    info.UsesManifest &&
+                    !string.IsNullOrEmpty(info.RazorDownloadUrl) &&
+                    !string.IsNullOrEmpty(info.RazorPackageFileName))
+                {
+                    using var razorForm = DownloadProgressForm.ForRazorUpdate(
+                        info.RazorDownloadUrl,
+                        info.RazorPackageFileName,
+                        info.RazorSha256);
+                    if (razorForm.ShowDialog(this) != DialogResult.OK)
+                    {
+                        ShowError(Loc.S("Aggiornamento Razor non riuscito.", "Razor update failed."));
+                        return;
+                    }
+
+                    string? razorVersion = info.RazorRemoteVersion
+                        ?? LauncherUpdater.ParseVersionFromPackageName(info.RazorPackageFileName)
+                        ?? info.LatestVersion;
+                    MarkRazorUpdated(razorVersion);
                     UpdateAssistantUi();
                 }
 
@@ -2425,7 +2505,8 @@ namespace ClassicUO.Launcher.Custom
                 {
                     using var launcherForm = DownloadProgressForm.ForLauncherUpdate(
                         info.LauncherDownloadUrl,
-                        info.LauncherPackageFileName);
+                        info.LauncherPackageFileName,
+                        info.LauncherSha256);
                     launcherForm.ShowDialog(this);
                     Environment.Exit(0);
                     return;

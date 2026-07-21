@@ -1020,6 +1020,11 @@ namespace ClassicUO.Game
 
         public void ProcessAutoWalk()
         {
+            if (SwingTimerService.IsMicroFreezeActive())
+            {
+                return;
+            }
+
             if (AutoWalking && _world.InGame && _world.Player.Walker.StepsCount < Constants.MAX_STEP_COUNT && _world.Player.Walker.LastStepRequestTime <= Time.Ticks)
             {
                 if (_pointIndex >= 0 && _pointIndex < _pathSize)

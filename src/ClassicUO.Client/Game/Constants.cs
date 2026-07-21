@@ -73,7 +73,7 @@ namespace ClassicUO.Game
         public const byte ALPHA_TIME = 20;
 
         public const int MAX_OBJECT_HANDLES = 200;
-        public const int OBJECT_HANDLES_GUMP_WIDTH = 100;
+        public const int OBJECT_HANDLES_GUMP_WIDTH = 450; // ~50 chars at default overhead font (was 100 / ~11 chars)
         public const int OBJECT_HANDLES_GUMP_HEIGHT = 18;
 
         public const int SPELLBOOK_1_SPELLS_COUNT = 64;

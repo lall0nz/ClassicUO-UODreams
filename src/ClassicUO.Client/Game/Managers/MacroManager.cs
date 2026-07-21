@@ -1804,6 +1804,19 @@ namespace ClassicUO.Game.Managers
                     ProfileManager.CurrentProfile.InvisibleHousesEnabled = !ProfileManager.CurrentProfile.InvisibleHousesEnabled;
 
                     break;
+
+                case MacroType.ToggleSwingReadyMicroFreeze:
+                    ProfileManager.CurrentProfile.SwingReadyMicroFreezeEnabled =
+                        !ProfileManager.CurrentProfile.SwingReadyMicroFreezeEnabled;
+
+                    GameActions.Print(
+                        _world,
+                        ProfileManager.CurrentProfile.SwingReadyMicroFreezeEnabled
+                            ? "Swing micro-freeze: ON"
+                            : "Swing micro-freeze: OFF"
+                    );
+
+                    break;
             }
 
 
@@ -2349,6 +2362,7 @@ namespace ClassicUO.Game.Managers
         CloseCorpses,
         UseObject,
         LookAtMouse,
+        ToggleSwingReadyMicroFreeze, // Dust765 swing timer helper
         ToggleInvisibleHouses // Dust765
     }
 

@@ -1,8 +1,11 @@
 # Builds GitHub Release assets for UODreams PVP Launcher (v1.3.x channel).
 param(
-    [string]$Version = "1.3.1",
+    [string]$Version = "1.3.9",
     [string]$OfficialCuo = "$env:USERPROFILE\Downloads\UODreams-PVP-by-lall0ne-Launcher-v1.3.0\Client",
-    [string]$RazorSourceDir = "$env:USERPROFILE\Downloads\UODreams-PVP-by-lall0ne-Launcher-v1.3.0\Assistant\RazorEnhanced",
+    # Sole Razor source: Desktop brand-test (do NOT use Downloads v1.3.0 Assistant).
+    [string]$RazorSourceDir = "$env:USERPROFILE\Desktop\0nE-UO-Launcher-v1.2.8-brand-test\Assistant\RazorEnhanced",
+    # Stock "default" comes from the same Razor source unless overridden.
+    [string]$RazorStockProfileSourceDir = "",
     [string]$StockProfileName = "default",
     [string]$PvpProfileName = "Default PVP",
     [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path,
@@ -82,6 +85,10 @@ function Resolve-LauncherExeName() {
     return "0nE UO Launcher.exe"
 }
 
+function Resolve-LegacyLauncherExeName() {
+    return "UODreams Launcher.exe"
+}
+
 function Resolve-LauncherEdition() {
     return "oneuo"
 }
@@ -124,6 +131,28 @@ function Resolve-OfficialCuoRoot([string]$Path) {
     $nested = Join-Path $Path "ClassicUO"
     if (Test-Path $nested) { return Resolve-OfficialCuoRoot $nested }
     return $null
+}
+
+function Resolve-RazorSourceDir([string]$ExplicitPath, [string]$RepoRoot) {
+    $candidates = @()
+    if (-not [string]::IsNullOrWhiteSpace($ExplicitPath)) { $candidates += $ExplicitPath }
+    # Only brand-test Desktop path — never fall back to Downloads/older Assistant.
+    $candidates += @(
+        "$env:USERPROFILE\Desktop\0nE-UO-Launcher-v1.2.8-brand-test\Assistant\RazorEnhanced"
+    )
+    foreach ($path in $candidates) {
+        if ([string]::IsNullOrWhiteSpace($path)) { continue }
+        $exe = Join-Path $path "RazorEnhanced.exe"
+        if ((Test-Path $exe) -and (Test-Path (Join-Path $path "Profiles"))) {
+            Write-Host "Razor source: $path" -ForegroundColor DarkGray
+            return $path
+        }
+        if ((Test-Path $exe) -and -not (Test-Path (Join-Path $path "Profiles"))) {
+            Write-Host "Razor binaries only (no Profiles): $path" -ForegroundColor DarkGray
+            return $path
+        }
+    }
+    throw "No Razor source found. Expected Desktop brand-test Assistant\RazorEnhanced (or set -RazorSourceDir)."
 }
 
 function Resolve-ProfileDir([string]$ProfilesRoot, [string]$ProfileName) {
@@ -170,6 +199,8 @@ function ConvertTo-RazorSettingsJson([object]$Items, [int]$Depth = 20) {
 }
 
 function Sanitize-RazorProfileDir([string]$ProfileDir) {
+    Get-ChildItem $ProfileDir -File -Filter "running_scripts_gump*.pos" -ErrorAction SilentlyContinue |
+        Remove-Item -Force -ErrorAction SilentlyContinue
     foreach ($file in Get-ChildItem $ProfileDir -File -Filter "RazorEnhanced.settings.*") {
         $raw = Get-Content $file.FullName -Raw
         if ($file.Name -eq "RazorEnhanced.settings.GENERAL") {
@@ -269,32 +300,53 @@ function Copy-ReferencedScripts([string]$SourceDir, [string]$ScriptsTarget, [obj
     return $copiedScripts
 }
 
-function Copy-RazorWithProfiles([string]$SourceDir, [string]$TargetDir, [string]$StockName, [string]$PvpName) {
+function Copy-RazorWithProfiles(
+    [string]$SourceDir,
+    [string]$TargetDir,
+    [string]$StockName,
+    [string]$PvpName,
+    [string]$StockProfileSourceDir = ""
+) {
     if (-not (Test-Path $SourceDir)) { throw "Razor source not found: $SourceDir" }
     if (Test-Path $TargetDir) { Remove-Item $TargetDir -Recurse -Force }
     New-Item -ItemType Directory -Force -Path $TargetDir | Out-Null
     $excludeDirs = @('Profiles','Scripts','Backup','_deploy_pending','Logs','Log','_bundled_default','_bundled_default_pvp')
+    $excludeFiles = @('.assistant_gump_positions')
     Get-ChildItem $SourceDir -Force | Where-Object {
-        $_.Name -notin $excludeDirs -and $_.Extension -notin @('.ERROR','.log')
+        $_.Name -notin $excludeDirs -and
+        $_.Name -notin $excludeFiles -and
+        $_.Extension -notin @('.ERROR','.log','.pdb')
     } | ForEach-Object {
         Copy-Item $_.FullName (Join-Path $TargetDir $_.Name) -Recurse -Force
     }
 
     $srcProfilesRoot = Join-Path $SourceDir "Profiles"
-    if (-not (Test-Path $srcProfilesRoot)) { throw "No Profiles folder in Razor source" }
+    $stockProfilesRoot = if (-not [string]::IsNullOrWhiteSpace($StockProfileSourceDir) -and (Test-Path (Join-Path $StockProfileSourceDir "Profiles"))) {
+        Join-Path $StockProfileSourceDir "Profiles"
+    } elseif (Test-Path $srcProfilesRoot) {
+        $srcProfilesRoot
+    } else {
+        $null
+    }
+    if (-not $stockProfilesRoot -and -not (Test-Path $srcProfilesRoot)) {
+        throw "No Profiles folder in Razor source (need Default PVP source)"
+    }
 
-    # 1) Stock "default" - copy untouched (no sanitize, no Backup). Prefer exact folder if present.
-    $stockSrc = Resolve-ProfileDir $srcProfilesRoot $StockName
+    # 1) Stock "default" - copy untouched from pristine stock source when set.
+    $stockSrc = if ($stockProfilesRoot) { Resolve-ProfileDir $stockProfilesRoot $StockName } else { $null }
     $shippedStock = $false
     if ($stockSrc) {
         $dstStock = Join-Path $TargetDir "Profiles\$StockName"
         New-Item -ItemType Directory -Force -Path $dstStock | Out-Null
         Copy-Item (Join-Path $stockSrc "*") $dstStock -Recurse -Force
         $shippedStock = $true
-        Write-Host "Shipped stock profile '$StockName' untouched (no sanitize)." -ForegroundColor DarkGray
+        $stockFrom = if ($StockProfileSourceDir -and (Test-Path $StockProfileSourceDir)) { $StockProfileSourceDir } else { $SourceDir }
+        Write-Host "Shipped stock profile '$StockName' untouched from $stockFrom." -ForegroundColor DarkGray
     } else {
         Write-Host "WARNING: stock profile '$StockName' not found - packaging without it." -ForegroundColor Yellow
     }
+
+    if (-not (Test-Path $srcProfilesRoot)) { throw "No Profiles folder in Razor source for Default PVP" }
 
     # 2) Default PVP - cleaned starter from source "Default PVP" / "default pvp", else fall back to default content.
     $pvpSrc = Resolve-ProfileDir $srcProfilesRoot $PvpName
@@ -313,7 +365,9 @@ function Copy-RazorWithProfiles([string]$SourceDir, [string]$TargetDir, [string]
     $copiedScripts = Copy-ReferencedScripts $SourceDir $scriptsTarget $refs
 
     Get-ChildItem $TargetDir -Filter "*.ERROR" -File -ErrorAction SilentlyContinue | Remove-Item -Force
+    Get-ChildItem $TargetDir -Filter "*.pdb" -File -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force
     Get-ChildItem $TargetDir -Filter "*.log" -File -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force
+    Get-ChildItem $TargetDir -Filter ".assistant_gump_positions" -File -ErrorAction SilentlyContinue | Remove-Item -Force
 
     # Pristine Default PVP stock (outside Profiles/) for OTA / startup repair.
     $stockDir = Join-Path $TargetDir "_bundled_default_pvp"
@@ -351,6 +405,50 @@ function Test-UnifiedPvpClientLayout([string]$ClientRoot) {
     if ($errors.Count -gt 0) { throw ($errors -join '; ') }
 }
 
+function Get-Sha256Hex([string]$Path) {
+    return (Get-FileHash -Path $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
+function New-UpdateManifestJson(
+    [string]$Edition,
+    [string]$ReleaseTag,
+    [string]$AssetPrefix,
+    [hashtable]$Components
+) {
+    $payload = [ordered]@{
+        schemaVersion = 1
+        edition       = $Edition
+        releaseTag    = $ReleaseTag
+        publishedAt   = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+        notes         = [ordered]@{
+            it = "OTA selettivo: il launcher scarica solo i componenti aggiornati (launcher, client, Razor)."
+            en = "Selective OTA: the launcher downloads only updated components (launcher, client, Razor)."
+        }
+        components    = [ordered]@{}
+    }
+
+    foreach ($name in @('launcher', 'client', 'razor')) {
+        if (-not $Components.ContainsKey($name)) { continue }
+        $entry = $Components[$name]
+        $payload.components[$name] = [ordered]@{
+            version   = [string]$entry.version
+            asset     = [string]$entry.asset
+            sha256    = [string]$entry.sha256
+            sizeBytes = [long]$entry.sizeBytes
+        }
+        if ($entry.notesIt) { $payload.components[$name].notes = [ordered]@{ it = [string]$entry.notesIt; en = [string]$entry.notesEn } }
+        if ($name -eq 'razor') {
+            $payload.components[$name].defaultPvpProfile = [ordered]@{
+                installPolicy        = 'copyIfMissingOnly'
+                profileName          = 'Default PVP'
+                bundledStockFolder   = '_bundled_default_pvp'
+            }
+        }
+    }
+
+    return ($payload | ConvertTo-Json -Depth 8)
+}
+
 function New-SourceZip([string]$RepoRoot, [string]$TargetZip) {
     $staging = Join-Path $env:TEMP ("uodreams-source-" + [guid]::NewGuid().ToString("N"))
     New-Item -ItemType Directory -Force -Path $staging | Out-Null
@@ -366,6 +464,12 @@ function New-SourceZip([string]$RepoRoot, [string]$TargetZip) {
 $resolvedOfficialCuo = Resolve-OfficialCuoRoot $OfficialCuo
 if ($resolvedOfficialCuo) { $OfficialCuo = $resolvedOfficialCuo }
 
+$RazorSourceDir = Resolve-RazorSourceDir $RazorSourceDir $RepoRoot
+if ([string]::IsNullOrWhiteSpace($RazorStockProfileSourceDir) -or -not (Test-Path $RazorStockProfileSourceDir)) {
+    Write-Host "Stock default profile comes from RazorSourceDir (brand-test)." -ForegroundColor DarkGray
+    $RazorStockProfileSourceDir = ""
+}
+
 if ([string]::IsNullOrWhiteSpace($OutputDir)) {
     $OutputDir = Join-Path $RepoRoot "bin\release-pvp-v$Version"
 }
@@ -375,14 +479,20 @@ $releaseTag = "v$Version"
 $releaseTitle = "0nE UO Launcher v$Version by lall0ne"
 $launcherExeName = Resolve-LauncherExeName
 $launcherEdition = Resolve-LauncherEdition
-$clientZip = Join-Path $OutputDir "$assetPrefix-Client-v$Version.zip"
-$launcherZip = Join-Path $OutputDir "$assetPrefix-Launcher-v$Version.zip"
-$sourceZip = Join-Path $OutputDir "$assetPrefix-Source-v$Version.zip"
-
 $manifestPath = Join-Path $RepoRoot "src\ClassicUO.Launcher.Custom\LauncherManifest.cs"
 if ((Get-Content $manifestPath -Raw) -notmatch 'LauncherVersion = "' + [regex]::Escape($Version) + '"') {
     throw "LauncherManifest version mismatch"
 }
+$clientRuntimeVersion = $Version
+if ((Get-Content $manifestPath -Raw) -match 'ClientRuntimeVersion = "([^"]+)"') {
+    $clientRuntimeVersion = $Matches[1]
+}
+
+$clientZip = Join-Path $OutputDir "$assetPrefix-Client-v$clientRuntimeVersion.zip"
+$launcherZip = Join-Path $OutputDir "$assetPrefix-Launcher-v$Version.zip"
+$razorZip = Join-Path $OutputDir "$assetPrefix-Assistant-Razor-v$Version.zip"
+$sourceZip = Join-Path $OutputDir "$assetPrefix-Source-v$Version.zip"
+$updateJsonPath = Join-Path $OutputDir "update.json"
 
 if (Test-Path $OutputDir) { Remove-Item $OutputDir -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
@@ -454,8 +564,22 @@ Write-Step "Bundling Razor with stock default + Default PVP"
 New-Item -ItemType Directory -Force -Path $launcherPackageRoot | Out-Null
 $publishedExe = Get-ChildItem $launcherOut -Filter $launcherExeName | Select-Object -First 1
 if (-not $publishedExe) { throw "Launcher exe not found: $launcherExeName" }
-Copy-Item -Force $publishedExe.FullName (Join-Path $launcherPackageRoot $launcherExeName)
-$razorBundle = Copy-RazorWithProfiles $RazorSourceDir $assistantRazorDir $StockProfileName $PvpProfileName
+$launcherExePath = Join-Path $launcherPackageRoot $launcherExeName
+Copy-Item -Force $publishedExe.FullName $launcherExePath
+# OTA from pre-1.3.1 installs validates UODreams Launcher.exe; ship the same binary under both names.
+$legacyLauncherExeName = Resolve-LegacyLauncherExeName
+if ($legacyLauncherExeName -ne $launcherExeName) {
+    Copy-Item -Force $launcherExePath (Join-Path $launcherPackageRoot $legacyLauncherExeName)
+}
+$razorBundle = Copy-RazorWithProfiles $RazorSourceDir $assistantRazorDir $StockProfileName $PvpProfileName $RazorStockProfileSourceDir
+Set-Content -Path (Join-Path $assistantRazorDir "uodreams-razor.version") -Value $Version -Encoding ASCII -NoNewline
+$packagedRazorExe = Join-Path $assistantRazorDir "RazorEnhanced.exe"
+if (-not (Test-Path $packagedRazorExe)) { throw "Packaged RazorEnhanced.exe missing" }
+$desktopRazorExe = "$env:USERPROFILE\Desktop\0nE-UO-Launcher-v1.2.8-brand-test\Assistant\RazorEnhanced\RazorEnhanced.exe"
+if ((Test-Path $desktopRazorExe) -and ((Get-FileHash $packagedRazorExe).Hash -ne (Get-FileHash $desktopRazorExe).Hash)) {
+    throw "Packaged RazorEnhanced.exe does not match Desktop brand-test build"
+}
+Write-Host "RazorEnhanced.exe verified (matches Desktop brand-test)." -ForegroundColor Green
 Clear-UserLauncherData $launcherPackageRoot
 
 if ($shouldSign) {
@@ -463,6 +587,10 @@ if ($shouldSign) {
     $launcherExe = Join-Path $launcherPackageRoot $launcherExeName
     $razorExe = Join-Path $assistantRazorDir "RazorEnhanced.exe"
     $signPaths = @($launcherExe)
+    if ($legacyLauncherExeName -ne $launcherExeName) {
+        $legacyLauncherExe = Join-Path $launcherPackageRoot $legacyLauncherExeName
+        if (Test-Path $legacyLauncherExe) { $signPaths += $legacyLauncherExe }
+    }
     if (Test-Path $razorExe) { $signPaths += $razorExe }
     & $signScript -Paths $signPaths
 } elseif ($RequireCodeSign) {
@@ -477,17 +605,58 @@ Compress-Archive -Path $clientPackageRoot\* -DestinationPath $clientZip -Compres
 if (Test-Path $launcherZip) { Remove-Item $launcherZip -Force }
 Compress-Archive -Path (Join-Path $launcherPackageRoot "*") -DestinationPath $launcherZip -CompressionLevel Optimal
 
+Write-Step "Creating standalone Razor zip (selective OTA)"
+$razorPackageRoot = Join-Path $OutputDir "razor-package"
+if (Test-Path $razorPackageRoot) { Remove-Item $razorPackageRoot -Recurse -Force }
+New-Item -ItemType Directory -Force -Path (Join-Path $razorPackageRoot "Assistant") | Out-Null
+robocopy (Join-Path $launcherPackageRoot "Assistant") (Join-Path $razorPackageRoot "Assistant") /E /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
+if (Test-Path $razorZip) { Remove-Item $razorZip -Force }
+Compress-Archive -Path (Join-Path $razorPackageRoot "Assistant") -DestinationPath $razorZip -CompressionLevel Optimal
+
 Write-Step "Creating source zip"
 New-SourceZip $RepoRoot $sourceZip
 
 $clientMb = [math]::Round((Get-Item $clientZip).Length / 1MB, 1)
 $launcherMb = [math]::Round((Get-Item $launcherZip).Length / 1MB, 1)
+$razorMb = [math]::Round((Get-Item $razorZip).Length / 1MB, 1)
 $sourceMb = [math]::Round((Get-Item $sourceZip).Length / 1MB, 1)
+
+Write-Step "Generating update.json manifest"
+$manifestComponents = @{
+    launcher = @{
+        version   = $Version
+        asset     = [IO.Path]::GetFileName($launcherZip)
+        sha256    = (Get-Sha256Hex $launcherZip)
+        sizeBytes = (Get-Item $launcherZip).Length
+        notesIt   = "OTA selettivo: aggiornamento launcher indipendente da client e Razor."
+        notesEn   = "Selective OTA: launcher updates independently from client and Razor."
+    }
+    client = @{
+        version   = $clientRuntimeVersion
+        asset     = [IO.Path]::GetFileName($clientZip)
+        sha256    = (Get-Sha256Hex $clientZip)
+        sizeBytes = (Get-Item $clientZip).Length
+        notesIt   = "Client ClassicUO NativeAOT + fix vari (Swing Assistant, damage numbers, name overheads)."
+        notesEn   = "NativeAOT ClassicUO client + assorted fixes (Swing Assistant, damage numbers, name overheads)."
+    }
+    razor = @{
+        version   = $Version
+        asset     = [IO.Path]::GetFileName($razorZip)
+        sha256    = (Get-Sha256Hex $razorZip)
+        sizeBytes = (Get-Item $razorZip).Length
+        notesIt   = "Razor Enhanced modded con anti-fizzle CA; profilo Default PVP copy-if-missing."
+        notesEn   = "Modded Razor Enhanced with CA anti-fizzle; Default PVP profile copy-if-missing."
+    }
+}
+$manifestJson = New-UpdateManifestJson -Edition "pvp" -ReleaseTag $releaseTag -AssetPrefix $assetPrefix -Components $manifestComponents
+[System.IO.File]::WriteAllText($updateJsonPath, $manifestJson, (New-Object System.Text.UTF8Encoding $false))
 
 Write-Host ""
 Write-Host "Release assets ready." -ForegroundColor Green
+Write-Host "update.json  : $updateJsonPath"
 Write-Host "Client zip   : $clientZip ($clientMb MB)"
 Write-Host "Launcher zip : $launcherZip ($launcherMb MB)"
+Write-Host "Razor zip    : $razorZip ($razorMb MB)"
 Write-Host "Source zip   : $sourceZip ($sourceMb MB)"
 Write-Host "Stock prof   : $($razorBundle.StockProfile)"
 Write-Host "PVP prof     : $($razorBundle.PvpProfile)"
@@ -495,6 +664,10 @@ Write-Host "Scripts      : $($razorBundle.Scripts -join ', ')"
 Write-Host "Script groups: $($razorBundle.Groups -join ', ')"
 
 $notesPath = Join-Path $OutputDir "release-notes.md"
+$externalNotesPath = Join-Path $RepoRoot "release-notes-pvp-v$Version.md"
+if (Test-Path $externalNotesPath) {
+    Copy-Item -Force $externalNotesPath $notesPath
+} else {
 $signedLine = if ($shouldSign) {
     "- **Code signing Authenticode**: ``$launcherExeName``, ``ClassicUO.exe`` / ``cuo.dll``, ``RazorEnhanced.exe`` firmati (timestamp DigiCert)"
 } else {
@@ -525,11 +698,15 @@ $notes = @"
 - NativeAOT ``cuo.dll`` + SDL2/OpenGL only (niente SDL3)
 
 ### Razor Enhanced / OTA
+- **Razor binaries**: aggiornati da OTA (exe/DLL in Assistant) — bundle allineato al brand-test Desktop 0nE (fix rispetto a v1.3.1/v1.3.2)
 - **Profilo ``Default PVP``**: copiato solo se mancante all'aggiornamento - **mai** sovrascritto se gia' presente
-- Profilo stock ``default`` **mai** toccato da OTA
+- Profilo stock ``default`` **mai** toccato da OTA (stock pristine da release v1.3.0)
 - ``_bundled_default_pvp`` aggiornato per repair-only (GENERAL corrotto)
 - GENERAL JSON in formato DataTable array ``[...]``
 - Script Default PVP: $($razorBundle.Scripts.Count) script (cartelle $($razorBundle.Groups -join ' / '))
+
+### Desktop shortcut (0nE rebrand)
+- Dopo OTA e al prossimo avvio, collegamento Desktop aggiornato (icona ``oneuo.ico``, nome **0nE UO Launcher**)
 
 ### Packaging pulito
 $signedLine
@@ -548,10 +725,11 @@ $signedLine
 Server: ``login.uodreams.com:2593``
 "@
 [System.IO.File]::WriteAllText($notesPath, $notes, (New-Object System.Text.UTF8Encoding $false))
+}
 
 if (-not $SkipGitHubRelease) {
     Write-Step "Publishing GitHub release $releaseTag"
-    gh release create $releaseTag $launcherZip $clientZip $sourceZip `
+    gh release create $releaseTag $updateJsonPath $launcherZip $clientZip $razorZip $sourceZip `
         --repo lall0nz/UODreams-PVP-Launcher `
         --title $releaseTitle `
         --notes-file $notesPath

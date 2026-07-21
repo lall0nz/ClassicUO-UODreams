@@ -26,6 +26,8 @@ namespace ClassicUO.Game.UI.Gumps
         private const int X_SPACING = 1, Y_SPACING = 1;
         private const int TOP_BAR_HEIGHT = 20;
         private const int TOP_BAR_ICON_SIZE = 20;
+        private const int GRID_CONTENT_TOP_PADDING = 2;
+        private const int GRID_CONTENT_BOTTOM_PADDING = 8;
         #endregion
 
         #region private static vars
@@ -234,14 +236,9 @@ namespace ClassicUO.Game.UI.Gumps
             #endregion
 
             #region Scroll Area
-            scrollArea = new ScrollArea(
-                background.X,
-                TOP_BAR_HEIGHT + background.Y,
-                background.Width,
-                background.Height - (containerNameLabel.Height + 1),
-                true
-            );
+            scrollArea = new ScrollArea(background.X, 0, background.Width, 1, true);
             scrollArea.MouseUp += ScrollArea_MouseUp;
+            UpdateScrollAreaLayout();
             #endregion
 
             #region Set loot bag
@@ -337,8 +334,7 @@ namespace ClassicUO.Game.UI.Gumps
             lastHeight = Height;
             background.Width = Width - (borderWidth * 2);
             background.Height = Height - (borderWidth * 2);
-            scrollArea.Width = background.Width;
-            scrollArea.Height = background.Height - (containerNameLabel.Height + 1);
+            UpdateScrollAreaLayout();
             UpdateTopBarIconPositions();
             setLootBag.Y = Height - 20;
             BuildBorder();
@@ -548,7 +544,10 @@ namespace ClassicUO.Game.UI.Gumps
                 UpdateItems();
             }
 
-            gridSlotManager?.ClearStaleSlots();
+            if (gridSlotManager?.ClearStaleSlots() == true)
+            {
+                UpdateItems();
+            }
         }
 
         private string GetContainerName()
@@ -570,8 +569,31 @@ namespace ClassicUO.Game.UI.Gumps
             sortContents.X = quickDropBackpack.X - TOP_BAR_ICON_SIZE;
         }
 
+        private void UpdateScrollAreaLayout()
+        {
+            if (scrollArea == null || background == null || searchBox == null)
+            {
+                return;
+            }
+
+            scrollArea.X = background.X;
+            scrollArea.Y = searchBox.Y + searchBox.Height + GRID_CONTENT_TOP_PADDING;
+            scrollArea.Width = background.Width;
+            scrollArea.Height = background.Y + background.Height - scrollArea.Y - GRID_CONTENT_BOTTOM_PADDING;
+        }
+
         internal void RefreshBorderOptions()
         {
+            Profile profile = ProfileManager.CurrentProfile;
+
+            if (profile != null && background != null)
+            {
+                background.Alpha = (float)profile.ContainerOpacity / 100;
+                background.Hue = profile.Grid_UseContainerHue && container != null
+                    ? container.Hue
+                    : profile.AltGridContainerBackgroundHue;
+            }
+
             BuildBorder();
         }
 
@@ -668,6 +690,8 @@ namespace ClassicUO.Game.UI.Gumps
                     }
                 }
 
+                CompactUnlockedItemPositions();
+
                 foreach (var spot in itemPositions)
                 {
                     Item i = world.Items.Get(spot.Value);
@@ -697,19 +721,78 @@ namespace ClassicUO.Game.UI.Gumps
                 bool hideMode = ProfileManager.CurrentProfile != null && ProfileManager.CurrentProfile.GridContainerSearchMode == 0;
                 bool highlightMode = ProfileManager.CurrentProfile != null && ProfileManager.CurrentProfile.GridContainerSearchMode == 1;
                 string searchTermLower = (searchText ?? "").Trim().ToLowerInvariant();
+                bool hasSearch = !string.IsNullOrEmpty(searchTermLower);
                 foreach (var slot in gridSlots)
                 {
-                    slot.Value.IsVisible = !(!string.IsNullOrWhiteSpace(searchText) && hideMode);
-                    if (slot.Value.SlotItem != null && !string.IsNullOrEmpty(searchTermLower))
+                    if (slot.Value.SlotItem != null)
                     {
-                        if (SearchItemNameAndProps(searchTermLower, slot.Value.SlotItem))
+                        slot.Value.IsVisible = !hasSearch || !hideMode;
+                        if (hasSearch)
                         {
-                            slot.Value.Hightlight = highlightMode;
-                            slot.Value.IsVisible = true;
+                            if (SearchItemNameAndProps(searchTermLower, slot.Value.SlotItem))
+                            {
+                                slot.Value.Hightlight = highlightMode;
+                                slot.Value.IsVisible = true;
+                            }
                         }
                     }
+                    else
+                    {
+                        slot.Value.Hightlight = false;
+                        // Empty cells only participate in search layouts; compact reflow hides holes.
+                        slot.Value.IsVisible = hasSearch && !hideMode;
+                    }
                 }
+
                 SetGridPositions();
+            }
+
+            private void CompactUnlockedItemPositions()
+            {
+                List<uint> unlockedSerials = new List<uint>();
+                List<int> unlockedSlots = new List<int>();
+
+                foreach (KeyValuePair<int, uint> spot in itemPositions)
+                {
+                    if (itemLocks.Contains(spot.Value))
+                    {
+                        continue;
+                    }
+
+                    unlockedSerials.Add(spot.Value);
+                    unlockedSlots.Add(spot.Key);
+                }
+
+                if (unlockedSerials.Count == 0)
+                {
+                    return;
+                }
+
+                foreach (int slot in unlockedSlots)
+                {
+                    itemPositions.Remove(slot);
+                }
+
+                int nextSlot = 0;
+
+                foreach (KeyValuePair<int, uint> spot in itemPositions)
+                {
+                    if (spot.Key >= nextSlot)
+                    {
+                        nextSlot = spot.Key + 1;
+                    }
+                }
+
+                foreach (uint serial in unlockedSerials)
+                {
+                    while (itemPositions.ContainsKey(nextSlot))
+                    {
+                        nextSlot++;
+                    }
+
+                    itemPositions[nextSlot] = serial;
+                    nextSlot++;
+                }
             }
 
             internal void SetLockedSlot(int slot, bool locked)
@@ -723,14 +806,28 @@ namespace ClassicUO.Game.UI.Gumps
             internal void SetGridPositions()
             {
                 int x = X_SPACING, y = 0;
-                foreach (var slot in gridSlots)
+
+                foreach (KeyValuePair<int, GridItem> slot in gridSlots)
                 {
-                    if (!slot.Value.IsVisible) continue;
+                    if (!slot.Value.IsVisible)
+                    {
+                        continue;
+                    }
+
+                    if (slot.Value.SlotItem == null)
+                    {
+                        // Empty slots must not keep stale coordinates between compacted items.
+                        slot.Value.X = -gridItemSize;
+                        slot.Value.Y = -gridItemSize;
+                        continue;
+                    }
+
                     if (x + gridItemSize >= area.Width - 14)
                     {
                         x = X_SPACING;
                         y += gridItemSize + Y_SPACING;
                     }
+
                     slot.Value.X = x;
                     slot.Value.Y = y;
                     slot.Value.Resize();
@@ -775,11 +872,43 @@ namespace ClassicUO.Game.UI.Gumps
                 containerContents = GetItemsInContainer(container);
             }
 
-            internal void ClearStaleSlots()
+            internal bool ClearStaleSlots()
             {
+                bool changed = false;
+
                 foreach (var slot in gridSlots)
                 {
-                    slot.Value.ClearIfStale();
+                    if (slot.Value.ClearIfStale())
+                    {
+                        changed = true;
+                    }
+                }
+
+                if (changed)
+                {
+                    SetGridPositions();
+                }
+
+                return changed;
+            }
+
+            internal void RemoveItemPosition(uint serial)
+            {
+                int removeSlot = -1;
+
+                foreach (KeyValuePair<int, uint> kv in itemPositions)
+                {
+                    if (kv.Value == serial)
+                    {
+                        removeSlot = kv.Key;
+                        break;
+                    }
+                }
+
+                if (removeSlot >= 0)
+                {
+                    itemPositions.Remove(removeSlot);
+                    itemLocks.Remove(serial);
                 }
             }
 
@@ -870,25 +999,30 @@ namespace ClassicUO.Game.UI.Gumps
                 }
             }
 
-            internal void ClearIfStale()
+            internal bool ClearIfStale()
             {
                 if (_item == null)
                 {
-                    return;
+                    return false;
                 }
 
                 if (_item.IsDestroyed || container == null || container.IsDestroyed)
                 {
+                    gridContainer.gridSlotManager.RemoveItemPosition(LocalSerial);
                     SetGridItem(null);
-                    return;
+                    return true;
                 }
 
                 Item current = gridContainer.World.Items.Get(LocalSerial);
 
                 if (current == null || current.IsDestroyed || current.Container != container.Serial)
                 {
+                    gridContainer.gridSlotManager.RemoveItemPosition(LocalSerial);
                     SetGridItem(null);
+                    return true;
                 }
+
+                return false;
             }
 
             private bool TryGetValidItem(out Item item)

@@ -101,7 +101,7 @@ namespace ClassicUO.Configuration
         public int SpeechDelay { get; set; } = 100;
         public bool ScaleSpeechDelay { get; set; } = true;
         public bool SaveJournalToFile { get; set; } = false;
-        public bool ForceUnicodeJournal { get; set; }
+        public bool ForceUnicodeJournal { get; set; } = true;
         public bool IgnoreAllianceMessages { get; set; }
         public bool IgnoreGuildMessages { get; set; }
 
@@ -124,6 +124,13 @@ namespace ClassicUO.Configuration
         public ushort BeneficHue { get; set; } = 0x0059;
         public ushort HarmfulHue { get; set; } = 0x0020;
         public ushort NeutralHue { get; set; } = 0x03B1;
+        public ushort DamageReceivedHue { get; set; } = 0x0034;
+        public ushort DamageDealtHue { get; set; } = 0x0021;
+        // Overhead damage numbers only — independent from speech/journal font override.
+        // Preset 0: Original (font 1, Unicode). Preset 1: Old School (ASCII font 3, classic thick damage numbers).
+        public byte DamageNumberFont { get; set; } = 1;
+        public bool DamageNumberFontIsUnicode { get; set; } = true;
+        public int DamageNumberScalePercent { get; set; } = 150;
         public bool EnabledSpellHue { get; set; } = true;
         public bool EnabledSpellFormat { get; set; } = true;
         public string SpellDisplayFormat { get; set; } = "{power} [{spell}]";
@@ -144,7 +151,7 @@ namespace ClassicUO.Configuration
         public bool HighlightMobilesByInvul { get; set; } = true;
         public bool ShowMobilesHP { get; set; } = true;
         public int MobileHPType { get; set; } = 2;     // 0 = %, 1 = line, 2 = both
-        public int MobileHPShowWhen { get; set; } // 0 = Always, 1 - <100%
+        public int MobileHPShowWhen { get; set; } = 2; // 0 = Always, 1 = <100%, 2 = Smart
         // Old-style overhead bars (classic solid HP/Mana/Stamina bars)
         public bool UseOldHealthBars { get; set; } = true;
         public bool DrawRoofs { get; set; } = false;
@@ -153,7 +160,7 @@ namespace ClassicUO.Configuration
         public bool HideVegetation { get; set; } = true;
         // Client-side only: prevents drawing known carpet/rug/goza-mat graphics (see Data/Client/carpets.txt).
         // Items are NOT removed from the server, just hidden from your own view.
-        public bool HideCarpets { get; set; } = false;
+        public bool HideCarpets { get; set; } = true;
         public int FieldsType { get; set; } = 2; // 0 = normal, 1 = static, 2 = tile
         public bool NoColorObjectsOutOfRange { get; set; }
         public bool UseCircleOfTransparency { get; set; } = true;
@@ -254,8 +261,20 @@ namespace ClassicUO.Configuration
         public bool HighlightMirrorImageClones { get; set; } = true;
         public ushort MirrorImageCloneHue { get; set; } = 0x038E;
 
+        // Swing timer bar (Dust765 UOCC swing gump).
+        public bool ShowSwingTimerBar { get; set; } = true;
+        public bool SwingTimerBarLocked { get; set; } = false;
+        [JsonConverter(typeof(Point2Converter))]
+        public Point SwingTimerBarLocation { get; set; } = new Point(50, 50);
+
+        // Toggle via MacroType.ToggleSwingReadyMicroFreeze — brief walk freeze when swing is ready while running.
+        public bool SwingReadyMicroFreezeEnabled { get; set; } = false;
+        // Visual Helpers slider: 100–1000 ms in 100 ms steps (stored as ms, default 200 = 0.2 s).
+        public int SwingReadyMicroFreezeDurationMs { get; set; } = 500;
+
         // Item cooldown ring timers (bandage/apple/confla/heal). X/Y = -1 → under player.
         public bool ShowBandageRingTimer { get; set; } = true;
+        public bool BandageRingTimerLocked { get; set; } = false;
         public int BandageRingTimerX { get; set; } = -1;
         public int BandageRingTimerY { get; set; } = -1;
 
@@ -279,7 +298,7 @@ namespace ClassicUO.Configuration
         // Visual Helpers (Dust765): remap AoS Energy Field graphics to a Wall-of-Stone-style
         // tile (hue 293) and mark them impassable so pathfinding auto-avoids them.
         public bool BlockEnergyFArtForceAoS { get; set; } = false;
-        public bool BlockEnergyF { get; set; } = false;
+        public bool BlockEnergyF { get; set; } = true;
         public uint BlockEnergyFArt { get; set; } = 1872;
 
         // UODreams: stub stone-roof tooltip spam instead of requesting OPL from server.
@@ -291,8 +310,8 @@ namespace ClassicUO.Configuration
         // Movement / ping tuning — exact Dust765-Light Constants defaults (no Light presets exist).
         // Turn/Fast/Walk/PlayerWalk = 80 / 45 / 150 / 150. (Full Dust765 uses Turn=100.)
         // FastRotation default matches Dust (false); enable for snappy first-turn delay.
-        public bool FastRotation { get; set; } = false;
-        public int MovementTurnDelay { get; set; } = 80;
+        public bool FastRotation { get; set; } = true;
+        public int MovementTurnDelay { get; set; } = 100;
         public int MovementTurnDelayFast { get; set; } = 45;
         public int MovementWalkingDelay { get; set; } = 150;
         public int MovementPlayerWalkingDelay { get; set; } = 150;
@@ -317,7 +336,7 @@ namespace ClassicUO.Configuration
         public int DragSelectStartX { get; set; } = 100;
         public int DragSelectStartY { get; set; } = 100;
         public bool DragSelectAsAnchor { get; set; } = false;
-        public NameOverheadTypeAllowed NameOverheadTypeAllowed { get; set; } = NameOverheadTypeAllowed.Mobiles;
+        public NameOverheadTypeAllowed NameOverheadTypeAllowed { get; set; } = NameOverheadTypeAllowed.All;
         public bool NameOverheadToggled { get; set; } = true;
 
         // When enabled, suppress the always-on overhead name for decorative /
@@ -376,7 +395,7 @@ namespace ClassicUO.Configuration
 
         public bool ReduceFPSWhenInactive { get; set; } = false;
 
-        public bool OverrideAllFonts { get; set; }
+        public bool OverrideAllFonts { get; set; } = true;
         public bool OverrideAllFontsIsUnicode { get; set; } = true;
 
         public bool SallosEasyGrab { get; set; }

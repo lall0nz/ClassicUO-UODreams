@@ -29,6 +29,8 @@ namespace ClassicUO
         public IntPtr /*delegate*<int, int, int, void>*/ UpdatePlayerPosFn;
         public IntPtr PacketInFn;
         public IntPtr PacketOutFn;
+        /// <summary>Bootstrap → RazorEnhanced.Friend.IsFriend(int). Returns 1/0 as bool.</summary>
+        public IntPtr /*delegate*<int, bool>*/ IsFriendFn;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -107,6 +109,11 @@ namespace ClassicUO
         [MarshalAs(UnmanagedType.FunctionPtr)]
         private readonly dOnPluginCommandList _cmdList;
 
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        delegate bool dIsFriend(int serial);
+        [MarshalAs(UnmanagedType.FunctionPtr)]
+        private readonly dIsFriend _isFriend;
+
 
         public UnmanagedAssistantHost(HostBindings* setup)
         {
@@ -125,6 +132,9 @@ namespace ClassicUO
             _connected = Marshal.GetDelegateForFunctionPointer<dOnPluginConnection>(setup->ConnectedFn);
             _disconnected = Marshal.GetDelegateForFunctionPointer<dOnPluginConnection>(setup->DisconnectedFn);
             _cmdList = Marshal.GetDelegateForFunctionPointer<dOnPluginCommandList>(setup->CmdListFn);
+            _isFriend = setup->IsFriendFn != IntPtr.Zero
+                ? Marshal.GetDelegateForFunctionPointer<dIsFriend>(setup->IsFriendFn)
+                : null;
         }
 
         public Dictionary<IntPtr, GraphicsResource> GfxResources { get; } = new Dictionary<nint, GraphicsResource>();
@@ -335,6 +345,18 @@ namespace ClassicUO
         {
             _updatePlayerPos?.Invoke(x, y, z);
         }
+
+        public bool IsFriend(int serial)
+        {
+            try
+            {
+                return _isFriend != null && _isFriend(serial);
+            }
+            catch
+            {
+                return false;
+            }
+        }
     }
 
     interface IPluginHost
@@ -356,5 +378,6 @@ namespace ClassicUO
         public void UpdatePlayerPosition(int x, int y, int z);
         public bool PacketIn(ArraySegment<byte> buffer);
         public bool PacketOut(Span<byte> buffer);
+        public bool IsFriend(int serial);
     }
 }

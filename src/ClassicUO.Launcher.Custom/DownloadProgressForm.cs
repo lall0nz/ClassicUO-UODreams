@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -45,11 +47,19 @@ namespace ClassicUO.Launcher.Custom
                 "Download componenti ClassicUO UODreams…"
             );
 
-        public static DownloadProgressForm ForClientRuntimeUpdate(string packageUrl, string packageFileName) =>
+        public static DownloadProgressForm ForClientRuntimeUpdate(
+            string packageUrl,
+            string packageFileName,
+            string? expectedSha256 = null) =>
             new(
                 async (progress, ct) =>
                 {
-                    await ClientRuntimeDownloader.DownloadAndInstallAsync(progress, ct, packageUrl, packageFileName)
+                    await ClientRuntimeDownloader.DownloadAndInstallAsync(
+                            progress,
+                            ct,
+                            packageUrl,
+                            packageFileName,
+                            expectedSha256)
                         .ConfigureAwait(true);
                     return AppContext.BaseDirectory;
                 },
@@ -57,11 +67,19 @@ namespace ClassicUO.Launcher.Custom
                 Loc.S("Download aggiornamento client UODreams…", "Downloading UODreams client update…")
             );
 
-        public static DownloadProgressForm ForLauncherUpdate(string packageUrl, string packageFileName) =>
+        public static DownloadProgressForm ForLauncherUpdate(
+            string packageUrl,
+            string packageFileName,
+            string? expectedSha256 = null) =>
             new(
                 async (progress, ct) =>
                 {
-                    await LauncherUpdater.ApplyLauncherUpdateAsync(packageUrl, packageFileName, progress, ct)
+                    await LauncherUpdater.ApplyLauncherUpdateAsync(
+                            packageUrl,
+                            packageFileName,
+                            progress,
+                            ct,
+                            expectedSha256)
                         .ConfigureAwait(true);
                     return Environment.ProcessPath;
                 },
@@ -71,6 +89,26 @@ namespace ClassicUO.Launcher.Custom
             {
                 AutoCloseOnSuccess = true
             };
+
+        public static DownloadProgressForm ForRazorUpdate(
+            string packageUrl,
+            string packageFileName,
+            string? expectedSha256 = null) =>
+            new(
+                async (progress, ct) =>
+                {
+                    await LauncherUpdater.ApplyRazorUpdateAsync(
+                            packageUrl,
+                            packageFileName,
+                            expectedSha256,
+                            progress,
+                            ct)
+                        .ConfigureAwait(true);
+                    return Path.Combine(AppContext.BaseDirectory, "Assistant", "RazorEnhanced");
+                },
+                Loc.S("UODreams Launcher — Aggiornamento Razor", "UODreams Launcher — Razor update"),
+                Loc.S("Download aggiornamento Razor Enhanced…", "Downloading Razor Enhanced update…")
+            );
 
         public static DownloadProgressForm ForEnhancedMap(string installDirectory) =>
             new(

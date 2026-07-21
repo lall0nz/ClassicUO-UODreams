@@ -73,12 +73,12 @@ namespace ClassicUO.Game.UI.Gumps
 
             _renderedText = RenderedText.Create(
                 string.Empty,
-                entity is Mobile m ? Notoriety.GetHue(m.NotorietyFlag) : (ushort)0x0481,
+                entity is Mobile m ? VisualHighlightHelper.GetMobileNameHue(World, m) : (ushort)0x0481,
                 0xFF,
                 true,
                 FontStyle.BlackBorder,
                 TEXT_ALIGN_TYPE.TS_CENTER,
-                100,
+                Constants.OBJECT_HANDLES_GUMP_WIDTH,
                 30,
                 true
             );
@@ -566,14 +566,14 @@ namespace ClassicUO.Game.UI.Gumps
                 {
                     _borderColor = SolidColorTextureCache.GetTexture(Color.Red);
                     _background.Hue = _renderedText.Hue = entity is Mobile m
-                        ? Notoriety.GetHue(m.NotorietyFlag)
+                        ? VisualHighlightHelper.GetMobileNameHue(World, m)
                         : (ushort)0x0481;
                 }
                 else
                 {
                     _borderColor = SolidColorTextureCache.GetTexture(Color.Black);
                     _background.Hue = _renderedText.Hue = entity is Mobile m
-                        ? Notoriety.GetHue(m.NotorietyFlag)
+                        ? VisualHighlightHelper.GetMobileNameHue(World, m)
                         : (ushort)0x0481;
                 }
             }
