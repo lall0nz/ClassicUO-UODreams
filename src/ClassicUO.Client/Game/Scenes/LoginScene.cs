@@ -97,6 +97,7 @@ namespace ClassicUO.Game.Scenes
         public override void Load()
         {
             base.Load();
+            ClientSessionLogger.Stage("LoginSceneLoad", "login UI ready");
 
             Client.Game.Window.AllowUserResizing = false;
 
@@ -328,6 +329,10 @@ namespace ClassicUO.Game.Scenes
             }
 
             Log.Trace($"Start login to: {Settings.GlobalSettings.IP},{Settings.GlobalSettings.Port}");
+            ClientSessionLogger.Stage(
+                "Connecting",
+                $"ip={Settings.GlobalSettings.IP}; port={Settings.GlobalSettings.Port}; account={Account}; reconnect={Reconnect}"
+            );
 
 
             if (!Reconnect)
@@ -405,6 +410,10 @@ namespace ClassicUO.Game.Scenes
                 CurrentLoginStep = LoginSteps.LoginInToServer;
 
                 _world.ServerName = Servers[ServerIndex].Name;
+                ClientSessionLogger.Stage(
+                    "ServerSelected",
+                    $"index={index}; name={_world.ServerName}"
+                );
 
                 NetClient.Socket.Send_SelectServer(index);
             }
@@ -414,10 +423,15 @@ namespace ClassicUO.Game.Scenes
         {
             if (CurrentLoginStep == LoginSteps.CharacterSelection)
             {
-                LastCharacterManager.Save(Account, _world.ServerName, Characters[index]);
+                string charName = Characters != null && index < Characters.Length ? Characters[index] : string.Empty;
+                LastCharacterManager.Save(Account, _world.ServerName, charName);
 
                 CurrentLoginStep = LoginSteps.EnteringBritania;
-                NetClient.Socket.Send_SelectCharacter(index, Characters[index], NetClient.Socket.LocalIP);
+                ClientSessionLogger.Stage(
+                    "CharacterSelected",
+                    $"index={index}; name={charName}; server={_world.ServerName}"
+                );
+                NetClient.Socket.Send_SelectCharacter(index, charName, NetClient.Socket.LocalIP);
             }
         }
 
@@ -518,6 +532,10 @@ namespace ClassicUO.Game.Scenes
         private void OnNetClientConnected(object sender, EventArgs e)
         {
             Log.Info("Connected!");
+            ClientSessionLogger.Stage(
+                "Connected",
+                $"ip={Settings.GlobalSettings.IP}; port={Settings.GlobalSettings.Port}; localIp=0x{NetClient.Socket.LocalIP:X8}"
+            );
             CurrentLoginStep = LoginSteps.VerifyingAccount;
 
             uint address = NetClient.Socket.LocalIP;
@@ -547,6 +565,7 @@ namespace ClassicUO.Game.Scenes
         private void OnNetClientDisconnected(object sender, SocketError e)
         {
             Log.Warn("Disconnected");
+            ClientSessionLogger.Stage("Disconnected", $"error={e}; step={CurrentLoginStep}");
 
             if (CurrentLoginStep == LoginSteps.CharacterCreation)
             {
@@ -588,6 +607,7 @@ namespace ClassicUO.Game.Scenes
             }
 
             CurrentLoginStep = LoginSteps.ServerSelection;
+            ClientSessionLogger.Stage("ServerListReceived", $"count={count}");
 
             if (CanAutologin)
             {
@@ -609,6 +629,10 @@ namespace ClassicUO.Game.Scenes
                 PopupMessage = null;
             }
             CurrentLoginStep = LoginSteps.CharacterSelection;
+            ClientSessionLogger.Stage(
+                "CharacterListUpdated",
+                $"slots={Characters?.Length ?? 0}; server={_world.ServerName}"
+            );
             UIManager.GetGump<CharacterSelectionGump>()?.Dispose();
 
             _currentGump?.Dispose();
@@ -630,6 +654,24 @@ namespace ClassicUO.Game.Scenes
 
             _world.ClientFeatures.SetFlags((CharacterListFlags) p.ReadUInt32BE());
             CurrentLoginStep = LoginSteps.CharacterSelection;
+
+            int filled = 0;
+
+            if (Characters != null)
+            {
+                for (int i = 0; i < Characters.Length; i++)
+                {
+                    if (!string.IsNullOrEmpty(Characters[i]))
+                    {
+                        filled++;
+                    }
+                }
+            }
+
+            ClientSessionLogger.Stage(
+                "CharacterListReceived",
+                $"slots={Characters?.Length ?? 0}; filled={filled}; server={_world.ServerName}"
+            );
 
             uint charToSelect = 0;
 
@@ -674,6 +716,7 @@ namespace ClassicUO.Game.Scenes
 
             PopupMessage = ServerErrorMessages.GetError(p[0], code);
             CurrentLoginStep = LoginSteps.PopUpMessage;
+            ClientSessionLogger.Stage("LoginRejection", $"code={code}; message={PopupMessage}");
         }
 
         public void HandleRelayServerPacket(ref StackDataReader p)

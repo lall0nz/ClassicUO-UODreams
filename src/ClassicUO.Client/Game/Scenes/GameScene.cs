@@ -149,68 +149,82 @@ namespace ClassicUO.Game.Scenes
         public override void Load()
         {
             base.Load();
+            ClientSessionLogger.Stage("GameSceneLoadStart", "first in-world scene loading");
 
-            Client.Game.Window.AllowUserResizing = true;
-
-            Camera.Zoom = ProfileManager.CurrentProfile.DefaultScale;
-            Camera.Bounds.X = Math.Max(0, ProfileManager.CurrentProfile.GameWindowPosition.X);
-            Camera.Bounds.Y = Math.Max(0, ProfileManager.CurrentProfile.GameWindowPosition.Y);
-            Camera.Bounds.Width = Math.Max(0, ProfileManager.CurrentProfile.GameWindowSize.X);
-            Camera.Bounds.Height = Math.Max(0, ProfileManager.CurrentProfile.GameWindowSize.Y);
-
-            Client.Game.UO.GameCursor.ItemHold.Clear();
-
-            _world.Macros.Clear();
-            _world.Macros.Load();
-            _animatedStaticsManager = new AnimatedStaticsManager();
-            _animatedStaticsManager.Initialize();
-            _world.InfoBars.Load();
-            _healthLinesManager = new HealthLinesManager(_world);
-            _bandageRingTimer = new BandageRingTimer(_world);
-
-            _world.CommandManager.Initialize();
-
-            WorldViewportGump viewport = new WorldViewportGump(_world, this);
-            UIManager.Add(viewport, false);
-
-            if (!ProfileManager.CurrentProfile.TopbarGumpIsDisabled)
+            try
             {
-                TopBarGump.Create(_world);
+                Client.Game.Window.AllowUserResizing = true;
+
+                Camera.Zoom = ProfileManager.CurrentProfile.DefaultScale;
+                Camera.Bounds.X = Math.Max(0, ProfileManager.CurrentProfile.GameWindowPosition.X);
+                Camera.Bounds.Y = Math.Max(0, ProfileManager.CurrentProfile.GameWindowPosition.Y);
+                Camera.Bounds.Width = Math.Max(0, ProfileManager.CurrentProfile.GameWindowSize.X);
+                Camera.Bounds.Height = Math.Max(0, ProfileManager.CurrentProfile.GameWindowSize.Y);
+
+                Client.Game.UO.GameCursor.ItemHold.Clear();
+
+                _world.Macros.Clear();
+                _world.Macros.Load();
+                _animatedStaticsManager = new AnimatedStaticsManager();
+                _animatedStaticsManager.Initialize();
+                _world.InfoBars.Load();
+                _healthLinesManager = new HealthLinesManager(_world);
+                _bandageRingTimer = new BandageRingTimer(_world);
+
+                _world.CommandManager.Initialize();
+
+                WorldViewportGump viewport = new WorldViewportGump(_world, this);
+                UIManager.Add(viewport, false);
+
+                if (!ProfileManager.CurrentProfile.TopbarGumpIsDisabled)
+                {
+                    TopBarGump.Create(_world);
+                }
+
+                UOClassicCombatSwingGump.RefreshOpenGump(_world);
+
+                NetClient.Socket.Disconnected += SocketOnDisconnected;
+                _world.MessageManager.MessageReceived += ChatOnMessageReceived;
+                UIManager.ContainerScale = ProfileManager.CurrentProfile.ContainersScale / 100f;
+                Data.MovementSpeed.FastRotation = ProfileManager.CurrentProfile.FastRotation;
+
+                SDL.SDL_SetWindowMinimumSize(Client.Game.Window.Handle, 640, 480);
+
+                if (ProfileManager.CurrentProfile.WindowBorderless)
+                {
+                    Client.Game.SetWindowBorderless(true);
+                }
+                else if (Settings.GlobalSettings.IsWindowMaximized)
+                {
+                    Client.Game.MaximizeWindow();
+                }
+                else if (Settings.GlobalSettings.WindowSize.HasValue)
+                {
+                    int w = Settings.GlobalSettings.WindowSize.Value.X;
+                    int h = Settings.GlobalSettings.WindowSize.Value.Y;
+
+                    w = Math.Max(640, w);
+                    h = Math.Max(480, h);
+
+                    Client.Game.SetWindowSize(w, h);
+                }
+
+                Plugin.OnConnected();
+
+                foreach (var xml in ProfileManager.CurrentProfile.AutoOpenXmlGumps)
+                {
+                    XmlGumpHandler.TryAutoOpenByName(_world, xml);
+                }
+
+                ClientSessionLogger.MarkWorldReady(
+                    $"player=0x{_world.Player?.Serial:X8}; name={_world.Player?.Name}; map={_world.MapIndex}; pos=({_world.Player?.X},{_world.Player?.Y},{_world.Player?.Z})"
+                );
             }
-
-            UOClassicCombatSwingGump.RefreshOpenGump(_world);
-
-            NetClient.Socket.Disconnected += SocketOnDisconnected;
-            _world.MessageManager.MessageReceived += ChatOnMessageReceived;
-            UIManager.ContainerScale = ProfileManager.CurrentProfile.ContainersScale / 100f;
-            Data.MovementSpeed.FastRotation = ProfileManager.CurrentProfile.FastRotation;
-
-            SDL.SDL_SetWindowMinimumSize(Client.Game.Window.Handle, 640, 480);
-
-            if (ProfileManager.CurrentProfile.WindowBorderless)
+            catch (Exception ex)
             {
-                Client.Game.SetWindowBorderless(true);
-            }
-            else if (Settings.GlobalSettings.IsWindowMaximized)
-            {
-                Client.Game.MaximizeWindow();
-            }
-            else if (Settings.GlobalSettings.WindowSize.HasValue)
-            {
-                int w = Settings.GlobalSettings.WindowSize.Value.X;
-                int h = Settings.GlobalSettings.WindowSize.Value.Y;
+                ClientSessionLogger.Exception("GameScene.Load", ex);
 
-                w = Math.Max(640, w);
-                h = Math.Max(480, h);
-
-                Client.Game.SetWindowSize(w, h);
-            }
-
-            Plugin.OnConnected();
-
-            foreach (var xml in ProfileManager.CurrentProfile.AutoOpenXmlGumps)
-            {
-                XmlGumpHandler.TryAutoOpenByName(_world, xml);
+                throw;
             }
         }
 

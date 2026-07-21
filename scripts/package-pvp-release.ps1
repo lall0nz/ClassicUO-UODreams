@@ -1,6 +1,6 @@
 # Builds GitHub Release assets for UODreams PVP Launcher (v1.3.x channel).
 param(
-    [string]$Version = "1.4.0",
+    [string]$Version = "1.4.1",
     [string]$OfficialCuo = "$env:USERPROFILE\Downloads\UODreams-PVP-by-lall0ne-Launcher-v1.3.0\Client",
     # Sole Razor source: Desktop brand-test (do NOT use Downloads v1.3.0 Assistant).
     [string]$RazorSourceDir = "$env:USERPROFILE\Desktop\0nE-UO-Launcher-v1.2.8-brand-test\Assistant\RazorEnhanced",
@@ -453,7 +453,33 @@ function New-SourceZip([string]$RepoRoot, [string]$TargetZip) {
     $staging = Join-Path $env:TEMP ("uodreams-source-" + [guid]::NewGuid().ToString("N"))
     New-Item -ItemType Directory -Force -Path $staging | Out-Null
     try {
-        robocopy $RepoRoot $staging /E /XD bin obj intermediate .git .vs temp vendor /XF *.user *.suo /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
+        # Exclude local junk, user installs, Compagnone scratch, and bulky ignored trees.
+        robocopy $RepoRoot $staging /E `
+            /XD bin obj intermediate .git .vs temp vendor `
+               _tmp_user_client _vanilla_ref _launcher_ref `
+               RazorEnhanced ClassicAssist-ref RazorEnhanced-decompiled `
+            /XF *.user *.suo `
+            /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
+        # Defense-in-depth: scrub Compagnone / personal leftovers (filename match anywhere).
+        Get-ChildItem $staging -Recurse -Force -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -match '(?i)compagnone|_script_part|^_tmp_user' } |
+            ForEach-Object { Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue }
+        # Drop scratch tools that should never ship.
+        foreach ($rel in @(
+            'tools\_deploy_compagnone_fix.py',
+            'tools\_patch_compagnone2.py',
+            'tools\_proof_compagnone.py',
+            'tools\_fix_imposta_tema.py',
+            'tools\_fix_macro_global_player.py',
+            'tools\_fix_serial_resolution.py',
+            'tools\_fix_start_loop_exit.py',
+            'tools\_patch_macro_player.py',
+            'tools\_repatch_gui_safe.py',
+            'tools\_restore_gui.py'
+        )) {
+            $p = Join-Path $staging $rel
+            if (Test-Path $p) { Remove-Item $p -Force -ErrorAction SilentlyContinue }
+        }
         if (Test-Path $TargetZip) { Remove-Item $TargetZip -Force }
         Compress-Archive -Path (Join-Path $staging "*") -DestinationPath $TargetZip -CompressionLevel Optimal
     } finally {

@@ -322,6 +322,15 @@ namespace ClassicUO.Game.GameObjects
                 return;
             }
 
+            // Scripts can clear stacked overhead (e.g. ENEMY banner) by sending
+            // only whitespace / zero-width characters via Mobiles.Message.
+            if (IsOverheadClearMessage(text))
+            {
+                TextContainer?.Clear();
+
+                return;
+            }
+
             TextObject msg = World.MessageManager.CreateMessage(
                 text,
                 hue,
@@ -332,6 +341,23 @@ namespace ClassicUO.Game.GameObjects
             );
 
             AddMessage(msg);
+        }
+
+        private static bool IsOverheadClearMessage(string text)
+        {
+            for (int i = 0; i < text.Length; i++)
+            {
+                char c = text[i];
+
+                if (c == '\u200B' || c == '\u200C' || c == '\u200D' || c == '\uFEFF' || char.IsWhiteSpace(c))
+                {
+                    continue;
+                }
+
+                return false;
+            }
+
+            return true;
         }
 
         public void AddMessage(TextObject msg)

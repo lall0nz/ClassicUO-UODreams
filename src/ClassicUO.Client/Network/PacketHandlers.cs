@@ -549,6 +549,11 @@ namespace ClassicUO.Network
             entity.Hits = p.ReadUInt16BE();
             entity.HitsMax = p.ReadUInt16BE();
 
+            if (ClientSessionLogger.IsLoginPhase && serial == world.Player.Serial)
+            {
+                ClientSessionLogger.LogStatusPacketOnce(serial, entity.Name);
+            }
+
             if (entity.HitsRequest == HitsRequestStatus.Pending)
             {
                 entity.HitsRequest = HitsRequestStatus.Received;
@@ -934,74 +939,90 @@ namespace ClassicUO.Network
         private static void EnterWorld(World world, ref StackDataReader p)
         {
             uint serial = p.ReadUInt32BE();
+            ClientSessionLogger.Stage("EnterWorld", $"serial=0x{serial:X8}");
 
-            world.CreatePlayer(serial);
-
-            p.Skip(4);
-            world.Player.Graphic = p.ReadUInt16BE();
-            world.Player.CheckGraphicChange();
-            ushort x = p.ReadUInt16BE();
-            ushort y = p.ReadUInt16BE();
-            sbyte z = (sbyte)p.ReadUInt16BE();
-
-            if (world.Map == null)
+            try
             {
-                world.MapIndex = 0;
-            }
+                world.CreatePlayer(serial);
 
-            world.Player.SetInWorldTile(x, y, z);
-            world.Player.Direction = (Direction)(p.ReadUInt8() & 0x7);
-            world.RangeSize.X = x;
-            world.RangeSize.Y = y;
+                p.Skip(4);
+                world.Player.Graphic = p.ReadUInt16BE();
+                world.Player.CheckGraphicChange();
+                ushort x = p.ReadUInt16BE();
+                ushort y = p.ReadUInt16BE();
+                sbyte z = (sbyte)p.ReadUInt16BE();
 
-            if (
-                ProfileManager.CurrentProfile != null
-                && ProfileManager.CurrentProfile.UseCustomLightLevel
-            )
-            {
-                world.Light.Overall =
-                    ProfileManager.CurrentProfile.LightLevelType == 1
-                        ? Math.Min(world.Light.Overall, ProfileManager.CurrentProfile.LightLevel)
-                        : ProfileManager.CurrentProfile.LightLevel;
-            }
-
-            Client.Game.Audio.UpdateCurrentMusicVolume();
-
-            if (Client.Game.UO.Version >= Utility.ClientVersion.CV_200)
-            {
-                if (ProfileManager.CurrentProfile != null)
+                if (world.Map == null)
                 {
-                    NetClient.Socket.Send_GameWindowSize(
-                        (uint)Client.Game.Scene.Camera.Bounds.Width,
-                        (uint)Client.Game.Scene.Camera.Bounds.Height
+                    world.MapIndex = 0;
+                }
+
+                world.Player.SetInWorldTile(x, y, z);
+                world.Player.Direction = (Direction)(p.ReadUInt8() & 0x7);
+                world.RangeSize.X = x;
+                world.RangeSize.Y = y;
+
+                ClientSessionLogger.Stage(
+                    "EnterWorldPlayerPlaced",
+                    $"graphic=0x{world.Player.Graphic:X4}; pos=({x},{y},{z}); map={world.MapIndex}"
+                );
+
+                if (
+                    ProfileManager.CurrentProfile != null
+                    && ProfileManager.CurrentProfile.UseCustomLightLevel
+                )
+                {
+                    world.Light.Overall =
+                        ProfileManager.CurrentProfile.LightLevelType == 1
+                            ? Math.Min(world.Light.Overall, ProfileManager.CurrentProfile.LightLevel)
+                            : ProfileManager.CurrentProfile.LightLevel;
+                }
+
+                Client.Game.Audio.UpdateCurrentMusicVolume();
+
+                if (Client.Game.UO.Version >= Utility.ClientVersion.CV_200)
+                {
+                    if (ProfileManager.CurrentProfile != null)
+                    {
+                        NetClient.Socket.Send_GameWindowSize(
+                            (uint)Client.Game.Scene.Camera.Bounds.Width,
+                            (uint)Client.Game.Scene.Camera.Bounds.Height
+                        );
+                    }
+
+                    NetClient.Socket.Send_Language(Settings.GlobalSettings.Language);
+                }
+
+                NetClient.Socket.Send_ClientVersion(Settings.GlobalSettings.ClientVersion);
+
+                GameActions.SingleClick(world, world.Player);
+                NetClient.Socket.Send_SkillsRequest(world.Player.Serial);
+
+                if (world.Player.IsDead)
+                {
+                    world.ChangeSeason(Game.Managers.Season.Desolation, 42);
+                }
+
+                if (
+                    Client.Game.UO.Version >= Utility.ClientVersion.CV_70796
+                    && ProfileManager.CurrentProfile != null
+                )
+                {
+                    NetClient.Socket.Send_ShowPublicHouseContent(
+                        ProfileManager.CurrentProfile.ShowHouseContent
                     );
                 }
 
-                NetClient.Socket.Send_Language(Settings.GlobalSettings.Language);
+                NetClient.Socket.Send_ToPlugins_AllSkills();
+                NetClient.Socket.Send_ToPlugins_AllSpells();
+                ClientSessionLogger.Stage("EnterWorldComplete", $"serial=0x{world.Player.Serial:X8}");
             }
-
-            NetClient.Socket.Send_ClientVersion(Settings.GlobalSettings.ClientVersion);
-
-            GameActions.SingleClick(world, world.Player);
-            NetClient.Socket.Send_SkillsRequest(world.Player.Serial);
-
-            if (world.Player.IsDead)
+            catch (Exception ex)
             {
-                world.ChangeSeason(Game.Managers.Season.Desolation, 42);
-            }
+                ClientSessionLogger.Exception("EnterWorld", ex);
 
-            if (
-                Client.Game.UO.Version >= Utility.ClientVersion.CV_70796
-                && ProfileManager.CurrentProfile != null
-            )
-            {
-                NetClient.Socket.Send_ShowPublicHouseContent(
-                    ProfileManager.CurrentProfile.ShowHouseContent
-                );
+                throw;
             }
-
-            NetClient.Socket.Send_ToPlugins_AllSkills();
-            NetClient.Socket.Send_ToPlugins_AllSpells();
         }
 
         private static void Talk(World world, ref StackDataReader p)
@@ -1896,6 +1917,8 @@ namespace ClassicUO.Network
             item.FixHue(p.ReadUInt16BE());
             item.Amount = 1;
 
+            ClientSessionLogger.LogEquipPacketOnce(serial, item.Graphic, (byte)item.Layer);
+
             Entity entity =world.Get(item.Container);
 
             entity?.PushToBack(item);
@@ -1990,6 +2013,7 @@ namespace ClassicUO.Network
             }
 
             byte type = p.ReadUInt8();
+            ClientSessionLogger.LogSkillsPacketOnce(type);
             bool haveCap = type != 0u && type <= 0x03 || type == 0xDF;
             bool isSingleUpdate = type == 0xFF || type == 0xDF;
 
@@ -2281,45 +2305,62 @@ namespace ClassicUO.Network
 
         private static void LoginComplete(World world, ref StackDataReader p)
         {
+            ClientSessionLogger.Stage(
+                "LoginComplete",
+                $"player={(world.Player != null ? $"0x{world.Player.Serial:X8}" : "null")}; scene={Client.Game.Scene?.GetType().Name}"
+            );
+
             if (world.Player != null && Client.Game.Scene is LoginScene)
             {
-                var scene = new GameScene(world);
-                Client.Game.SetScene(scene);
-
-                GameActions.RequestMobileStatus(world, world.Player);
-                NetClient.Socket.Send_OpenChat("");
-
-                NetClient.Socket.Send_SkillsRequest(world.Player);
-
-                if (Client.Game.UO.Version >= Utility.ClientVersion.CV_306E)
+                try
                 {
-                    NetClient.Socket.Send_ClientType();
-                }
+                    var scene = new GameScene(world);
+                    Client.Game.SetScene(scene);
+                    ClientSessionLogger.Stage("GameSceneSet", "switched from LoginScene to GameScene");
 
-                if (Client.Game.UO.Version >= Utility.ClientVersion.CV_305D)
-                {
-                    NetClient.Socket.Send_ClientViewRange(world.ClientViewRange);
-                }
+                    GameActions.RequestMobileStatus(world, world.Player);
+                    NetClient.Socket.Send_OpenChat("");
 
-                List<Gump> gumps = ProfileManager.CurrentProfile.ReadGumps(
-                    world,
-                    ProfileManager.ProfilePath
-                );
+                    NetClient.Socket.Send_SkillsRequest(world.Player);
 
-                if (gumps != null)
-                {
-                    foreach (Gump gump in gumps)
+                    if (Client.Game.UO.Version >= Utility.ClientVersion.CV_306E)
                     {
-                        UIManager.Add(gump);
+                        NetClient.Socket.Send_ClientType();
                     }
-                }
 
-                if (
-                    ProfileManager.CurrentProfile != null
-                    && ProfileManager.CurrentProfile.AutoOpenUiOnLogin
-                )
+                    if (Client.Game.UO.Version >= Utility.ClientVersion.CV_305D)
+                    {
+                        NetClient.Socket.Send_ClientViewRange(world.ClientViewRange);
+                    }
+
+                    List<Gump> gumps = ProfileManager.CurrentProfile.ReadGumps(
+                        world,
+                        ProfileManager.ProfilePath
+                    );
+
+                    if (gumps != null)
+                    {
+                        foreach (Gump gump in gumps)
+                        {
+                            UIManager.Add(gump);
+                        }
+                    }
+
+                    if (
+                        ProfileManager.CurrentProfile != null
+                        && ProfileManager.CurrentProfile.AutoOpenUiOnLogin
+                    )
+                    {
+                        scene.BeginPendingAutoOpenUi();
+                    }
+
+                    ClientSessionLogger.Stage("LoginCompleteDone", "post-login packets/gumps requested");
+                }
+                catch (Exception ex)
                 {
-                    scene.BeginPendingAutoOpenUi();
+                    ClientSessionLogger.Exception("LoginComplete", ex);
+
+                    throw;
                 }
             }
         }

@@ -30,6 +30,7 @@
 
 #endregion
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using ClassicUO.IO.Audio;
@@ -160,51 +161,80 @@ namespace ClassicUO.Game
             {
                 if (MapIndex != value)
                 {
-                    InternalMapChangeClear(true);
+                    bool logMap = ClientSessionLogger.IsLoginPhase || Map == null;
 
-                    if (value < 0 && Map != null)
+                    if (logMap)
                     {
-                        Map.Destroy();
-                        Map = null;
-
-                        return;
+                        ClientSessionLogger.Stage("MapLoadStart", $"index={value}; previous={MapIndex}");
                     }
 
-                    if (Map != null)
+                    try
                     {
-                        if (MapIndex >= 0)
+                        InternalMapChangeClear(true);
+
+                        if (value < 0 && Map != null)
                         {
                             Map.Destroy();
+                            Map = null;
+
+                            if (logMap)
+                            {
+                                ClientSessionLogger.Stage("MapLoadEnd", "cleared (index < 0)");
+                            }
+
+                            return;
                         }
 
-                        ushort x = Player.X;
-                        ushort y = Player.Y;
-                        sbyte z = Player.Z;
-
-                        Map = null;
-
-                        if (value >= MapLoader.MAPS_COUNT)
+                        if (Map != null)
                         {
-                            value = 0;
+                            if (MapIndex >= 0)
+                            {
+                                Map.Destroy();
+                            }
+
+                            ushort x = Player.X;
+                            ushort y = Player.Y;
+                            sbyte z = Player.Z;
+
+                            Map = null;
+
+                            if (value >= MapLoader.MAPS_COUNT)
+                            {
+                                value = 0;
+                            }
+
+                            Map = new Map.Map(this, value);
+
+                            Player.SetInWorldTile(x, y, z);
+                            Player.ClearSteps();
+                        }
+                        else
+                        {
+                            Map = new Map.Map(this, value);
                         }
 
-                        Map = new Map.Map(this, value);
+                        // force cursor update when switching map
+                        if (Client.Game.UO.GameCursor != null)
+                        {
+                            Client.Game.UO.GameCursor.Graphic = 0xFFFF;
+                        }
 
-                        Player.SetInWorldTile(x, y, z);
-                        Player.ClearSteps();
+                        UoAssist.SignalMapChanged(value);
+
+                        if (logMap)
+                        {
+                            ClientSessionLogger.Stage(
+                                "MapLoadEnd",
+                                $"index={Map?.Index ?? -1}; player=({Player?.X},{Player?.Y},{Player?.Z})"
+                            );
+                        }
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        Map = new Map.Map(this, value);
-                    }
+                        ClientSessionLogger.Exception("MapIndex", ex);
 
-                    // force cursor update when switching map
-                    if (Client.Game.UO.GameCursor != null)
-                    {
-                        Client.Game.UO.GameCursor.Graphic = 0xFFFF;
+                        throw;
                     }
-
-                    UoAssist.SignalMapChanged(value);
                 }
             }
         }
@@ -229,21 +259,40 @@ namespace ClassicUO.Game
 
         public void CreatePlayer(uint serial)
         {
-            if (ProfileManager.CurrentProfile == null)
+            try
             {
-                string lastChar = LastCharacterManager.GetLastCharacter(LoginScene.Account, ServerName);
-                ProfileManager.Load(ServerName, LoginScene.Account, lastChar);
-            }
+                ClientSessionLogger.Stage("PlayerCreateStart", $"serial=0x{serial:X8}");
 
-            if (Player != null)
+                if (ProfileManager.CurrentProfile == null)
+                {
+                    string lastChar = LastCharacterManager.GetLastCharacter(LoginScene.Account, ServerName);
+                    ProfileManager.Load(ServerName, LoginScene.Account, lastChar);
+                    ClientSessionLogger.Stage(
+                        "ProfileLoaded",
+                        $"server={ServerName}; account={LoginScene.Account}; char={lastChar}"
+                    );
+                }
+
+                if (Player != null)
+                {
+                    Clear();
+                }
+
+                Player = new PlayerMobile(this, serial);
+                Mobiles.Add(Player);
+
+                Log.Trace($"Player [0x{serial:X8}] created");
+                ClientSessionLogger.Stage(
+                    "PlayerCreated",
+                    $"serial=0x{serial:X8}; World.Player set"
+                );
+            }
+            catch (Exception ex)
             {
-                Clear();
+                ClientSessionLogger.Exception("CreatePlayer", ex);
+
+                throw;
             }
-
-            Player = new PlayerMobile(this, serial);
-            Mobiles.Add(Player);
-
-            Log.Trace($"Player [0x{serial:X8}] created");
         }
 
         public void ChangeSeason(Season season, int music)

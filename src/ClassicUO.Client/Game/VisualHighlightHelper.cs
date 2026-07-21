@@ -47,18 +47,14 @@ namespace ClassicUO.Game
         }
 
         /// <summary>
-        /// Name/overhead hue: friend Mods color when active, otherwise notoriety.
+        /// Name/overhead hue: always original notoriety/guild color.
+        /// Friend Mods highlight applies to body/aura/mount only — not name text.
         /// </summary>
         public static ushort GetMobileNameHue(World world, Mobile mobile)
         {
             if (mobile == null)
             {
                 return 0x0481;
-            }
-
-            if (TryGetFriendsGuildHighlightHue(world, mobile, out ushort friendHue))
-            {
-                return friendHue;
             }
 
             return Notoriety.GetHue(mobile.NotorietyFlag);
