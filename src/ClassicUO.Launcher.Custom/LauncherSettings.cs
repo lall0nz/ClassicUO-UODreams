@@ -164,6 +164,19 @@ namespace ClassicUO.Launcher.Custom
             FirstRunCompleted = false;
         }
 
+        /// <summary>
+        /// True when the user has already configured launcher paths / assistant selection
+        /// that must survive Client reinstall, OTA, and repair downloads.
+        /// </summary>
+        public bool HasUserConfiguredPaths() =>
+            !string.IsNullOrWhiteSpace(UoDirectory) ||
+            !string.IsNullOrWhiteSpace(ClientPath) ||
+            !string.IsNullOrWhiteSpace(ClassicAssistPath) ||
+            !string.IsNullOrWhiteSpace(RazorPath) ||
+            !string.IsNullOrWhiteSpace(OrionPath) ||
+            !string.IsNullOrWhiteSpace(UOSteamPath) ||
+            !string.Equals(Assistant, "Nessuno", StringComparison.OrdinalIgnoreCase);
+
         public void ClearAllAssistantPaths()
         {
             ClassicAssistPath = "";
@@ -222,13 +235,7 @@ namespace ClassicUO.Launcher.Custom
                 return;
             }
 
-            if (!string.IsNullOrWhiteSpace(UoDirectory) ||
-                !string.IsNullOrWhiteSpace(ClassicAssistPath) ||
-                !string.IsNullOrWhiteSpace(RazorPath) ||
-                !string.IsNullOrWhiteSpace(OrionPath) ||
-                !string.IsNullOrWhiteSpace(UOSteamPath) ||
-                !string.IsNullOrWhiteSpace(ClientPath) ||
-                !string.Equals(Assistant, "Nessuno", StringComparison.OrdinalIgnoreCase))
+            if (HasUserConfiguredPaths())
             {
                 FirstRunCompleted = true;
             }

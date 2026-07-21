@@ -190,10 +190,18 @@ namespace ClassicUO.Game.GameObjects
 
             if (isLastTarget || isAttack)
             {
-                if (ProfileManager.CurrentProfile.HighlightLastTargetType != 0)
+                // Apply Mods last-target / status overlays when ANY of those modes is enabled
+                // (base LT or poison/para/stun/mortal). Previously required base LT != Off, so
+                // status-only configs never tinted the target.
+                if (VisualHighlightHelper.HasAnyLastTargetHighlight(ProfileManager.CurrentProfile))
                 {
+                    ushort beforeLt = overridedHue;
                     overridedHue = VisualHighlightHelper.LastTargetHue(this, overridedHue);
-                    hueVec.Y = 1;
+
+                    if (overridedHue != beforeLt || ProfileManager.CurrentProfile.HighlightLastTargetType != 0)
+                    {
+                        hueVec.Y = 1;
+                    }
                 }
                 else if (overridedHue == 0)
                 {

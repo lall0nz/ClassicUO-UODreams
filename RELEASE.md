@@ -36,4 +36,13 @@ Razor Enhanced user data is stripped separately:
 
 `Assistant/RazorEnhanced/Profiles`, `Scripts`, and `Backup` are preserved across client updates. Launcher self-updates merge new `Assistant/` files without overwriting existing Razor user data.
 
-Launcher settings (`launcher.settings.json` next to the exe) are never part of the client zip and are not overwritten by client updates.
+Launcher settings (`launcher.settings.json` next to the exe) are never part of the client zip and are not overwritten by client updates. Client extract also backs up / skips that file. Install-root `Logs\` (including `launcher.log`, `client-crash-*.txt`, and `razor-crash-*.txt`) is preserved across client OTA the same way — never wiped on update. Launcher self-update only replaces the exe (+ Assistant merge) and never resets user paths. Client bootstrap/repair after a missing Client folder must not call `ResetUserPaths` — virgin installs simply have no settings file (empty UO path); configured installs keep `UoDirectory`, assistant selection, theme, language, etc.
+
+## Crash reports (support)
+
+On crash, ClassicUO and Razor Enhanced write full exception reports under:
+
+- `<launcher_root>\Logs\client-crash-YYYY-MM-DD_HH-mm-ss.txt`
+- `<launcher_root>\Logs\razor-crash-YYYY-MM-DD_HH-mm-ss.txt`
+
+ClassicUO also keeps writing under `Client\Logs\` (dual write). For support, zip the entire `Logs\` folder next to the launcher exe.

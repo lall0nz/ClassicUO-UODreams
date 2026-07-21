@@ -24,6 +24,7 @@ namespace ClassicUO.Game
         public const ushort BrightFireColor = 0x0496;
         public const ushort BrightPoisonColor = 0x0A0B;
         public const ushort BrightParalyzeColor = 0x0A13;
+        public const ushort BrightMortalColor = 0x0035;
 
         private static Func<int, bool> _razorIsFriend;
         private static bool _razorResolveAttempted;
@@ -268,6 +269,11 @@ namespace ClassicUO.Game
         {
             Profile profile = ProfileManager.CurrentProfile;
 
+            if (profile == null)
+            {
+                return hue;
+            }
+
             return profile.GlowingWeaponsType switch
             {
                 1 => BrightWhiteColor,
@@ -279,92 +285,117 @@ namespace ClassicUO.Game
             };
         }
 
+        /// <summary>
+        /// True when any Mods → Visual Helpers last-target highlight mode is enabled
+        /// (base last target and/or a status overlay).
+        /// </summary>
+        public static bool HasAnyLastTargetHighlight(Profile profile)
+        {
+            if (profile == null)
+            {
+                return false;
+            }
+
+            return profile.HighlightLastTargetType != 0
+                   || profile.HighlightLastTargetTypePoison != 0
+                   || profile.HighlightLastTargetTypePara != 0
+                   || profile.HighlightLastTargetTypeStunned != 0
+                   || profile.HighlightLastTargetTypeMortalled != 0;
+        }
+
+        /// <summary>
+        /// Frozen mobiles cannot be told apart as paralyze vs wrestling-stun on other players
+        /// (both use Flags.Frozen). Both overlays key off <see cref="Mobile.IsParalyzed"/>.
+        /// </summary>
+        public static bool IsFrozenCombatStatus(Mobile mobile)
+        {
+            return mobile != null
+                   && mobile.IsParalyzed
+                   && mobile.NotorietyFlag != NotorietyFlag.Invulnerable;
+        }
+
+        /// <summary>
+        /// Last-target body tint (Mods → Visual Helpers).
+        /// Precedence when multiple statuses apply (later wins):
+        /// base last-target → poison → paralyze → stun → mortal.
+        /// Effective overlap order: Mortal &gt; Stun &gt; Paralyze &gt; Poison &gt; base LT.
+        /// Base LT is applied only when HighlightLastTargetType != 0 (does not wipe prior
+        /// friend/global-status hues when base LT is Off). Status overlays apply whenever
+        /// their own mode != 0, even if base LT is Off.
+        /// </summary>
         public static ushort LastTargetHue(Mobile mobile, ushort hue)
         {
+            if (mobile == null)
+            {
+                return hue;
+            }
+
             Profile profile = ProfileManager.CurrentProfile;
 
-            if (profile.HighlightLastTargetType == 1)
+            if (profile == null)
             {
-                hue = BrightWhiteColor;
-            }
-            else if (profile.HighlightLastTargetType == 2)
-            {
-                hue = BrightPinkColor;
-            }
-            else if (profile.HighlightLastTargetType == 3)
-            {
-                hue = BrightIceColor;
-            }
-            else if (profile.HighlightLastTargetType == 4)
-            {
-                hue = BrightFireColor;
-            }
-            else if (profile.HighlightLastTargetType == 5)
-            {
-                hue = profile.HighlightLastTargetTypeHue;
+                return hue;
             }
 
-            if (mobile.IsPoisoned)
+            if (profile.HighlightLastTargetType != 0)
             {
-                hue = profile.HighlightLastTargetTypePoison switch
-                {
-                    1 => BrightWhiteColor,
-                    2 => BrightPinkColor,
-                    3 => BrightIceColor,
-                    4 => BrightFireColor,
-                    5 => BrightPoisonColor,
-                    6 => profile.HighlightLastTargetTypePoisonHue,
-                    _ => hue
-                };
+                hue = ResolveHighlightMode(
+                    profile.HighlightLastTargetType,
+                    profile.HighlightLastTargetTypeHue,
+                    hue
+                );
             }
 
-            if (mobile.IsParalyzed)
+            if (mobile.IsPoisoned && profile.HighlightLastTargetTypePoison != 0)
             {
-                hue = profile.HighlightLastTargetTypePara switch
-                {
-                    1 => BrightWhiteColor,
-                    2 => BrightPinkColor,
-                    3 => BrightIceColor,
-                    4 => BrightFireColor,
-                    5 => BrightParalyzeColor,
-                    6 => profile.HighlightLastTargetTypeParaHue,
-                    _ => hue
-                };
+                hue = ResolveStateHighlightMode(
+                    profile.HighlightLastTargetTypePoison,
+                    profile.HighlightLastTargetTypePoisonHue,
+                    BrightPoisonColor,
+                    hue
+                );
             }
 
-            if (mobile.IsParalyzed)
+            if (IsFrozenCombatStatus(mobile) && profile.HighlightLastTargetTypePara != 0)
             {
-                hue = profile.HighlightLastTargetTypeStunned switch
-                {
-                    1 => BrightWhiteColor,
-                    2 => BrightPinkColor,
-                    3 => BrightIceColor,
-                    4 => BrightFireColor,
-                    5 => BrightParalyzeColor,
-                    6 => profile.HighlightLastTargetTypeStunnedHue,
-                    _ => hue
-                };
+                hue = ResolveStateHighlightMode(
+                    profile.HighlightLastTargetTypePara,
+                    profile.HighlightLastTargetTypeParaHue,
+                    BrightParalyzeColor,
+                    hue
+                );
             }
 
-            if (mobile.IsYellowHits)
+            // Stun shares Flags.Frozen with paralyze (Dust765 / shard limitation).
+            // When both Para and Stun modes are enabled, Stun wins (applied after Para).
+            if (IsFrozenCombatStatus(mobile) && profile.HighlightLastTargetTypeStunned != 0)
             {
-                hue = profile.HighlightLastTargetTypeMortalled switch
-                {
-                    1 => BrightWhiteColor,
-                    2 => BrightPinkColor,
-                    3 => BrightIceColor,
-                    4 => BrightFireColor,
-                    5 => 0x0035,
-                    6 => profile.HighlightLastTargetTypeMortalledHue,
-                    _ => hue
-                };
+                hue = ResolveStateHighlightMode(
+                    profile.HighlightLastTargetTypeStunned,
+                    profile.HighlightLastTargetTypeStunnedHue,
+                    BrightParalyzeColor,
+                    hue
+                );
+            }
+
+            if (mobile.IsYellowHits && profile.HighlightLastTargetTypeMortalled != 0)
+            {
+                hue = ResolveStateHighlightMode(
+                    profile.HighlightLastTargetTypeMortalled,
+                    profile.HighlightLastTargetTypeMortalledHue,
+                    BrightMortalColor,
+                    hue
+                );
             }
 
             return hue;
         }
 
         /// <summary>
-        /// Poison / paral / mortal / mirror highlights. Applied after notoriety so Mods colors win.
+        /// Global poison / paral / mortal / mirror highlights (Options → General + Mods mirror).
+        /// Applied after notoriety/friend so Mods colors win.
+        /// Precedence when multiple apply (later wins): Poison → Paralyze → Mortal → Mirror.
+        /// Effective: Mirror &gt; Mortal &gt; Paralyze &gt; Poison.
         /// </summary>
         public static ushort ApplyStatusHighlights(Mobile mobile, ushort hue)
         {
@@ -385,7 +416,7 @@ namespace ClassicUO.Game
                 hue = profile.PoisonHue;
             }
 
-            if (profile.HighlightMobilesByParalize && mobile.IsParalyzed && mobile.NotorietyFlag != NotorietyFlag.Invulnerable)
+            if (profile.HighlightMobilesByParalize && IsFrozenCombatStatus(mobile))
             {
                 hue = profile.ParalyzedHue;
             }
@@ -401,6 +432,33 @@ namespace ClassicUO.Game
             }
 
             return hue;
+        }
+
+        private static ushort ResolveHighlightMode(int mode, ushort customHue, ushort fallback)
+        {
+            return mode switch
+            {
+                1 => BrightWhiteColor,
+                2 => BrightPinkColor,
+                3 => BrightIceColor,
+                4 => BrightFireColor,
+                5 => customHue,
+                _ => fallback
+            };
+        }
+
+        private static ushort ResolveStateHighlightMode(int mode, ushort customHue, ushort specialHue, ushort fallback)
+        {
+            return mode switch
+            {
+                1 => BrightWhiteColor,
+                2 => BrightPinkColor,
+                3 => BrightIceColor,
+                4 => BrightFireColor,
+                5 => specialHue,
+                6 => customHue,
+                _ => fallback
+            };
         }
     }
 }

@@ -33,6 +33,24 @@ namespace ClassicUO.Launcher.Custom
             "Client/Bootstrap/settings.json",
         };
 
+        /// <summary>
+        /// Install-root launcher prefs. Must survive client OTA extract even if a bad package
+        /// ships an empty launcher.settings.json.
+        /// </summary>
+        private static readonly string[] PreservedInstallRootFilePaths =
+        {
+            "launcher.settings.json",
+        };
+
+        /// <summary>
+        /// Install-root Logs\ (launcher.log + client-crash-*.txt + razor-crash-*.txt).
+        /// Must survive OTA like settings — support needs these after updates.
+        /// </summary>
+        private static readonly string[] PreservedInstallRootDirectoryPaths =
+        {
+            "Logs",
+        };
+
         private static readonly string[] PreservedClientUserMarkerPrefixes =
         {
             "Client/Data/Client/",
@@ -470,7 +488,31 @@ namespace ClassicUO.Launcher.Custom
 
         private static bool ShouldSkipZipEntry(string entryPath)
         {
-            return IsRazorUserDataZipEntry(entryPath) || IsClientUserDataZipEntry(entryPath);
+            return IsRazorUserDataZipEntry(entryPath) ||
+                   IsClientUserDataZipEntry(entryPath) ||
+                   IsLauncherSettingsZipEntry(entryPath);
+        }
+
+        private static bool IsLauncherSettingsZipEntry(string entryPath)
+        {
+            string normalized = NormalizeZipEntryPath(entryPath);
+            foreach (string preservedFile in PreservedInstallRootFilePaths)
+            {
+                if (normalized.Equals(preservedFile, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            foreach (string preservedDir in PreservedInstallRootDirectoryPaths)
+            {
+                if (IsZipEntryUnderPath(normalized, preservedDir))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static bool IsClientUserDataZipEntry(string entryPath)
@@ -681,6 +723,26 @@ namespace ClassicUO.Launcher.Custom
             {
                 BackupFile(
                     Path.Combine(installRoot, relativeFile.Replace('/', Path.DirectorySeparatorChar)),
+                    tempRoot,
+                    ref backupIndex,
+                    preserved
+                );
+            }
+
+            foreach (string relativeFile in PreservedInstallRootFilePaths)
+            {
+                BackupFile(
+                    Path.Combine(installRoot, relativeFile.Replace('/', Path.DirectorySeparatorChar)),
+                    tempRoot,
+                    ref backupIndex,
+                    preserved
+                );
+            }
+
+            foreach (string relativeDir in PreservedInstallRootDirectoryPaths)
+            {
+                BackupDirectory(
+                    Path.Combine(installRoot, relativeDir.Replace('/', Path.DirectorySeparatorChar)),
                     tempRoot,
                     ref backupIndex,
                     preserved

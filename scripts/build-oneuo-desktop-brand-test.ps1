@@ -8,7 +8,7 @@ param(
     [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path,
     [string]$DesktopDir = "$env:USERPROFILE\Desktop\0nE-UO-Launcher-v1.2.8-brand-test",
     [string]$TemplateDir = "$env:USERPROFILE\Downloads\UODreams-PVP-by-lall0ne-Launcher-v1.2.8",
-    [string]$BrandTestClientVersion = "1.3.9",
+    [string]$BrandTestClientVersion = "1.4.0",
     [switch]$SkipClientRebuild
 )
 
@@ -75,6 +75,15 @@ if (-not $SkipClientRebuild) {
 }
 
 Write-Step "Assembling Desktop test folder: $DesktopDir"
+
+# Backup user prefs BEFORE wiping the folder (brand-test redeploy must behave like OTA).
+$settingsPath = Join-Path $DesktopDir "launcher.settings.json"
+$settingsBackup = $null
+if (Test-Path $settingsPath) {
+    $settingsBackup = Get-Content $settingsPath -Raw
+    Write-Host "Backed up existing launcher.settings.json for restore after rebuild" -ForegroundColor DarkGray
+}
+
 if (Test-Path $DesktopDir) { Remove-Item $DesktopDir -Recurse -Force }
 New-Item -ItemType Directory -Path $DesktopDir -Force | Out-Null
 
@@ -110,6 +119,14 @@ if (-not $SkipClientRebuild) {
 Set-Content -Path (Join-Path $clientDir "uodreams-client.version") -Value $BrandTestClientVersion -Encoding ASCII -NoNewline
 Write-Host "Client version marker: $BrandTestClientVersion (ahead of GitHub 1.3.5 for local dev)" -ForegroundColor DarkGray
 
+# Same marker the OTA package script writes; without it ResolveEffectiveRazorVersion falls back to 0.0.0
+# and the launcher offers a spurious Razor download even when binaries are already current.
+$razorDir = Join-Path $DesktopDir "Assistant\RazorEnhanced"
+if (Test-Path (Join-Path $razorDir "RazorEnhanced.exe")) {
+    Set-Content -Path (Join-Path $razorDir "uodreams-razor.version") -Value $BrandTestClientVersion -Encoding ASCII -NoNewline
+    Write-Host "Razor version marker: $BrandTestClientVersion" -ForegroundColor DarkGray
+}
+
 # Regenerate carpets.txt so the new default IDs (0x28A4-0x28A6) are included even if an older
 # generated file was copied from the template (StaticFilters only writes it if missing).
 $carpetsFile = Join-Path $clientDir "Data\Client\carpets.txt"
@@ -121,7 +138,7 @@ if (Test-Path $carpetsFile) {
     }
 }
 
-# Fresh launcher binaries only (no virgin settings file — launcher creates defaults on first run).
+# Fresh launcher binaries; restore user prefs if this Desktop folder already had them.
 robocopy $launcherOut $DesktopDir /E /XF launcher.settings.json /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "Failed copying launcher publish output" }
 
@@ -131,8 +148,15 @@ if (Test-Path $legacyExe) { Remove-Item -Force $legacyExe }
 $legacyIco = Join-Path $DesktopDir "uodreams.ico"
 if (Test-Path $legacyIco) { Remove-Item -Force $legacyIco }
 
-$settings = Join-Path $DesktopDir "launcher.settings.json"
-if (Test-Path $settings) { Remove-Item -Force $settings }
+$settingsPath = Join-Path $DesktopDir "launcher.settings.json"
+if ($null -ne $settingsBackup) {
+    Set-Content -Path $settingsPath -Value $settingsBackup -Encoding UTF8
+    Write-Host "Preserved existing launcher.settings.json (UO path / assistant selection)" -ForegroundColor Green
+} else {
+    # True fresh Desktop folder: leave no settings file so first run starts with empty client path.
+    if (Test-Path $settingsPath) { Remove-Item -Force $settingsPath }
+    Write-Host "Fresh install: no launcher.settings.json (empty client path on first run)" -ForegroundColor DarkGray
+}
 
 Write-Host ""
 Write-Host "DONE: $DesktopDir" -ForegroundColor Green

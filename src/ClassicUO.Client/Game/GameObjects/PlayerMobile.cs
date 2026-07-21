@@ -1296,6 +1296,12 @@ namespace ClassicUO.Game.GameObjects
 
                                 goto done;
 
+                            case 0xAED1: // Paladin Hammer of Fire
+                                Abilities[0] = Ability.DoubleStrike;
+                                Abilities[1] = Ability.WhirlwindAttack;
+
+                                goto done;
+
                             case 0x08FF: // Boomerang
                                 Abilities[0] = Ability.MysticArc;
                                 Abilities[1] = Ability.ConcussionBlow;
@@ -1555,14 +1561,26 @@ namespace ClassicUO.Game.GameObjects
 
         public bool Walk(Direction direction, bool run)
         {
+            if (IsDestroyed || Walker == null || Pathfinder == null)
+            {
+                return false;
+            }
+
+            var profile = ProfileManager.CurrentProfile;
+
+            if (profile == null)
+            {
+                return false;
+            }
+
             if (Walker.WalkingFailed || Walker.LastStepRequestTime > Time.Ticks || Walker.StepsCount >= Constants.MAX_STEP_COUNT || Client.Game.UO.Version >= ClientVersion.CV_60142 && IsParalyzed)
             {
                 return false;
             }
 
-            run |= ProfileManager.CurrentProfile.AlwaysRun;
+            run |= profile.AlwaysRun;
 
-            if (SpeedMode >= CharacterSpeedType.CantRun || Stamina <= 1 && !IsDead || IsHidden && ProfileManager.CurrentProfile.AlwaysRunUnlessHidden)
+            if (SpeedMode >= CharacterSpeedType.CantRun || Stamina <= 1 && !IsDead || IsHidden && profile.AlwaysRunUnlessHidden)
             {
                 run = false;
             }
@@ -1593,7 +1611,7 @@ namespace ClassicUO.Game.GameObjects
 
             // Auto Avoid Obstacles: when walking into a blocked cardinal tile, try to open a door
             // ahead, otherwise sidestep around the obstacle.
-            if (ProfileManager.CurrentProfile.AvoidObstacles && IsCardinalDirection(direction))
+            if (profile.AvoidObstacles && IsCardinalDirection(direction))
             {
                 if (IsObstacle(direction, x, y, z))
                 {

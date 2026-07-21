@@ -29,25 +29,13 @@ namespace ClassicUO.Launcher.Custom
                     return;
                 }
 
-                ResetSettingsAfterCleanInstall();
+                // Do not reset launcher.settings.json here. Client bootstrap can also run as a
+                // repair after OTA/missing Client; wiping would clear UO path and Razor selection.
+                // Fresh install: no settings file → empty client path. Existing prefs: preserved.
             }
 
             EnsureDesktopShortcut();
             Application.Run(new MainForm());
-        }
-
-        private static void ResetSettingsAfterCleanInstall()
-        {
-            try
-            {
-                var settings = LauncherSettings.Load();
-                settings.ResetUserPaths();
-                settings.Save();
-            }
-            catch
-            {
-                // best-effort
-            }
         }
 
         private static void EnsureDesktopShortcut()

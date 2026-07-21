@@ -128,6 +128,36 @@ namespace ClassicUO.Game.UI.Controls
             WantUpdateSize = false;
             ContainsByBounds = true;
             IsFromServer = true;
+
+            // Optional Orion-style hue on a single clickable button (no gumppic overlay).
+            // Layout: { button x y normal pressed type param id hue=N }
+            for (int i = 8; i < parts.Count; i++)
+            {
+                string p = parts[i];
+
+                if (p == null)
+                {
+                    continue;
+                }
+
+                int eq = p.IndexOf('=');
+
+                if (eq > 0 && p.Substring(0, eq).Equals("hue", System.StringComparison.OrdinalIgnoreCase))
+                {
+                    // Match GumpPic server hue= parsing (value+1 then strip <=2).
+                    ushort raw = UInt16Converter.Parse(p.Substring(eq + 1));
+                    ushort parsed = (ushort)(raw + 1);
+
+                    if (parsed <= 2)
+                    {
+                        parsed = 0;
+                    }
+
+                    Hue = parsed;
+
+                    break;
+                }
+            }
         }
 
         public bool IsClicked { get; set; }

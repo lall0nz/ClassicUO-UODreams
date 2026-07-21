@@ -1,6 +1,6 @@
 # Builds GitHub Release assets for UODreams PVP Launcher (v1.3.x channel).
 param(
-    [string]$Version = "1.3.9",
+    [string]$Version = "1.4.0",
     [string]$OfficialCuo = "$env:USERPROFILE\Downloads\UODreams-PVP-by-lall0ne-Launcher-v1.3.0\Client",
     # Sole Razor source: Desktop brand-test (do NOT use Downloads v1.3.0 Assistant).
     [string]$RazorSourceDir = "$env:USERPROFILE\Desktop\0nE-UO-Launcher-v1.2.8-brand-test\Assistant\RazorEnhanced",

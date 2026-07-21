@@ -392,69 +392,6 @@ namespace ClassicUO.Game.UI.Gumps.Login
             _checkboxAutologin.IsChecked = Settings.GlobalSettings.AutoLogin;
 
 
-            int htmlX = 130;
-            int htmlY = 442;
-
-
-            Add
-            (
-                new HtmlControl
-                (
-                    htmlX,
-                    htmlY,
-                    150,
-                    15,
-                    false,
-                    false,
-                    false,
-                    "<body link=\"#FF00FF00\" vlink=\"#FF00FF00\" ><a href=\"https://www.classicuo.eu/support.php\">Support ClassicUO!",
-                    0x32,
-                    true,
-                    isunicode: true,
-                    style: FontStyle.BlackBorder
-                )
-            );
-
-
-            Add
-            (
-                new HtmlControl
-                (
-                    505,
-                    htmlY,
-                    100,
-                    15,
-                    false,
-                    false,
-                    false,
-                    "<body link=\"#FF00FF00\" vlink=\"#FF00FF00\" ><a href=\"https://www.classicuo.eu\">Website",
-                    0x32,
-                    true,
-                    isunicode: true,
-                    style: FontStyle.BlackBorder
-                )
-            );
-
-            Add
-            (
-                new HtmlControl
-                (
-                    505,
-                    htmlY + 19,
-                    100,
-                    15,
-                    false,
-                    false,
-                    false,
-                    "<body link=\"#FF00FF00\" vlink=\"#FF00FF00\" ><a href=\"https://discord.gg/VdyCpjQ\">Join Discord",
-                    0x32,
-                    true,
-                    isunicode: true,
-                    style: FontStyle.BlackBorder
-                )
-            );
-
-
             Checkbox loginmusic_checkbox = new Checkbox
             (
                 0x00D2,

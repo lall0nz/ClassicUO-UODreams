@@ -757,7 +757,7 @@ when amount is or exceeds</value>
     <value>Log in to Ultima Online</value>
   </data>
   <data name="CUOVersion0" xml:space="preserve">
-    <value>ClassicUO Version {0}</value>
+    <value>0nE UO Version {0}</value>
   </data>
   <data name="Autologin" xml:space="preserve">
     <value>Autologin</value>

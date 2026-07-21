@@ -961,7 +961,7 @@ namespace ClassicUO.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to ClassicUO Version {0}.
+        ///   Looks up a localized string similar to 0nE UO Version {0}.
         /// </summary>
         public static string CUOVersion0 {
             get {

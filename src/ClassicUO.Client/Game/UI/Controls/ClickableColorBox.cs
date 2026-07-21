@@ -94,19 +94,11 @@ namespace ClassicUO.Game.UI.Controls
         {
             if (button == MouseButtonType.Left)
             {
+                UIManager.GetGump<ModernColorPicker>()?.Dispose();
                 UIManager.GetGump<ColorPickerGump>()?.Dispose();
 
-                ColorPickerGump pickerGump = new ColorPickerGump
-                (
-                    _world,
-                    0,
-                    0,
-                    100,
-                    100,
-                    s => Hue = s
-                );
-
-                UIManager.Add(pickerGump);
+                // TazUO-style multi-page dye-tub grid (includes black/white/specials).
+                UIManager.Add(new ModernColorPicker(_world, s => Hue = s));
             }
         }
     }

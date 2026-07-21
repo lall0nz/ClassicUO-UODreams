@@ -503,7 +503,14 @@ namespace ClassicUO.Network
 
         internal static bool RequestMove(int dir, bool run)
         {
-            return Client.Game.UO.World.Player.Walk((Direction)dir, run);
+            var player = Client.Game?.UO?.World?.Player;
+
+            if (player == null || player.IsDestroyed)
+            {
+                return false;
+            }
+
+            return player.Walk((Direction)dir, run);
         }
 
         internal static bool GetPlayerPosition(out int x, out int y, out int z)

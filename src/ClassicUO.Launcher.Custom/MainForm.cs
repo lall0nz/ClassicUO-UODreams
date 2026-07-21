@@ -2554,6 +2554,9 @@ namespace ClassicUO.Launcher.Custom
                     break;
             }
 
+            // Mark first-run complete as soon as the user configures paths/assistant,
+            // so a later Client repair download cannot treat this as a virgin install.
+            _settings.MigrateFirstRunFlag();
             _settings.Save();
         }
 

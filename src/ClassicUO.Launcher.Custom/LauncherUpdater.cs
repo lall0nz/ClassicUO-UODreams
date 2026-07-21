@@ -596,6 +596,8 @@ namespace ClassicUO.Launcher.Custom
                 }
 
                 string installRoot = AppContext.BaseDirectory;
+                // Never touch launcher.settings.json during launcher OTA — only replace the exe
+                // and merge Assistant binaries. User UO path / assistant selection must survive.
                 // Prefer Assistant next to the found exe (handles nested zip layouts),
                 // then fall back to extract root.
                 string? exeDir = Path.GetDirectoryName(newExe);

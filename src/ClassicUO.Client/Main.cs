@@ -122,14 +122,43 @@ namespace ClassicUO
                 sb.AppendLine();
 
                 Log.Panic(e.ExceptionObject.ToString());
-                string path = Path.Combine(CUOEnviroment.ExecutablePath, "Logs");
+                string report = sb.ToString();
 
-                if (!Directory.Exists(path))
-                    Directory.CreateDirectory(path);
-
-                using (LogFile crashfile = new LogFile(path, "crash.txt"))
+                // Client\Logs (existing CUO layout)
+                try
                 {
-                    crashfile.WriteAsync(sb.ToString()).RunSynchronously();
+                    string path = Path.Combine(CUOEnviroment.ExecutablePath, "Logs");
+
+                    if (!Directory.Exists(path))
+                        Directory.CreateDirectory(path);
+
+                    using (LogFile crashfile = new LogFile(path, "crash.txt"))
+                    {
+                        crashfile.WriteAsync(report).RunSynchronously();
+                    }
+                }
+                catch
+                {
+                    // best-effort
+                }
+
+                // Launcher install-root Logs\ (sibling of Client\) for support zip
+                try
+                {
+                    string launcherRoot = TryResolveLauncherInstallRoot();
+                    if (!string.IsNullOrEmpty(launcherRoot))
+                    {
+                        string launcherLogs = Path.Combine(launcherRoot, "Logs");
+                        if (!Directory.Exists(launcherLogs))
+                            Directory.CreateDirectory(launcherLogs);
+
+                        string fileName = $"client-crash-{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.txt";
+                        File.WriteAllText(Path.Combine(launcherLogs, fileName), report);
+                    }
+                }
+                catch
+                {
+                    // best-effort
                 }
             };
 #endif
@@ -552,6 +581,56 @@ namespace ClassicUO
                         break;
                 }
             }
+        }
+
+        /// <summary>
+        /// Resolves the launcher install root (folder that contains Client\ and Logs\).
+        /// Typical layout: &lt;root&gt;\Client\ClassicUO.exe and &lt;root&gt;\0nE UO Launcher.exe.
+        /// </summary>
+        private static string TryResolveLauncherInstallRoot()
+        {
+            try
+            {
+                string clientDir = CUOEnviroment.ExecutablePath;
+                if (string.IsNullOrWhiteSpace(clientDir))
+                {
+                    clientDir = AppContext.BaseDirectory;
+                }
+
+                if (string.IsNullOrWhiteSpace(clientDir))
+                {
+                    clientDir = Environment.CurrentDirectory;
+                }
+
+                DirectoryInfo dir = new DirectoryInfo(clientDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                if (dir.Name.Equals("Client", StringComparison.OrdinalIgnoreCase) && dir.Parent != null)
+                {
+                    return dir.Parent.FullName;
+                }
+
+                // Running from install root or Bootstrap subfolder: walk up looking for Client sibling / launcher markers.
+                for (DirectoryInfo walk = dir; walk != null; walk = walk.Parent)
+                {
+                    if (Directory.Exists(Path.Combine(walk.FullName, "Client")) &&
+                        (File.Exists(Path.Combine(walk.FullName, "0nE UO Launcher.exe")) ||
+                         File.Exists(Path.Combine(walk.FullName, "UODreams Launcher.exe")) ||
+                         File.Exists(Path.Combine(walk.FullName, "launcher.settings.json"))))
+                    {
+                        return walk.FullName;
+                    }
+
+                    if (walk.Name.Equals("Client", StringComparison.OrdinalIgnoreCase) && walk.Parent != null)
+                    {
+                        return walk.Parent.FullName;
+                    }
+                }
+            }
+            catch
+            {
+                // ignore
+            }
+
+            return null;
         }
     }
 }

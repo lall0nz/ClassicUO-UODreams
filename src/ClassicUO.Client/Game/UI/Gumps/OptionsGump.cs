@@ -55,8 +55,6 @@ namespace ClassicUO.Game.UI.Gumps
     {
         private const byte FONT = 0xFF;
         private const ushort HUE_FONT = 0xFFFF;
-        private const ushort PureBlackHue = 0x0001;
-        private const ushort PureWhiteHue = 0x0481;
         private const int WIDTH = 700;
         private const int HEIGHT = 500;
         private const int TEXTBOX_HEIGHT = 25;
@@ -1155,18 +1153,15 @@ namespace ClassicUO.Game.UI.Gumps
             combat.AddRight(_ltHighlightRangeOnActivatedRange = AddHSlider(null, 1, 18, _currentProfile.LTHighlightRangeOnActivatedRange, startX, startY, 150));
             combat.Add(AddLabel(null, "Tile color", startX, startY));
             combat.AddRight(_ltHighlightRangeOnActivatedHue = AddColorBox(null, startX, startY, _currentProfile.LTHighlightRangeOnActivatedHue, string.Empty), 2);
-            AddBlackWhiteButtons(combat, _ltHighlightRangeOnActivatedHue);
             combat.Add(_ltHighlightRangeOnCast = AddCheckBox(null, "Highlight tiles on range for spells", _currentProfile.LTHighlightRangeOnCast, startX, startY));
             combat.Add(AddLabel(null, "Range", startX, startY));
             combat.AddRight(_ltHighlightRangeOnCastRange = AddHSlider(null, 1, 18, _currentProfile.LTHighlightRangeOnCastRange, startX, startY, 150));
             combat.Add(AddLabel(null, "Tile color", startX, startY));
             combat.AddRight(_ltHighlightRangeOnCastHue = AddColorBox(null, startX, startY, _currentProfile.LTHighlightRangeOnCastHue, string.Empty), 2);
-            AddBlackWhiteButtons(combat, _ltHighlightRangeOnCastHue);
             combat.Add(AddLabel(null, "Outline width (pixels)", startX, startY));
             combat.AddRight(_ltHighlightRangeOutlinePixels = AddHSlider(null, 1, 20, _currentProfile.LTHighlightRangeOutlinePixels, startX, startY, 150));
             combat.Add(_highlightMirrorClones = AddCheckBox(null, "Ghost mirror image clones", _currentProfile.HighlightMirrorImageClones, startX, startY));
             combat.AddRight(_mirrorCloneHue = AddColorBox(null, startX, startY, _currentProfile.MirrorImageCloneHue, string.Empty), 2);
-            AddBlackWhiteButtons(combat, _mirrorCloneHue);
             combat.Add(_showBandageRingTimer = AddCheckBox(null, "Show Timer Countdown", _currentProfile.ShowBandageRingTimer, startX, startY));
             combat.Add(
                 _bandageRingTimerLocked = AddCheckBox(
@@ -1253,47 +1248,34 @@ namespace ClassicUO.Game.UI.Gumps
 
             visualHelpers.Add(_nameOverheadAlwaysOn = AddCheckBox(null, "Always show name overheads (mobiles only)", _currentProfile.NameOverheadToggled, startX, startY));
 
+            // One row per function: label | dropdown | dye-tub picker (color belongs to this row).
             visualHelpers.Add(AddLabel(null, "Glowing Weapons", startX, startY));
             visualHelpers.AddRight(_glowingWeaponsType = AddCombobox(null, VisualHighlightModes, _currentProfile.GlowingWeaponsType, startX, startY, 100), 2);
-            visualHelpers.Add(AddLabel(null, "Custom color", startX, startY));
             visualHelpers.AddRight(_highlightGlowingWeaponsTypeHue = AddColorBox(null, startX, startY, _currentProfile.HighlightGlowingWeaponsTypeHue, string.Empty), 2);
-            AddBlackWhiteButtons(visualHelpers, _highlightGlowingWeaponsTypeHue);
 
             visualHelpers.Add(AddLabel(null, "Highlight lasttarget", startX, startY));
             visualHelpers.AddRight(_highlightLastTargetType = AddCombobox(null, VisualHighlightModes, _currentProfile.HighlightLastTargetType, startX, startY, 100), 2);
-            visualHelpers.Add(AddLabel(null, "Custom color", startX, startY));
             visualHelpers.AddRight(_highlightLastTargetTypeHue = AddColorBox(null, startX, startY, _currentProfile.HighlightLastTargetTypeHue, string.Empty), 2);
-            AddBlackWhiteButtons(visualHelpers, _highlightLastTargetTypeHue);
 
             visualHelpers.Add(AddLabel(null, "Highlight Friends Guild Mobiles", startX, startY));
             visualHelpers.AddRight(_highlighFriendsGuildType = AddCombobox(null, VisualHighlightModes, _currentProfile.HighlighFriendsGuildType, startX, startY, 100), 2);
-            visualHelpers.Add(AddLabel(null, "Custom color", startX, startY));
             visualHelpers.AddRight(_highlighFriendsGuildTypeHue = AddColorBox(null, startX, startY, _currentProfile.HighlighFriendsGuildTypeHue, string.Empty), 2);
-            AddBlackWhiteButtons(visualHelpers, _highlighFriendsGuildTypeHue);
 
             visualHelpers.Add(AddLabel(null, "Highlight lasttarget poisoned", startX, startY));
             visualHelpers.AddRight(_highlightLastTargetTypePoison = AddCombobox(null, VisualHighlightStateModes, _currentProfile.HighlightLastTargetTypePoison, startX, startY, 100), 2);
-            visualHelpers.Add(AddLabel(null, "Custom color", startX, startY));
             visualHelpers.AddRight(_highlightLastTargetTypePoisonHue = AddColorBox(null, startX, startY, _currentProfile.HighlightLastTargetTypePoisonHue, string.Empty), 2);
-            AddBlackWhiteButtons(visualHelpers, _highlightLastTargetTypePoisonHue);
 
             visualHelpers.Add(AddLabel(null, "Highlight lasttarget paralyzed", startX, startY));
             visualHelpers.AddRight(_highlightLastTargetTypePara = AddCombobox(null, VisualHighlightStateModes, _currentProfile.HighlightLastTargetTypePara, startX, startY, 100), 2);
-            visualHelpers.Add(AddLabel(null, "Custom color", startX, startY));
             visualHelpers.AddRight(_highlightLastTargetTypeParaHue = AddColorBox(null, startX, startY, _currentProfile.HighlightLastTargetTypeParaHue, string.Empty), 2);
-            AddBlackWhiteButtons(visualHelpers, _highlightLastTargetTypeParaHue);
 
             visualHelpers.Add(AddLabel(null, "Highlight lasttarget stunned", startX, startY));
             visualHelpers.AddRight(_highlightLastTargetTypeStunned = AddCombobox(null, VisualHighlightStateModes, _currentProfile.HighlightLastTargetTypeStunned, startX, startY, 100), 2);
-            visualHelpers.Add(AddLabel(null, "Custom color", startX, startY));
             visualHelpers.AddRight(_highlightLastTargetTypeStunnedHue = AddColorBox(null, startX, startY, _currentProfile.HighlightLastTargetTypeStunnedHue, string.Empty), 2);
-            AddBlackWhiteButtons(visualHelpers, _highlightLastTargetTypeStunnedHue);
 
             visualHelpers.Add(AddLabel(null, "Highlight lasttarget mortalled (yellow hits)", startX, startY));
             visualHelpers.AddRight(_highlightLastTargetTypeMortalled = AddCombobox(null, VisualHighlightStateModes, _currentProfile.HighlightLastTargetTypeMortalled, startX, startY, 100), 2);
-            visualHelpers.Add(AddLabel(null, "Custom color", startX, startY));
             visualHelpers.AddRight(_highlightLastTargetTypeMortalledHue = AddColorBox(null, startX, startY, _currentProfile.HighlightLastTargetTypeMortalledHue, string.Empty), 2);
-            AddBlackWhiteButtons(visualHelpers, _highlightLastTargetTypeMortalledHue);
             visualHelpers.Add(
                 _energyFieldWallOfStoneAutoAvoid = AddCheckBox(
                     null,
@@ -4401,7 +4383,6 @@ namespace ClassicUO.Game.UI.Gumps
 
             text = AddLabel(rightArea, "Background color", startX, startY);
             _gridContainerBackgroundHue = AddColorBox(rightArea, startX + text.Width + 5, startY, _currentProfile.AltGridContainerBackgroundHue, string.Empty);
-            AddBlackWhiteButtonsBeside(rightArea, _gridContainerBackgroundHue);
             startY += _gridContainerBackgroundHue.Height + 4;
 
             text = AddLabel(rightArea, "Search mode", startX, startY);
@@ -4414,12 +4395,10 @@ namespace ClassicUO.Game.UI.Gumps
 
             text = AddLabel(rightArea, "Grid line color", startX, startY);
             _gridBorderHue = AddColorBox(rightArea, startX + text.Width + 5, startY, _currentProfile.GridBorderHue, string.Empty);
-            AddBlackWhiteButtonsBeside(rightArea, _gridBorderHue);
             startY += _gridBorderHue.Height + 4;
 
             text = AddLabel(rightArea, "Container border color", startX, startY);
             _gridContainerBorderHue = AddColorBox(rightArea, startX + text.Width + 5, startY, _currentProfile.GridContainerBorderHue, string.Empty);
-            AddBlackWhiteButtonsBeside(rightArea, _gridContainerBorderHue);
             startY += _gridContainerBorderHue.Height + 6;
 
             startX = 5;
@@ -5772,53 +5751,6 @@ namespace ClassicUO.Game.UI.Gumps
             );
 
             return box;
-        }
-
-        private void AddBlackWhiteButtons(SettingsSection section, ClickableColorBox colorBox)
-        {
-            if (section == null || colorBox == null)
-            {
-                return;
-            }
-
-            section.AddRight(CreateHuePresetButton(OptionsLocalizedLabel("Nero", "Black"), colorBox, PureBlackHue), 4);
-            section.AddRight(CreateHuePresetButton(OptionsLocalizedLabel("Bianco", "White"), colorBox, PureWhiteHue), 2);
-        }
-
-        private void AddBlackWhiteButtonsBeside(ScrollArea area, ClickableColorBox colorBox)
-        {
-            if (area == null || colorBox == null)
-            {
-                return;
-            }
-
-            NiceButton black = CreateHuePresetButton(OptionsLocalizedLabel("Nero", "Black"), colorBox, PureBlackHue);
-            black.X = colorBox.X + colorBox.Width + 4;
-            black.Y = colorBox.Y;
-            area.Add(black);
-
-            NiceButton white = CreateHuePresetButton(OptionsLocalizedLabel("Bianco", "White"), colorBox, PureWhiteHue);
-            white.X = black.X + black.Width + 2;
-            white.Y = colorBox.Y;
-            area.Add(white);
-        }
-
-        private NiceButton CreateHuePresetButton(string label, ClickableColorBox colorBox, ushort hue)
-        {
-            NiceButton button = new NiceButton(0, 0, 48, 20, ButtonAction.Activate, label)
-            {
-                ButtonParameter = (int)Buttons.Disabled
-            };
-
-            button.MouseUp += (_, e) =>
-            {
-                if (e.Button == MouseButtonType.Left)
-                {
-                    colorBox.Hue = hue;
-                }
-            };
-
-            return button;
         }
 
         private SettingsSection AddSettingsSection(DataBox area, string label)
