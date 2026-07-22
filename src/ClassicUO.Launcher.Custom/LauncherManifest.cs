@@ -23,8 +23,8 @@ namespace ClassicUO.Launcher.Custom
 #endif
 
 #if LAUNCHER_EDITION_PVP
-        public const string LauncherVersion = "1.4.1";
-        public const string ClientRuntimeVersion = "1.4.1";
+        public const string LauncherVersion = "1.4.2";
+        public const string ClientRuntimeVersion = "1.4.2";
         public const string GitHubRepo = "lall0nz/UODreams-PVP-Launcher";
 #else
         public const string LauncherVersion = "1.1.9";

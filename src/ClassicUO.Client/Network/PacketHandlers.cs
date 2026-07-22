@@ -5629,7 +5629,6 @@ namespace ClassicUO.Network
 
             if (iconID < BuffTable.Table.Length)
             {
-                BuffGump gump = UIManager.GetGump<BuffGump>();
                 ushort count = p.ReadUInt16BE();
 
                 if (count == 0)
@@ -5641,7 +5640,7 @@ namespace ClassicUO.Network
                         Client.Game.GetScene<GameScene>()?.NotifyBandageBuffChanged(false);
                     }
 
-                    gump?.RequestUpdateContents();
+                    BuffGump.RequestUpdateAll();
                 }
                 else
                 {
@@ -5707,7 +5706,6 @@ namespace ClassicUO.Network
                         }
 
                         string text = $"<left>{title}{description}{wtf}</left>";
-                        bool alreadyExists = world.Player.IsBuffIconExists(ic);
                         world.Player.AddBuff(ic, BuffTable.Table[iconID], timer, text);
 
                         if (ic == BuffIconType.Healing || ic == BuffIconType.Veterinary)
@@ -5715,10 +5713,9 @@ namespace ClassicUO.Network
                             Client.Game.GetScene<GameScene>()?.NotifyBandageBuffChanged(true);
                         }
 
-                        if (!alreadyExists)
-                        {
-                            gump?.RequestUpdateContents();
-                        }
+                        // Always refresh both bars so split filtering and timers stay current
+                        // when an existing icon is replaced with a new BuffIcon instance.
+                        BuffGump.RequestUpdateAll();
                     }
                 }
             }

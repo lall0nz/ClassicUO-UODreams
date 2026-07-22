@@ -11,9 +11,9 @@
     <PublishAot>false</PublishAot>
     <ApplicationIcon>Resources\uodreams.ico</ApplicationIcon>
     <LauncherEdition Condition="'$(LauncherEdition)' == ''">pvp</LauncherEdition>
-    <Version>1.4.1.0</Version>
-    <AssemblyVersion>1.4.1.0</AssemblyVersion>
-    <FileVersion>1.4.1.0</FileVersion>
+    <Version>1.4.2.0</Version>
+    <AssemblyVersion>1.4.2.0</AssemblyVersion>
+    <FileVersion>1.4.2.0</FileVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(LauncherEdition)' == 'pvp'">

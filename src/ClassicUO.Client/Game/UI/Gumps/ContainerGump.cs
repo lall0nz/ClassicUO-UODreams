@@ -181,6 +181,7 @@ namespace ClassicUO.Game.UI.Gumps
         {
             CanMove = true;
             CanCloseWithRightClick = true;
+            CanBeLocked = true;
             WantUpdateSize = false;
 
             Item item = World.Items.Get(LocalSerial);
@@ -299,6 +300,11 @@ namespace ClassicUO.Game.UI.Gumps
 
         protected override void OnMouseUp(int x, int y, MouseButtonType button)
         {
+            if (TryToggleLock(x, y, button))
+            {
+                return;
+            }
+
             if (button != MouseButtonType.Left || UIManager.IsMouseOverWorld)
             {
                 return;

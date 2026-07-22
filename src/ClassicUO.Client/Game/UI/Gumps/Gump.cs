@@ -37,6 +37,7 @@ using System.Xml;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
 using ClassicUO.Game.UI.Controls;
+using ClassicUO.Input;
 using ClassicUO.Renderer;
 using ClassicUO.Utility;
 using Microsoft.Xna.Framework;
@@ -45,6 +46,15 @@ namespace ClassicUO.Game.UI.Gumps
 {
     internal class Gump : Control
     {
+        private const ushort LOCK_GRAPHIC = 0x082C;
+        /// <summary>Inset of the padlock from the gump frame edge.</summary>
+        protected const int LOCK_INSET = 3;
+
+        private bool _isLocked;
+        private bool _canMoveWhenUnlocked = true;
+        private bool _canCloseWithRightClickWhenUnlocked = true;
+        private bool _lockIconClickLatched;
+
         public Gump(World world, uint local, uint server)
         {
             World = world;
@@ -64,9 +74,105 @@ namespace ClassicUO.Game.UI.Gumps
 
         public uint MasterGumpSerial { get; set; }
 
+        /// <summary>
+        /// When true, Alt+Shift + left-click on the padlock toggles <see cref="IsLocked"/>.
+        /// </summary>
+        public bool CanBeLocked { get; set; }
+
+        /// <summary>
+        /// Locked gumps cannot be moved or closed with right-click.
+        /// Padlock icon is shown only while Alt+Shift are held (see <see cref="ShowLockIcon"/>).
+        /// </summary>
+        public virtual bool IsLocked
+        {
+            get => _isLocked;
+            set
+            {
+                if (_isLocked == value)
+                {
+                    return;
+                }
+
+                if (value)
+                {
+                    _canMoveWhenUnlocked = CanMove;
+                    _canCloseWithRightClickWhenUnlocked = CanCloseWithRightClick;
+                    CanMove = false;
+                    CanCloseWithRightClick = false;
+                }
+                else
+                {
+                    CanMove = _canMoveWhenUnlocked;
+                    CanCloseWithRightClick = _canCloseWithRightClickWhenUnlocked;
+                }
+
+                _isLocked = value;
+            }
+        }
+
+        /// <summary>
+        /// Padlock is visible only while Alt+Shift are held (locked or unlocked).
+        /// </summary>
+        protected bool ShowLockIcon => CanBeLocked && Keyboard.Alt && Keyboard.Shift;
+
+        /// <summary>
+        /// Top-left of the padlock in gump-local coordinates. Default: top-right inside the frame.
+        /// </summary>
+        protected virtual Point GetLockIconPosition(int iconWidth, int iconHeight)
+        {
+            int w = Width > 0 ? Width : iconWidth + LOCK_INSET * 2;
+
+            return new Point(Math.Max(LOCK_INSET, w - iconWidth - LOCK_INSET), LOCK_INSET);
+        }
+
+        /// <summary>
+        /// Padlock icon bounds in gump-local coordinates (draw + hitbox).
+        /// </summary>
+        protected Rectangle GetLockIconBounds()
+        {
+            ref readonly var gumpInfo = ref Client.Game.UO.Gumps.GetGump(LOCK_GRAPHIC);
+
+            if (gumpInfo.Texture == null)
+            {
+                return Rectangle.Empty;
+            }
+
+            Point pos = GetLockIconPosition(gumpInfo.UV.Width, gumpInfo.UV.Height);
+
+            return new Rectangle(pos.X, pos.Y, gumpInfo.UV.Width, gumpInfo.UV.Height);
+        }
+
+        protected bool IsMouseOverLockIcon()
+        {
+            if (!CanBeLocked || !ShowLockIcon)
+            {
+                return false;
+            }
+
+            Rectangle lockBounds = GetLockIconBounds();
+
+            if (lockBounds.IsEmpty)
+            {
+                return false;
+            }
+
+            int localX = Mouse.Position.X - X - ParentX;
+            int localY = Mouse.Position.Y - Y - ParentY;
+
+            return lockBounds.Contains(localX, localY);
+        }
 
         public override void Update()
         {
+            // Re-assert lock after BuildGump / other code resets CanMove / CanCloseWithRightClick.
+            if (_isLocked)
+            {
+                CanMove = false;
+                CanCloseWithRightClick = false;
+            }
+
+            ProcessLockIconInput();
+
             if (InvalidateContents)
             {
                 UpdateContents();
@@ -79,6 +185,36 @@ namespace ClassicUO.Game.UI.Gumps
             }
 
             base.Update();
+        }
+
+        /// <summary>
+        /// Toggle padlock on Alt+Shift+press while the cursor is over the icon.
+        /// Uses press (not MouseUp) so it works when a child control owns the hit-test
+        /// and when the icon is drawn outside gump Bounds (title-adjacent GridContainer).
+        /// </summary>
+        private void ProcessLockIconInput()
+        {
+            if (!ShowLockIcon || Keyboard.Ctrl)
+            {
+                _lockIconClickLatched = false;
+
+                return;
+            }
+
+            if (!Mouse.LButtonPressed)
+            {
+                _lockIconClickLatched = false;
+
+                return;
+            }
+
+            if (_lockIconClickLatched || !IsMouseOverLockIcon())
+            {
+                return;
+            }
+
+            _lockIconClickLatched = true;
+            IsLocked = !IsLocked;
         }
 
         public override void Dispose()
@@ -100,6 +236,11 @@ namespace ClassicUO.Game.UI.Gumps
             writer.WriteAttributeString("x", X.ToString());
             writer.WriteAttributeString("y", Y.ToString());
             writer.WriteAttributeString("serial", LocalSerial.ToString());
+
+            if (CanBeLocked)
+            {
+                writer.WriteAttributeString("isLocked", IsLocked.ToString());
+            }
         }
 
         public void SetInScreen()
@@ -120,6 +261,10 @@ namespace ClassicUO.Game.UI.Gumps
 
         public virtual void Restore(XmlElement xml)
         {
+            if (CanBeLocked && bool.TryParse(xml.GetAttribute("isLocked"), out bool locked))
+            {
+                IsLocked = locked;
+            }
         }
 
         public void RequestUpdateContents()
@@ -169,7 +314,76 @@ namespace ClassicUO.Game.UI.Gumps
 
         public override bool Draw(UltimaBatcher2D batcher, int x, int y)
         {
-            return IsVisible && base.Draw(batcher, x, y);
+            if (!IsVisible)
+            {
+                return false;
+            }
+
+            base.Draw(batcher, x, y);
+
+            if (ShowLockIcon)
+            {
+                DrawLockIcon(batcher, x, y);
+            }
+
+            return true;
+        }
+
+        protected virtual void DrawLockIcon(UltimaBatcher2D batcher, int x, int y)
+        {
+            ref readonly var gumpInfo = ref Client.Game.UO.Gumps.GetGump(LOCK_GRAPHIC);
+
+            if (gumpInfo.Texture == null)
+            {
+                return;
+            }
+
+            Vector3 hueVector = ShaderHueTranslator.GetHueVector(0);
+
+            // Highlight only when the cursor is over the padlock itself (matches click target).
+            if (Keyboard.Alt && Keyboard.Shift && IsMouseOverLockIcon())
+            {
+                hueVector.X = 34;
+                hueVector.Y = 1;
+            }
+
+            Rectangle lockBounds = GetLockIconBounds();
+
+            batcher.Draw(
+                gumpInfo.Texture,
+                new Vector2(x + lockBounds.X, y + lockBounds.Y),
+                gumpInfo.UV,
+                hueVector
+            );
+        }
+
+        /// <summary>
+        /// Returns true when an Alt+Shift padlock click should be consumed (suppress other actions).
+        /// The actual toggle is applied in <see cref="ProcessLockIconInput"/> on mouse press.
+        /// </summary>
+        protected bool TryToggleLock(int x, int y, MouseButtonType button)
+        {
+            if (
+                !CanBeLocked
+                || button != MouseButtonType.Left
+                || !Keyboard.Alt
+                || !Keyboard.Shift
+                || Keyboard.Ctrl
+            )
+            {
+                return false;
+            }
+
+            Rectangle lockBounds = GetLockIconBounds();
+
+            return IsMouseOverLockIcon()
+                || (!lockBounds.IsEmpty && lockBounds.Contains(x, y));
+        }
+
+        protected override void OnMouseUp(int x, int y, MouseButtonType button)
+        {
+            TryToggleLock(x, y, button);
+            base.OnMouseUp(x, y, button);
         }
 
         public override void OnButtonClick(int buttonID)

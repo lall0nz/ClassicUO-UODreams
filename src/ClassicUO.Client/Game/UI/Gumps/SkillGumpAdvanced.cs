@@ -76,6 +76,8 @@ namespace ClassicUO.Game.UI.Gumps
             _totalValue = 0;
             CanMove = true;
             AcceptMouseInput = true;
+            CanCloseWithRightClick = true;
+            CanBeLocked = true;
             WantUpdateSize = false;
 
             Width = WIDTH;

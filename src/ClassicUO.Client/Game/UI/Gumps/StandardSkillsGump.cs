@@ -70,6 +70,7 @@ namespace ClassicUO.Game.UI.Gumps
             AcceptMouseInput = false;
             CanMove = true;
             CanCloseWithRightClick = true;
+            CanBeLocked = true;
 
             Height = 200 + _diffY;
 

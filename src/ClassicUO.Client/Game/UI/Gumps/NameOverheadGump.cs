@@ -678,14 +678,39 @@ namespace ClassicUO.Game.UI.Gumps
 
             base.Draw(batcher, x, y);
 
+            // Text is centered horizontally inside the gump; use those bounds for the
+            // Ctrl+Shift frame so it sits around the name (not the min-width hit box).
             int renderedTextOffset = Math.Max(0, Width - _renderedText.Width - 4) >> 1;
+            int textX = x + 2 + renderedTextOffset;
+            int textY = y + 2;
+            int textW = Math.Max(1, _renderedText.Width);
+            int textH = Math.Max(1, _renderedText.Height);
+
+            // Ctrl+Shift (same hold as name-overhead filter menu): frame any name
+            // overhead (mobiles, players, items, corpses) so the click target is clear.
+            if (Keyboard.Ctrl && Keyboard.Shift)
+            {
+                const int framePadX = 6;
+                const int framePadY = 4;
+
+                int frameX = textX - framePadX;
+                int frameY = textY - framePadY;
+                int frameW = textW + (framePadX << 1);
+                int frameH = textH + (framePadY << 1);
+
+                Texture2D frame = SolidColorTextureCache.GetTexture(Color.White);
+                Vector3 hueVector = ShaderHueTranslator.GetHueVector(0, false, 0.95f);
+
+                batcher.DrawRectangle(frame, frameX, frameY, frameW, frameH, hueVector);
+                batcher.DrawRectangle(frame, frameX + 1, frameY + 1, frameW - 2, frameH - 2, hueVector);
+            }
 
             return _renderedText.Draw(
                 batcher,
                 Width,
                 Height,
-                x + 2 + renderedTextOffset,
-                y + 2,
+                textX,
+                textY,
                 Width,
                 Height,
                 0,

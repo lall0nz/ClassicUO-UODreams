@@ -1441,16 +1441,7 @@ namespace ClassicUO.Game.Managers
                     break;
 
                 case MacroType.ToggleBuffIconGump:
-                    BuffGump buff = UIManager.GetGump<BuffGump>();
-
-                    if (buff != null)
-                    {
-                        buff.Dispose();
-                    }
-                    else
-                    {
-                        UIManager.Add(new BuffGump(_world, 100, 100));
-                    }
+                    BuffGump.Toggle(_world, 100, 100);
 
                     break;
 

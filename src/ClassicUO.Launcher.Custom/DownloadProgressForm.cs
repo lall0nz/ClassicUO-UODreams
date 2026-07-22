@@ -110,6 +110,36 @@ namespace ClassicUO.Launcher.Custom
                 Loc.S("Download aggiornamento Razor Enhanced…", "Downloading Razor Enhanced update…")
             );
 
+        /// <summary>
+        /// Single progress UI that downloads/installs all selected components, then auto-closes on success
+        /// so MainForm can show one final done/restart prompt.
+        /// </summary>
+        internal static DownloadProgressForm ForCombinedUpdate(UpdateCheckResult info)
+        {
+            CombinedUpdateResult? combinedResult = null;
+            var form = new DownloadProgressForm(
+                async (progress, ct) =>
+                {
+                    combinedResult = await LauncherUpdater.ApplyCombinedUpdateAsync(info, progress, ct)
+                        .ConfigureAwait(true);
+                    return combinedResult.AppliedLauncherRestartPending
+                        ? Loc.S("Riavvio launcher…", "Restarting launcher…")
+                        : Loc.S("Tutti i componenti sono aggiornati.", "All components are up to date.");
+                },
+                Loc.S("UODreams Launcher — Aggiornamento", "UODreams Launcher — Update"),
+                Loc.S("Download e installazione aggiornamenti…", "Downloading and installing updates…"))
+            {
+                // Auto-close so the only user prompt after confirm is the final done/restart message.
+                AutoCloseOnSuccess = true
+            };
+            form.CombinedResultAccessor = () => combinedResult;
+            return form;
+        }
+
+        internal Func<CombinedUpdateResult?>? CombinedResultAccessor { get; set; }
+
+        internal CombinedUpdateResult? CombinedResult => CombinedResultAccessor?.Invoke();
+
         public static DownloadProgressForm ForEnhancedMap(string installDirectory) =>
             new(
                 async (progress, ct) =>

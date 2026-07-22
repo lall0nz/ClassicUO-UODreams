@@ -61,6 +61,9 @@ namespace ClassicUO.Game.UI.Gumps
         NameOverHeadHandler,
 
         GridContainer,
-        DurabilityGump
+        DurabilityGump,
+
+        // Appended to preserve existing gumps.xml type ordinals.
+        Debuff
     }
 }

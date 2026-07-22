@@ -32,35 +32,46 @@
 
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Xml;
+using ClassicUO.Assets;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
+using ClassicUO.Game.Managers;
 using ClassicUO.Game.UI.Controls;
-using ClassicUO.Assets;
 using ClassicUO.Renderer;
 using ClassicUO.Resources;
 using Microsoft.Xna.Framework;
 
 namespace ClassicUO.Game.UI.Gumps
 {
+    internal enum BuffGumpKind : byte
+    {
+        Beneficial = 0,
+        Harmful = 1
+    }
+
     internal class BuffGump : Gump
     {
+        // Clear green (matches green buff icons). Old 0x0059 reads as cyan/azure.
+        private const ushort FRAME_HUE_BENEFICIAL = 0x003F;
+        private const ushort FRAME_HUE_HARMFUL = 0x0020;
+
         private GumpPic _background;
         private Button _button;
         private GumpDirection _direction;
         private ushort _graphic;
         private DataBox _box;
 
-        public BuffGump(World world) : base(world, 0, 0)
+        public BuffGump(World world, BuffGumpKind kind = BuffGumpKind.Beneficial) : base(world, 0, 0)
         {
+            Kind = kind;
             CanMove = true;
             CanCloseWithRightClick = true;
             AcceptMouseInput = true;
+            CanBeLocked = true;
         }
 
-        public BuffGump(World world, int x, int y) : this(world)
+        public BuffGump(World world, int x, int y, BuffGumpKind kind = BuffGumpKind.Beneficial) : this(world, kind)
         {
             X = x;
             Y = y;
@@ -73,7 +84,163 @@ namespace ClassicUO.Game.UI.Gumps
             BuildGump();
         }
 
-        public override GumpType GumpType => GumpType.Buff;
+        public BuffGumpKind Kind { get; private set; }
+
+        private static bool SeparateBars =>
+            ProfileManager.CurrentProfile == null || ProfileManager.CurrentProfile.SeparateBuffStatus;
+
+        public ushort FrameHue
+        {
+            get
+            {
+                if (!SeparateBars)
+                {
+                    return 0;
+                }
+
+                return Kind == BuffGumpKind.Harmful ? FRAME_HUE_HARMFUL : FRAME_HUE_BENEFICIAL;
+            }
+        }
+
+        public override GumpType GumpType => Kind == BuffGumpKind.Harmful ? GumpType.Debuff : GumpType.Buff;
+
+        public static BuffGump Get(BuffGumpKind kind)
+        {
+            for (LinkedListNode<Gump> node = UIManager.Gumps.Last; node != null; node = node.Previous)
+            {
+                if (!node.Value.IsDisposed && node.Value is BuffGump buff && buff.Kind == kind)
+                {
+                    return buff;
+                }
+            }
+
+            return null;
+        }
+
+        public static void RequestUpdateAll()
+        {
+            Get(BuffGumpKind.Beneficial)?.RequestUpdateContents();
+            Get(BuffGumpKind.Harmful)?.RequestUpdateContents();
+        }
+
+        /// <summary>
+        /// Apply Mods → Visual Helpers "SEPARA BUFF STATUS" (unified vs green/red split).
+        /// </summary>
+        public static void ApplySeparateBuffStatus(World world)
+        {
+            if (world == null)
+            {
+                return;
+            }
+
+            BuffGump buff = Get(BuffGumpKind.Beneficial);
+            BuffGump debuff = Get(BuffGumpKind.Harmful);
+            bool anyOpen = buff != null || debuff != null;
+
+            if (!anyOpen)
+            {
+                return;
+            }
+
+            int x = buff?.X ?? debuff?.X ?? 100;
+            int y = buff?.Y ?? debuff?.Y ?? 100;
+            bool locked = buff?.IsLocked == true || debuff?.IsLocked == true;
+
+            buff?.Dispose();
+            debuff?.Dispose();
+
+            OpenOrFocus(world, x, y);
+
+            if (locked)
+            {
+                BuffGump newBuff = Get(BuffGumpKind.Beneficial);
+                BuffGump newDebuff = Get(BuffGumpKind.Harmful);
+
+                if (newBuff != null)
+                {
+                    newBuff.IsLocked = true;
+                }
+
+                if (newDebuff != null)
+                {
+                    newDebuff.IsLocked = true;
+                }
+            }
+        }
+
+        public static void OpenOrFocus(World world, int x = 100, int y = 100)
+        {
+            BuffGump buff = Get(BuffGumpKind.Beneficial);
+            BuffGump debuff = Get(BuffGumpKind.Harmful);
+            bool separate = SeparateBars;
+
+            if (!separate)
+            {
+                debuff?.Dispose();
+                debuff = null;
+
+                if (buff == null)
+                {
+                    UIManager.Add(new BuffGump(world, x, y, BuffGumpKind.Beneficial));
+                }
+                else
+                {
+                    buff.SetInScreen();
+                    buff.BringOnTop();
+                    buff.RequestUpdateContents();
+                }
+
+                return;
+            }
+
+            if (buff == null && debuff == null)
+            {
+                UIManager.Add(new BuffGump(world, x, y, BuffGumpKind.Beneficial));
+                UIManager.Add(new BuffGump(world, x, y + 60, BuffGumpKind.Harmful));
+
+                return;
+            }
+
+            if (buff == null)
+            {
+                int bx = debuff != null ? debuff.X : x;
+                int by = debuff != null ? Math.Max(0, debuff.Y - 60) : y;
+                UIManager.Add(new BuffGump(world, bx, by, BuffGumpKind.Beneficial));
+            }
+            else
+            {
+                buff.SetInScreen();
+                buff.BringOnTop();
+            }
+
+            if (debuff == null)
+            {
+                int dx = buff != null ? buff.X : x;
+                int dy = buff != null ? buff.Y + 60 : y + 60;
+                UIManager.Add(new BuffGump(world, dx, dy, BuffGumpKind.Harmful));
+            }
+            else
+            {
+                debuff.SetInScreen();
+                debuff.BringOnTop();
+            }
+        }
+
+        public static void Toggle(World world, int x = 100, int y = 100)
+        {
+            BuffGump buff = Get(BuffGumpKind.Beneficial);
+            BuffGump debuff = Get(BuffGumpKind.Harmful);
+
+            if (buff != null || debuff != null)
+            {
+                buff?.Dispose();
+                debuff?.Dispose();
+            }
+            else
+            {
+                OpenOrFocus(world, x, y);
+            }
+        }
 
         private void BuildGump()
         {
@@ -84,12 +251,15 @@ namespace ClassicUO.Game.UI.Gumps
 
             Clear();
 
-            Add(_background = new GumpPic(0, 0, _graphic, 0) { LocalSerial = 1 });
+            ushort frameHue = FrameHue;
+
+            Add(_background = new GumpPic(0, 0, _graphic, frameHue) { LocalSerial = 1 });
 
             Add(
                 _button = new Button(0, 0x7585, 0x7589, 0x7589)
                 {
-                    ButtonAction = ButtonAction.Activate
+                    ButtonAction = ButtonAction.Activate,
+                    Hue = frameHue
                 }
             );
 
@@ -125,9 +295,17 @@ namespace ClassicUO.Game.UI.Gumps
 
             if (World.Player != null)
             {
+                bool separate = SeparateBars;
+                bool showDebuffs = Kind == BuffGumpKind.Harmful;
+
                 foreach (KeyValuePair<BuffIconType, BuffIcon> k in World.Player.BuffIcons)
                 {
-                    _box.Add(new BuffControlEntry(World.Player.BuffIcons[k.Key]));
+                    BuffIcon icon = World.Player.BuffIcons[k.Key];
+
+                    if (!separate || BuffIconClassifier.IsDebuff(icon) == showDebuffs)
+                    {
+                        _box.Add(new BuffControlEntry(icon));
+                    }
                 }
             }
 
@@ -142,7 +320,8 @@ namespace ClassicUO.Game.UI.Gumps
         {
             base.Save(writer);
             writer.WriteAttributeString("graphic", _graphic.ToString());
-            writer.WriteAttributeString("direction", ((int)_direction).ToString());
+            writer.WriteAttributeString("direction", ((int) _direction).ToString());
+            writer.WriteAttributeString("kind", ((int) Kind).ToString());
         }
 
         public override void Restore(XmlElement xml)
@@ -150,7 +329,15 @@ namespace ClassicUO.Game.UI.Gumps
             base.Restore(xml);
 
             _graphic = ushort.Parse(xml.GetAttribute("graphic"));
-            _direction = (GumpDirection)byte.Parse(xml.GetAttribute("direction"));
+            _direction = (GumpDirection) byte.Parse(xml.GetAttribute("direction"));
+
+            string kindAttr = xml.GetAttribute("kind");
+
+            if (!string.IsNullOrEmpty(kindAttr) && byte.TryParse(kindAttr, out byte kindValue))
+            {
+                Kind = (BuffGumpKind) kindValue;
+            }
+
             BuildGump();
         }
 
@@ -284,7 +471,7 @@ namespace ClassicUO.Game.UI.Gumps
 
                 if (!IsDisposed && Icon != null)
                 {
-                    int delta = (int)(Icon.Timer - Time.Ticks);
+                    int delta = (int) (Icon.Timer - Time.Ticks);
 
                     if (_updateTooltipTime < Time.Ticks && delta > 0)
                     {
@@ -300,7 +487,7 @@ namespace ClassicUO.Game.UI.Gumps
                             )
                         );
 
-                        _updateTooltipTime = (float)Time.Ticks + 1000;
+                        _updateTooltipTime = (float) Time.Ticks + 1000;
 
                         if (span.Hours > 0)
                         {
@@ -319,7 +506,7 @@ namespace ClassicUO.Game.UI.Gumps
                     {
                         if (delta <= 0)
                         {
-                            ((BuffGump)Parent.Parent)?.RequestUpdateContents();
+                            ((BuffGump) Parent.Parent)?.RequestUpdateContents();
                         }
                         else
                         {
@@ -347,7 +534,7 @@ namespace ClassicUO.Game.UI.Gumps
                                 }
                             }
 
-                            _alpha = (byte)alpha;
+                            _alpha = (byte) alpha;
                         }
                     }
                 }

@@ -58,6 +58,7 @@ namespace ClassicUO.Game.UI.Gumps
 
             CanCloseWithRightClick = true;
             CanMove = true;
+            CanBeLocked = true;
         }
 
         public override GumpType GumpType => GumpType.StatusGump;
@@ -66,23 +67,22 @@ namespace ClassicUO.Game.UI.Gumps
         protected Point _point;
         protected long _refreshTime;
 
+        /// <summary>
+        /// Top-right of the status title bar / frame corner.
+        /// </summary>
+        protected override Point GetLockIconPosition(int iconWidth, int iconHeight)
+        {
+            int w = Width > 0 ? Width : iconWidth + LOCK_INSET * 2;
+
+            return new Point(Math.Max(LOCK_INSET, w - iconWidth - LOCK_INSET), LOCK_INSET);
+        }
+
         public override void OnButtonClick(int buttonID)
         {
             switch ((ButtonType) buttonID)
             {
                 case ButtonType.BuffIcon:
-
-                    BuffGump gump = UIManager.GetGump<BuffGump>();
-
-                    if (gump == null)
-                    {
-                        UIManager.Add(new BuffGump(World, 100, 100));
-                    }
-                    else
-                    {
-                        gump.SetInScreen();
-                        gump.BringOnTop();
-                    }
+                    BuffGump.OpenOrFocus(World, 100, 100);
 
                     break;
             }
@@ -91,6 +91,11 @@ namespace ClassicUO.Game.UI.Gumps
 
         protected override void OnMouseUp(int x, int y, MouseButtonType button)
         {
+            if (TryToggleLock(x, y, button))
+            {
+                return;
+            }
+
             if (button == MouseButtonType.Left)
             {
                 if (World.TargetManager.IsTargeting)
@@ -98,7 +103,7 @@ namespace ClassicUO.Game.UI.Gumps
                     World.TargetManager.Target(World.Player);
                     Mouse.LastLeftButtonClickTime = 0;
                 }
-                else if (x >= _point.X && x <= Width + 16 && y >= _point.Y && y <= Height + 16)
+                else if (!IsLocked && x >= _point.X && x <= Width + 16 && y >= _point.Y && y <= Height + 16)
                 {
                     Point offset = Mouse.LDragOffset;
 
@@ -1950,6 +1955,11 @@ namespace ClassicUO.Game.UI.Gumps
 
         protected override void OnMouseUp(int x, int y, MouseButtonType button)
         {
+            if (TryToggleLock(x, y, button))
+            {
+                return;
+            }
+
             if (button == MouseButtonType.Left)
             {
                 if (World.TargetManager.IsTargeting)
@@ -1957,7 +1967,7 @@ namespace ClassicUO.Game.UI.Gumps
                     World.TargetManager.Target(World.Player);
                     Mouse.LastLeftButtonClickTime = 0;
                 }
-                else
+                else if (!IsLocked)
                 {
                     Point p = new Point(x, y);
                     Rectangle rect = new Rectangle(Bounds.Width - 42, Bounds.Height - 25, Bounds.Width, Bounds.Height);

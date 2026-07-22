@@ -49,6 +49,15 @@ namespace ClassicUO.Launcher.Custom
             (NeedsRazorUpdate ? RazorSizeBytes : 0);
     }
 
+    internal sealed class CombinedUpdateResult
+    {
+        public bool AppliedClient { get; init; }
+        public bool AppliedRazor { get; init; }
+        public bool AppliedLauncherRestartPending { get; init; }
+        public string? ClientVersion { get; init; }
+        public string? RazorVersion { get; init; }
+    }
+
     internal static class LauncherUpdater
     {
         private static readonly HttpClient Http = new()
@@ -178,6 +187,134 @@ namespace ClassicUO.Launcher.Custom
             }
 
             return "0.0.0";
+        }
+
+        /// <summary>
+        /// Downloads and installs every selected component in one pass (client → Razor → launcher).
+        /// Launcher is always last because it schedules a process restart.
+        /// </summary>
+        public static async Task<CombinedUpdateResult> ApplyCombinedUpdateAsync(
+            UpdateCheckResult info,
+            IProgress<DownloadProgressReport>? progress,
+            CancellationToken cancellationToken = default)
+        {
+            bool appliedClient = false;
+            bool appliedRazor = false;
+            bool launcherRestart = false;
+            string? clientVersion = null;
+            string? razorVersion = null;
+
+            if (info.NeedsClientUpdate &&
+                !string.IsNullOrEmpty(info.ClientDownloadUrl) &&
+                !string.IsNullOrEmpty(info.ClientPackageFileName))
+            {
+                IProgress<DownloadProgressReport> clientProgress = PrefixedProgress(
+                    progress,
+                    Loc.S("Client", "Client"));
+                await ClientRuntimeDownloader.DownloadAndInstallAsync(
+                        clientProgress,
+                        cancellationToken,
+                        info.ClientDownloadUrl,
+                        info.ClientPackageFileName,
+                        info.ClientSha256)
+                    .ConfigureAwait(false);
+
+                clientVersion = info.ClientRemoteVersion
+                    ?? ParseVersionFromPackageName(info.ClientPackageFileName)
+                    ?? info.LatestVersion;
+                appliedClient = true;
+            }
+
+            if (info.NeedsRazorUpdate &&
+                info.UsesManifest &&
+                !string.IsNullOrEmpty(info.RazorDownloadUrl) &&
+                !string.IsNullOrEmpty(info.RazorPackageFileName))
+            {
+                IProgress<DownloadProgressReport> razorProgress = PrefixedProgress(
+                    progress,
+                    Loc.S("Razor", "Razor"));
+                await ApplyRazorUpdateAsync(
+                        info.RazorDownloadUrl,
+                        info.RazorPackageFileName,
+                        info.RazorSha256,
+                        razorProgress,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+                razorVersion = info.RazorRemoteVersion
+                    ?? ParseVersionFromPackageName(info.RazorPackageFileName)
+                    ?? info.LatestVersion;
+                appliedRazor = true;
+            }
+
+            if (info.NeedsLauncherUpdate &&
+                !string.IsNullOrEmpty(info.LauncherDownloadUrl) &&
+                !string.IsNullOrEmpty(info.LauncherPackageFileName))
+            {
+                IProgress<DownloadProgressReport> launcherProgress = PrefixedProgress(
+                    progress,
+                    Loc.S("Launcher", "Launcher"));
+                await ApplyLauncherUpdateAsync(
+                        info.LauncherDownloadUrl,
+                        info.LauncherPackageFileName,
+                        launcherProgress,
+                        cancellationToken,
+                        info.LauncherSha256)
+                    .ConfigureAwait(false);
+                launcherRestart = true;
+            }
+
+            progress?.Report(new DownloadProgressReport
+            {
+                Status = Loc.S("Installazione completata.", "Installation completed."),
+                BytesReceived = 1,
+                TotalBytes = 1
+            });
+
+            return new CombinedUpdateResult
+            {
+                AppliedClient = appliedClient,
+                AppliedRazor = appliedRazor,
+                AppliedLauncherRestartPending = launcherRestart,
+                ClientVersion = clientVersion,
+                RazorVersion = razorVersion
+            };
+        }
+
+        private static IProgress<DownloadProgressReport> PrefixedProgress(
+            IProgress<DownloadProgressReport>? inner,
+            string prefix)
+        {
+            return new ProgressRelay(report =>
+            {
+                if (inner == null)
+                {
+                    return;
+                }
+
+                string status = string.IsNullOrWhiteSpace(report.Status)
+                    ? prefix
+                    : $"{prefix} — {report.Status}";
+                inner.Report(new DownloadProgressReport
+                {
+                    Status = status,
+                    BytesReceived = report.BytesReceived,
+                    TotalBytes = report.TotalBytes,
+                    BytesPerSecond = report.BytesPerSecond
+                });
+            });
+        }
+
+        private sealed class ProgressRelay : IProgress<DownloadProgressReport>
+        {
+            private readonly Action<DownloadProgressReport> _handler;
+
+            public ProgressRelay(Action<DownloadProgressReport> handler)
+            {
+                _handler = handler;
+            }
+
+            public void Report(DownloadProgressReport value) => _handler(value);
         }
 
         public static async Task ApplyRazorUpdateAsync(
@@ -587,6 +724,8 @@ namespace ClassicUO.Launcher.Custom
 
                 ZipFile.ExtractToDirectory(archivePath, extractDir, overwriteFiles: true);
 
+                // Prefer 0nE UO Launcher.exe; accept legacy UODreams Launcher.exe from older zips.
+                // Do not require both names to exist in the package.
                 string? newExe = FindLauncherExe(extractDir);
                 if (newExe == null)
                 {
@@ -636,13 +775,33 @@ namespace ClassicUO.Launcher.Custom
                     }
                 }
 
+                // Always replace the running process path. Also ensure preferred 0nE name exists
+                // when the user is still launching a legacy UODreams Launcher.exe.
+                string preferredExeName = LauncherExeFileNames[0];
+                string preferredExe = Path.Combine(installRoot, preferredExeName);
                 string currentExe = Environment.ProcessPath
-                    ?? Path.Combine(AppContext.BaseDirectory, LauncherExeFileNames[0]);
+                    ?? preferredExe;
                 string stagingExe = currentExe + ".new";
+                string preferredStaging = preferredExe + ".new";
+                bool alsoWritePreferred = !string.Equals(
+                    Path.GetFullPath(currentExe),
+                    Path.GetFullPath(preferredExe),
+                    StringComparison.OrdinalIgnoreCase);
                 string logFile = Path.Combine(tempDir, "launcher-update.log");
                 int pid = Environment.ProcessId;
 
                 string updaterScript = Path.Combine(tempDir, "apply-update.cmd");
+                string preferredBlock = alsoWritePreferred
+                    ? $"""
+                      echo [%date% %time%] Also writing preferred launcher {preferredExeName}>>"%LOG%"
+                      if exist "{preferredStaging}" del /F /Q "{preferredStaging}" >>"%LOG%" 2>&1
+                      copy /Y "%SRC%" "{preferredStaging}" >>"%LOG%" 2>&1
+                      if not errorlevel 1 (
+                        move /Y "{preferredStaging}" "{preferredExe}" >>"%LOG%" 2>&1
+                        if errorlevel 1 copy /Y "{preferredStaging}" "{preferredExe}" >>"%LOG%" 2>&1
+                      )
+                      """
+                    : "";
                 File.WriteAllText(updaterScript, $"""
                     @echo off
                     setlocal
@@ -672,6 +831,7 @@ namespace ClassicUO.Launcher.Custom
                       copy /Y "%STG%" "%DST%" >>"%LOG%" 2>&1
                     )
                     if errorlevel 1 goto copyfailed
+                    {preferredBlock}
                     echo [%date% %time%] Restarting launcher>>"%LOG%"
                     start "" "%DST%"
                     del "%~f0"

@@ -84,6 +84,7 @@ namespace ClassicUO.Game.UI.Gumps
         {
             CanCloseWithRightClick = true;
             CanMove = true;
+            CanBeLocked = true;
             Width = WIDTH;
             Height = HEIGHT;
             X = _lastX;
@@ -118,6 +119,14 @@ namespace ClassicUO.Game.UI.Gumps
         }
 
         public override GumpType GumpType => GumpType.DurabilityGump;
+
+        /// <summary>
+        /// Top-right near the "Equipment Durability" title.
+        /// </summary>
+        protected override Point GetLockIconPosition(int iconWidth, int iconHeight)
+        {
+            return new Point(Math.Max(LOCK_INSET, WIDTH - iconWidth - LOCK_INSET), LOCK_INSET);
+        }
 
         public override void Dispose()
         {

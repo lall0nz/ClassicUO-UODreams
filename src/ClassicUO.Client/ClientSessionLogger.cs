@@ -34,12 +34,13 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
+using System.Threading;
 
 namespace ClassicUO
 {
     /// <summary>
     /// Always-on login / character-load breadcrumb log under launcher install-root Logs\.
-    /// Verbose until the first in-world GameScene is ready; then rare breadcrumbs only.
+    /// Verbose through first in-world ready plus a 30s post-login window; then rare breadcrumbs only.
     /// Never logs passwords or account secrets.
     /// </summary>
     internal static class ClientSessionLogger
@@ -52,12 +53,15 @@ namespace ClassicUO
         private static bool _started;
         private static bool _loginPhase = true;
         private static bool _firstChanceHooked;
+        private static DateTime? _verboseUntilUtc;
+        private static System.Threading.Timer _verboseEndTimer;
 
         private static bool _loggedStatusPacket;
         private static bool _loggedSkillsPacket;
         private static bool _loggedEquipPacket;
         private static int _firstChanceLogged;
-        private const int MaxFirstChanceLogs = 25;
+        private const int MaxFirstChanceLogs = 40;
+        private const int PostLoginVerboseSeconds = 30;
 
         public static string SessionFilePath
         {
@@ -76,6 +80,8 @@ namespace ClassicUO
             {
                 lock (Sync)
                 {
+                    ExpireVerboseWindowUnlocked();
+
                     return _loginPhase;
                 }
             }
@@ -121,12 +127,16 @@ namespace ClassicUO
 
                     _started = true;
                     _loginPhase = true;
+                    _verboseUntilUtc = null;
                     _loggedStatusPacket = false;
                     _loggedSkillsPacket = false;
                     _loggedEquipPacket = false;
                     _firstChanceLogged = 0;
 
-                    AppendLineUnlocked("SESSION", "Client session log started (always-on login/character-load breadcrumbs)");
+                    AppendLineUnlocked(
+                        "SESSION",
+                        $"Client session log started (verbose through InWorldReady + {PostLoginVerboseSeconds}s)"
+                    );
                     FlushUnlocked();
 
                     HookFirstChanceExceptionsUnlocked();
@@ -156,9 +166,20 @@ namespace ClassicUO
 
             string cuoDllInfo = TryDescribeCuoDll();
 
+            long workingSet = 0;
+
+            try
+            {
+                workingSet = Process.GetCurrentProcess().WorkingSet64;
+            }
+            catch
+            {
+                // ignore
+            }
+
             Stage(
                 "ClientStart",
-                $"cuo={cuoVersion}; marker={marker}; exe={processPath}; {cuoDllInfo}; os={Environment.OSVersion}; x64={Environment.Is64BitProcess}"
+                $"cuo={cuoVersion}; marker={marker}; exe={processPath}; {cuoDllInfo}; os={Environment.OSVersion}; x64={Environment.Is64BitProcess}; cores={Environment.ProcessorCount}; ws={workingSet}"
             );
         }
 
@@ -176,13 +197,14 @@ namespace ClassicUO
                     return;
                 }
 
+                ExpireVerboseWindowUnlocked();
                 AppendLineUnlocked(stage, details);
                 FlushUnlocked();
             }
         }
 
         /// <summary>
-        /// Buffered line (no flush). Use for non-stage notes during login; flushed by next Stage/Flush.
+        /// Buffered line (no flush). Verbose during login + 30s post-InWorldReady; flushed by next Stage/Flush.
         /// </summary>
         public static void Write(string stage, string details = null)
         {
@@ -192,6 +214,8 @@ namespace ClassicUO
                 {
                     return;
                 }
+
+                ExpireVerboseWindowUnlocked();
 
                 if (!_loginPhase)
                 {
@@ -261,9 +285,14 @@ namespace ClassicUO
                     return;
                 }
 
-                AppendLineUnlocked("InWorldReady", details ?? "Game scene loaded; throttling session log to rare breadcrumbs");
-                _loginPhase = false;
-                UnhookFirstChanceExceptionsUnlocked();
+                string baseDetails = details ?? "Game scene loaded";
+                AppendLineUnlocked(
+                    "InWorldReady",
+                    $"{baseDetails}; keeping verbose breadcrumbs for {PostLoginVerboseSeconds}s"
+                );
+                _loginPhase = true;
+                _verboseUntilUtc = DateTime.UtcNow.AddSeconds(PostLoginVerboseSeconds);
+                ScheduleVerboseEndTimerUnlocked();
                 FlushUnlocked();
             }
         }
@@ -280,6 +309,8 @@ namespace ClassicUO
         {
             lock (Sync)
             {
+                ExpireVerboseWindowUnlocked();
+
                 if (!_loginPhase || _loggedStatusPacket)
                 {
                     return;
@@ -295,6 +326,8 @@ namespace ClassicUO
         {
             lock (Sync)
             {
+                ExpireVerboseWindowUnlocked();
+
                 if (!_loginPhase || _loggedSkillsPacket)
                 {
                     return;
@@ -310,6 +343,8 @@ namespace ClassicUO
         {
             lock (Sync)
             {
+                ExpireVerboseWindowUnlocked();
+
                 if (!_loginPhase || _loggedEquipPacket)
                 {
                     return;
@@ -340,9 +375,11 @@ namespace ClassicUO
                     // ignore
                 }
 
+                DisposeVerboseEndTimerUnlocked();
                 UnhookFirstChanceExceptionsUnlocked();
                 DisposeWriterUnlocked();
                 _started = false;
+                _verboseUntilUtc = null;
             }
         }
 
@@ -449,6 +486,8 @@ namespace ClassicUO
                 };
 
                 _started = true;
+                _loginPhase = true;
+                _verboseUntilUtc = null;
                 AppendLineUnlocked("SESSION", "Client session log started (lazy)");
                 FlushUnlocked();
                 HookFirstChanceExceptionsUnlocked();
@@ -462,6 +501,74 @@ namespace ClassicUO
 
                 return false;
             }
+        }
+
+        private static void ExpireVerboseWindowUnlocked()
+        {
+            if (!_loginPhase || !_verboseUntilUtc.HasValue)
+            {
+                return;
+            }
+
+            if (DateTime.UtcNow < _verboseUntilUtc.Value)
+            {
+                return;
+            }
+
+            EndVerboseWindowUnlocked("VerboseEnd", "30s post-login verbose window ended; throttling to rare breadcrumbs");
+        }
+
+        private static void ScheduleVerboseEndTimerUnlocked()
+        {
+            DisposeVerboseEndTimerUnlocked();
+
+            if (!_verboseUntilUtc.HasValue)
+            {
+                return;
+            }
+
+            int dueMs = (int)Math.Max(250, (_verboseUntilUtc.Value - DateTime.UtcNow).TotalMilliseconds);
+            _verboseEndTimer = new System.Threading.Timer(
+                _ =>
+                {
+                    lock (Sync)
+                    {
+                        ExpireVerboseWindowUnlocked();
+                    }
+                },
+                null,
+                dueMs,
+                System.Threading.Timeout.Infinite
+            );
+        }
+
+        private static void EndVerboseWindowUnlocked(string stage, string details)
+        {
+            if (!_loginPhase)
+            {
+                return;
+            }
+
+            _loginPhase = false;
+            _verboseUntilUtc = null;
+            DisposeVerboseEndTimerUnlocked();
+            AppendLineUnlocked(stage, details);
+            UnhookFirstChanceExceptionsUnlocked();
+            FlushUnlocked();
+        }
+
+        private static void DisposeVerboseEndTimerUnlocked()
+        {
+            try
+            {
+                _verboseEndTimer?.Dispose();
+            }
+            catch
+            {
+                // ignore
+            }
+
+            _verboseEndTimer = null;
         }
 
         private static void AppendLineUnlocked(string stage, string details)
@@ -572,6 +679,8 @@ namespace ClassicUO
 
             lock (Sync)
             {
+                ExpireVerboseWindowUnlocked();
+
                 if (!_started || !_loginPhase || _firstChanceLogged >= MaxFirstChanceLogs)
                 {
                     return;

@@ -141,6 +141,7 @@ namespace ClassicUO.Game.UI.Gumps
 
             CanMove = true;
             AcceptMouseInput = true;
+            CanBeLocked = true;
             #endregion
 
             #region background
@@ -320,6 +321,32 @@ namespace ClassicUO.Game.UI.Gumps
         }
 
         public override GumpType GumpType => GumpType.GridContainer;
+
+        /// <summary>
+        /// Padlock sits to the right of the container title ("Backpack") above the top bar.
+        /// </summary>
+        protected override Point GetLockIconPosition(int iconWidth, int iconHeight)
+        {
+            if (containerNameLabel == null)
+            {
+                return base.GetLockIconPosition(iconWidth, iconHeight);
+            }
+
+            int x = containerNameLabel.X + Math.Max(containerNameLabel.Width, 8) + 4;
+            int y = containerNameLabel.Y + Math.Max(0, (containerNameLabel.Height - iconHeight) / 2);
+
+            return new Point(x, y);
+        }
+
+        protected override void OnMouseUp(int x, int y, MouseButtonType button)
+        {
+            if (TryToggleLock(x, y, button))
+            {
+                return;
+            }
+
+            base.OnMouseUp(x, y, button);
+        }
 
         public override void OnResize()
         {

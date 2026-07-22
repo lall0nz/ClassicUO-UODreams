@@ -73,6 +73,7 @@ namespace ClassicUO.Game.UI.Gumps
         {
             CanMove = true;
             CanCloseWithRightClick = true;
+            CanBeLocked = true;
         }
 
         public PaperDollGump(World world, uint serial, bool canLift) : this(world)
@@ -83,6 +84,21 @@ namespace ClassicUO.Game.UI.Gumps
         }
 
         public override GumpType GumpType => GumpType.PaperDoll;
+
+        /// <summary>
+        /// Top-right inside the stone frame (above the HELP column), not top-left.
+        /// </summary>
+        protected override Point GetLockIconPosition(int iconWidth, int iconHeight)
+        {
+            int frameWidth = _picBase != null && _picBase.Width > 0 ? _picBase.Width : Width;
+
+            if (frameWidth <= 0)
+            {
+                frameWidth = iconWidth + LOCK_INSET * 2;
+            }
+
+            return new Point(Math.Max(LOCK_INSET, frameWidth - iconWidth - LOCK_INSET), LOCK_INSET);
+        }
 
         public bool IsMinimized
         {
@@ -561,6 +577,11 @@ namespace ClassicUO.Game.UI.Gumps
 
         protected override void OnMouseUp(int x, int y, MouseButtonType button)
         {
+            if (TryToggleLock(x, y, button))
+            {
+                return;
+            }
+
             if (button == MouseButtonType.Left && World.InGame)
             {
                 Mobile container = World.Mobiles.Get(LocalSerial);

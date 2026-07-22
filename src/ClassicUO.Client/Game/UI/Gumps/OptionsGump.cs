@@ -169,7 +169,7 @@ namespace ClassicUO.Game.UI.Gumps
         private readonly List<Control> _optionsSearchMatches = new List<Control>();
         private readonly HashSet<int> _optionsSearchPagesWithHits = new HashSet<int>();
         private readonly Dictionary<Control, int> _optionsSearchSavedY = new Dictionary<Control, int>();
-        private Checkbox _hidePersistentNPCNames, _nameOverheadAlwaysOn, _showSwingTimerBar, _swingTimerBarLocked, _swingReadyMicroFreezeEnabled;
+        private Checkbox _hidePersistentNPCNames, _nameOverheadAlwaysOn, _separateBuffStatus, _showSwingTimerBar, _swingTimerBarLocked, _swingReadyMicroFreezeEnabled;
         private HSliderBar _swingMicroFreezeDuration;
         private Checkbox _showAllLayersPaperdoll;
         private Checkbox _energyFieldWallOfStoneAutoAvoid;
@@ -1247,6 +1247,15 @@ namespace ClassicUO.Game.UI.Gumps
             visualHelpers.Y = swingAssistant.Bounds.Bottom + OptionsSectionGap;
 
             visualHelpers.Add(_nameOverheadAlwaysOn = AddCheckBox(null, "Always show name overheads (mobiles only)", _currentProfile.NameOverheadToggled, startX, startY));
+            visualHelpers.Add(
+                _separateBuffStatus = AddCheckBox(
+                    null,
+                    OptionsLocalizedLabel("SEPARA BUFF STATUS", "SEPARATE BUFF STATUS"),
+                    _currentProfile.SeparateBuffStatus,
+                    startX,
+                    startY
+                )
+            );
 
             // One row per function: label | dropdown | dye-tub picker (color belongs to this row).
             visualHelpers.Add(AddLabel(null, "Glowing Weapons", startX, startY));
@@ -4921,6 +4930,19 @@ namespace ClassicUO.Game.UI.Gumps
             }
 
             _currentProfile.NameOverheadToggled = _nameOverheadAlwaysOn.IsChecked;
+
+            bool separateBuffStatus = _separateBuffStatus?.IsChecked ?? _currentProfile.SeparateBuffStatus;
+
+            if (_currentProfile.SeparateBuffStatus != separateBuffStatus)
+            {
+                _currentProfile.SeparateBuffStatus = separateBuffStatus;
+                BuffGump.ApplySeparateBuffStatus(World);
+            }
+            else
+            {
+                _currentProfile.SeparateBuffStatus = separateBuffStatus;
+            }
+
             _currentProfile.EnableUoDreamsNetworkOptimizer = _enableUoDreamsNetworkOptimizer.IsChecked;
             _currentProfile.EnableFullSocketDrain = _enableFullSocketDrain.IsChecked;
             _currentProfile.FastRotation = _fastRotation.IsChecked;

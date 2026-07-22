@@ -1,6 +1,6 @@
 # Builds GitHub Release assets for UODreams PVP Launcher (v1.3.x channel).
 param(
-    [string]$Version = "1.4.1",
+    [string]$Version = "1.4.2",
     [string]$OfficialCuo = "$env:USERPROFILE\Downloads\UODreams-PVP-by-lall0ne-Launcher-v1.3.0\Client",
     # Sole Razor source: Desktop brand-test (do NOT use Downloads v1.3.0 Assistant).
     [string]$RazorSourceDir = "$env:USERPROFILE\Desktop\0nE-UO-Launcher-v1.2.8-brand-test\Assistant\RazorEnhanced",
@@ -83,10 +83,6 @@ function Clear-UserLauncherData([string]$LauncherRoot) {
 
 function Resolve-LauncherExeName() {
     return "0nE UO Launcher.exe"
-}
-
-function Resolve-LegacyLauncherExeName() {
-    return "UODreams Launcher.exe"
 }
 
 function Resolve-LauncherEdition() {
@@ -592,11 +588,8 @@ $publishedExe = Get-ChildItem $launcherOut -Filter $launcherExeName | Select-Obj
 if (-not $publishedExe) { throw "Launcher exe not found: $launcherExeName" }
 $launcherExePath = Join-Path $launcherPackageRoot $launcherExeName
 Copy-Item -Force $publishedExe.FullName $launcherExePath
-# OTA from pre-1.3.1 installs validates UODreams Launcher.exe; ship the same binary under both names.
-$legacyLauncherExeName = Resolve-LegacyLauncherExeName
-if ($legacyLauncherExeName -ne $launcherExeName) {
-    Copy-Item -Force $launcherExePath (Join-Path $launcherPackageRoot $legacyLauncherExeName)
-}
+# Single-exe package: only 0nE UO Launcher.exe (no dual UODreams Launcher.exe).
+# OTA updater resolves either name from the running process / extract dir and does not require the legacy exe.
 $razorBundle = Copy-RazorWithProfiles $RazorSourceDir $assistantRazorDir $StockProfileName $PvpProfileName $RazorStockProfileSourceDir
 Set-Content -Path (Join-Path $assistantRazorDir "uodreams-razor.version") -Value $Version -Encoding ASCII -NoNewline
 $packagedRazorExe = Join-Path $assistantRazorDir "RazorEnhanced.exe"
@@ -613,10 +606,6 @@ if ($shouldSign) {
     $launcherExe = Join-Path $launcherPackageRoot $launcherExeName
     $razorExe = Join-Path $assistantRazorDir "RazorEnhanced.exe"
     $signPaths = @($launcherExe)
-    if ($legacyLauncherExeName -ne $launcherExeName) {
-        $legacyLauncherExe = Join-Path $launcherPackageRoot $legacyLauncherExeName
-        if (Test-Path $legacyLauncherExe) { $signPaths += $legacyLauncherExe }
-    }
     if (Test-Path $razorExe) { $signPaths += $razorExe }
     & $signScript -Paths $signPaths
 } elseif ($RequireCodeSign) {

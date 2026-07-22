@@ -935,6 +935,10 @@ namespace ClassicUO.Launcher.Custom
 
             lines.AppendLine();
             lines.AppendLine(Loc.S(
+                "Un solo download installerà tutti i componenti selezionati, poi un riavvio/conferma finale.",
+                "A single download will install all selected components, then one final restart/confirmation."));
+            lines.AppendLine();
+            lines.AppendLine(Loc.S(
                 "Procedere con il download e l'installazione?",
                 "Proceed with download and installation?"));
 
@@ -2454,60 +2458,30 @@ namespace ClassicUO.Launcher.Custom
                     return;
                 }
 
-                // Client first: launcher update restarts the process and would skip later steps otherwise.
-                if (info.NeedsClientUpdate &&
-                    !string.IsNullOrEmpty(info.ClientDownloadUrl) &&
-                    !string.IsNullOrEmpty(info.ClientPackageFileName))
+                // One progress UI for all components — no per-zip Close / confirm dialogs.
+                using var updateForm = DownloadProgressForm.ForCombinedUpdate(info);
+                if (updateForm.ShowDialog(this) != DialogResult.OK)
                 {
-                    using var clientForm = DownloadProgressForm.ForClientRuntimeUpdate(
-                        info.ClientDownloadUrl,
-                        info.ClientPackageFileName,
-                        info.ClientSha256);
-                    if (clientForm.ShowDialog(this) != DialogResult.OK)
-                    {
-                        ShowError(Loc.S("Aggiornamento client non riuscito.", "Client update failed."));
-                        return;
-                    }
+                    ShowError(Loc.S("Aggiornamento non riuscito.", "Update failed."));
+                    return;
+                }
 
-                    string? clientVersion = info.ClientRemoteVersion
-                        ?? LauncherUpdater.ParseVersionFromPackageName(info.ClientPackageFileName)
-                        ?? info.LatestVersion;
-                    MarkClientUpdated(clientVersion);
+                CombinedUpdateResult? combined = updateForm.CombinedResult;
+                if (combined?.AppliedClient == true && !string.IsNullOrWhiteSpace(combined.ClientVersion))
+                {
+                    MarkClientUpdated(combined.ClientVersion);
                     _clientPathBox.Text = DetectDefaultClient();
-                    UpdateAssistantUi();
                 }
 
-                if (info.NeedsRazorUpdate &&
-                    info.UsesManifest &&
-                    !string.IsNullOrEmpty(info.RazorDownloadUrl) &&
-                    !string.IsNullOrEmpty(info.RazorPackageFileName))
+                if (combined?.AppliedRazor == true && !string.IsNullOrWhiteSpace(combined.RazorVersion))
                 {
-                    using var razorForm = DownloadProgressForm.ForRazorUpdate(
-                        info.RazorDownloadUrl,
-                        info.RazorPackageFileName,
-                        info.RazorSha256);
-                    if (razorForm.ShowDialog(this) != DialogResult.OK)
-                    {
-                        ShowError(Loc.S("Aggiornamento Razor non riuscito.", "Razor update failed."));
-                        return;
-                    }
-
-                    string? razorVersion = info.RazorRemoteVersion
-                        ?? LauncherUpdater.ParseVersionFromPackageName(info.RazorPackageFileName)
-                        ?? info.LatestVersion;
-                    MarkRazorUpdated(razorVersion);
-                    UpdateAssistantUi();
+                    MarkRazorUpdated(combined.RazorVersion);
                 }
 
-                if (info.NeedsLauncherUpdate &&
-                    !string.IsNullOrEmpty(info.LauncherDownloadUrl) &&
-                    !string.IsNullOrEmpty(info.LauncherPackageFileName))
+                UpdateAssistantUi();
+
+                if (combined?.AppliedLauncherRestartPending == true || info.NeedsLauncherUpdate)
                 {
-                    using var launcherForm = DownloadProgressForm.ForLauncherUpdate(
-                        info.LauncherDownloadUrl,
-                        info.LauncherPackageFileName,
-                        info.LauncherSha256);
-                    launcherForm.ShowDialog(this);
                     Environment.Exit(0);
                     return;
                 }
@@ -2516,6 +2490,12 @@ namespace ClassicUO.Launcher.Custom
                 _statusLabel.ForeColor = Theme.SectionGreen;
                 _statusLabel.Text = Loc.S("Aggiornamento completato.", "Update completed.");
                 RefreshWindowTitle();
+                ThemedMessageDialog.ShowInfo(
+                    this,
+                    Loc.S("Aggiornamento", "Update"),
+                    Loc.S(
+                        "Download e installazione completati. Client e Razor sono aggiornati.",
+                        "Download and installation completed. Client and Razor are up to date."));
             }
             catch (Exception ex)
             {

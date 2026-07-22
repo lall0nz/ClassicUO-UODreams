@@ -14,7 +14,7 @@ param(
     [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path,
     [string]$DesktopDir = "$env:USERPROFILE\Desktop\0nE-UO-Launcher-v1.2.8-brand-test",
     [string]$TemplateDir = "$env:USERPROFILE\Downloads\UODreams-PVP-by-lall0ne-Launcher-v1.2.8",
-    [string]$BrandTestClientVersion = "1.4.1",
+    [string]$BrandTestClientVersion = "1.4.2",
     [string]$RazorBuildDir = "",
     [switch]$SkipClientRebuild,
     [switch]$SkipRazorRebuild

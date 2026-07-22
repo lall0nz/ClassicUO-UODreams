@@ -228,6 +228,10 @@ namespace ClassicUO.Configuration
         // Experimental
         public bool CastSpellsByOneClick { get; set; }
         public bool BuffBarTime { get; set; } = true;
+
+        // Mods → Visual Helpers: when true, buff (green) and debuff (red) bars are separate.
+        // When false, a single unified buff bar shows all icons (classic behavior).
+        public bool SeparateBuffStatus { get; set; } = true;
         public bool FastSpellsAssign { get; set; }
         public bool AutoOpenDoors { get; set; } = true;
         public bool SmoothDoors { get; set; } = true;
@@ -702,7 +706,12 @@ namespace ClassicUO.Configuration
                             switch (type)
                             {
                                 case GumpType.Buff:
-                                    gump = new BuffGump(world);
+                                    gump = new BuffGump(world, BuffGumpKind.Beneficial);
+
+                                    break;
+
+                                case GumpType.Debuff:
+                                    gump = new BuffGump(world, BuffGumpKind.Harmful);
 
                                     break;
 
@@ -944,6 +953,54 @@ namespace ClassicUO.Configuration
                             catch (Exception ex)
                             {
                                 Log.Error(ex.ToString());
+                            }
+                        }
+                    }
+
+                    // Migrate pre-split profiles: keep old Buff position as the green gump
+                    // and create a red gump nearby when Debuff was never saved (separate mode only).
+                    if (SeparateBuffStatus)
+                    {
+                        BuffGump beneficial = null;
+                        BuffGump harmful = null;
+
+                        for (int i = 0; i < gumps.Count; i++)
+                        {
+                            if (gumps[i] is BuffGump buffGump)
+                            {
+                                if (buffGump.Kind == BuffGumpKind.Harmful)
+                                {
+                                    harmful = buffGump;
+                                }
+                                else
+                                {
+                                    beneficial = buffGump;
+                                }
+                            }
+                        }
+
+                        if (beneficial != null && harmful == null)
+                        {
+                            BuffGump migratedDebuff = new BuffGump
+                            (
+                                world,
+                                beneficial.X,
+                                beneficial.Y + 60,
+                                BuffGumpKind.Harmful
+                            );
+
+                            gumps.Add(migratedDebuff);
+                        }
+                    }
+                    else
+                    {
+                        // Unified mode: drop any saved debuff gump so only one bar remains.
+                        for (int i = gumps.Count - 1; i >= 0; i--)
+                        {
+                            if (gumps[i] is BuffGump buffGump && buffGump.Kind == BuffGumpKind.Harmful)
+                            {
+                                buffGump.Dispose();
+                                gumps.RemoveAt(i);
                             }
                         }
                     }

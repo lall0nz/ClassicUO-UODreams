@@ -969,25 +969,10 @@ namespace ClassicUO.Game.UI
         private uint nextUpdate;
         private int _savingFile;
         private uint saveFileAfter = uint.MaxValue;
-        private bool _isLocked;
-
-        public bool IsLocked
-        {
-            get => _isLocked;
-            set
-            {
-                _isLocked = value;
-                CanMove = !value;
-
-                if (value)
-                {
-                    CanCloseWithRightClick = false;
-                }
-            }
-        }
 
         public XmlGump(World world) : base(world, 0, 0)
         {
+            CanBeLocked = true;
         }
 
         public override void Update()
